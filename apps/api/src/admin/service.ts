@@ -22,6 +22,7 @@ import {
   aiUsage,
   notificationPrefs,
   sessionAlertPrefs,
+  rolloverPlans,
   alertPrefs,
   pushoverReceipts,
   userFeatures,
@@ -503,6 +504,7 @@ export async function deleteUser(actingUserId: string, targetId: string): Promis
     await tx.delete(tradingOrders).where(eq(tradingOrders.userId, targetId));
     await tx.delete(tradingSessions).where(eq(tradingSessions.userId, targetId));
     await tx.delete(sessionAlertPrefs).where(eq(sessionAlertPrefs.userId, targetId));
+    await tx.delete(rolloverPlans).where(eq(rolloverPlans.userId, targetId));
     // Trading Notes — their predictions, observations and reflections. Personal
     // writing, so it goes with the person: unlike credential_audit and the
     // employee audit log, nothing here records access to money or to a hardened

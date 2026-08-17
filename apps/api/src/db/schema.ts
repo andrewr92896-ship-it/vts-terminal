@@ -532,6 +532,11 @@ export const fundedAccounts = sqliteTable('funded_accounts', {
   currency: text('currency').notNull().default('USD'),
   balance: real('balance'), // current account balance, kept current by hand
   startingBalance: real('starting_balance'), // the account's funded size
+  // Round-turn commission per standard lot (100,000 units) in this account's
+  // currency, as the firm charges it. Null is "not stated" and is NEVER read as
+  // zero: nothing can look a prop firm's commission schedule up, so the re-entry
+  // check reports it missing rather than making getting back in look free.
+  commissionPerLot: real('commission_per_lot'),
   notes: text('notes'),
   createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
   updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
@@ -1138,6 +1143,39 @@ export const sessionAlertPrefs = sqliteTable('session_alert_prefs', {
   updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
 });
 export type SessionAlertPrefRow = typeof sessionAlertPrefs.$inferSelect;
+
+// Rollover close — the three timed alerts around the 5pm ET rollover, for a
+// trader who cannot hold a funded position through it. One row per user: a desk
+// has one rollover routine, and two rows would be two answers to the same
+// question. Times are ET wall-clock 'HH:MM' like trading_sessions, because
+// rollover is an Eastern event rather than a per-reader one.
+//
+// Each event carries its own notification level from the same ladder the trade
+// events use (silent / normal / alert / repeating). Stored as plain TEXT with a
+// default, exactly as notification_prefs does, so a value nothing recognises
+// falls back in code instead of failing a constraint.
+export const rolloverPlans = sqliteTable('rollover_plans', {
+  id: text('id').primaryKey(),
+  userId: text('user_id')
+    .notNull()
+    .unique()
+    .references(() => users.id, { onDelete: 'cascade' }),
+  // The master switch. Kept separate from the three per-event switches so the
+  // whole routine can be paused for a week without losing the times.
+  enabled: integer('enabled', { mode: 'boolean' }).notNull().default(false),
+  evaluateOn: integer('evaluate_on', { mode: 'boolean' }).notNull().default(true),
+  evaluateAt: text('evaluate_at').notNull().default('16:30'),
+  evaluateLevel: text('evaluate_level').notNull().default('normal'),
+  closeOn: integer('close_on', { mode: 'boolean' }).notNull().default(true),
+  closeAt: text('close_at').notNull().default('16:45'),
+  closeLevel: text('close_level').notNull().default('alert'),
+  recheckOn: integer('recheck_on', { mode: 'boolean' }).notNull().default(true),
+  recheckAt: text('recheck_at').notNull().default('17:15'),
+  recheckLevel: text('recheck_level').notNull().default('normal'),
+  createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+  updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
+});
+export type RolloverPlanRow = typeof rolloverPlans.$inferSelect;
 
 // ---- Feature Access (My Terminal ▸ Premium Features) ----
 // One row per user recording which optional parts of the terminal they have turned

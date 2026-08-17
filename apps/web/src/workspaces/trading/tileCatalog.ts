@@ -280,6 +280,22 @@ export const TILE_CATALOG: TileDef[] = [
     minH: 5,
   },
   {
+    // What re-entering a funded trade you just closed would cost right now.
+    // Belongs on a board because it is read at one moment — the rollover close —
+    // when the decision is whether to get back on.
+    kind: 'reentry',
+    label: 'Re-entry check',
+    group: 'desk',
+    icon: 'refresh-cw',
+    blurb: 'Drift, spread and commission on getting back into a trade you closed.',
+    feature: 'funded',
+    desk: true,
+    funded: true,
+    w: 4,
+    h: 8,
+    minH: 4,
+  },
+  {
     kind: 'capital',
     label: 'Broker Capital',
     group: 'desk',

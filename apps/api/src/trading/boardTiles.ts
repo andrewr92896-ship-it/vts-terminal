@@ -38,6 +38,7 @@ export const BOARD_TILE_KINDS = [
   'tradingnotes',
   'funded',
   'challenge',
+  'reentry',
   'capital',
   // Personal
   'networth',
@@ -96,6 +97,10 @@ export const TILE_GATES: Partial<Record<BoardTileKind, TileGate>> = {
   // `challenge` is the prop-firm Funded Account (`/api/trading/challenge`),
   // which IS behind the nested opt-in and the paid feature.
   challenge: { desk: true, funded: true, feature: 'funded' },
+  // The re-entry check reads the funded book and prices it, so it sits on the
+  // same gate as the challenge tile — which is exactly the guard its endpoint
+  // (/api/trading/funded/reentry) is behind.
+  reentry: { desk: true, funded: true, feature: 'funded' },
   // Desk-gated only. Connecting a broker is Max, but reading an account you
   // already connected is not — `/api/trading/oanda-capital` serves any desk
   // user, and Trade History ▸ Live Brokers shows the same figures behind

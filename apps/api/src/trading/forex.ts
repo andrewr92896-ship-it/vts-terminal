@@ -40,6 +40,18 @@ export function forexPair(instrument: string): [string, string] | null {
   return [base, quote];
 }
 
+// The currency an instrument is QUOTED in, when that is a real currency —
+// "EUR/USD" and "XAU/USD" both answer USD, "US30" answers null. Deliberately
+// looser than `forexPair`, which additionally requires the BASE to be a
+// currency: gold is not a currency pair (so it speaks points, not pips) and is
+// still priced in dollars, so a dollar move on it is still money. Reads the one
+// currency list in this file, so there is no second copy to drift.
+export function quoteCurrencyOf(instrument: string): string | null {
+  const m = /^[A-Z0-9]{2,10}\/([A-Z]{3})$/.exec(instrument.trim().toUpperCase());
+  if (!m) return null;
+  return CURRENCIES.has(m[1]) ? m[1] : null;
+}
+
 export function pipSizeFor(quote: string): number {
   // JPY pairs are quoted to 2-3 decimals, so one pip is 0.01.
   return quote === 'JPY' ? 0.01 : 0.0001;

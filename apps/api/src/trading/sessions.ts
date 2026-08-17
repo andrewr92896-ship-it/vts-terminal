@@ -2,6 +2,13 @@ import crypto from 'node:crypto';
 import { and, eq } from 'drizzle-orm';
 import { db } from '../db/index.js';
 import { tradingSessions, type TradingSessionRow } from '../db/schema.js';
+import { etDayStamp, etNow, parseHHMM } from './etTime.js';
+
+// The Eastern clock primitives moved to `etTime.ts` so they can be checked
+// without opening a database. Re-exported here because every caller in the
+// terminal already reads them from this module, and a rename is not what that
+// move was for.
+export { etDayStamp, etNow, parseHHMM };
 
 // Per-user trading-session windows with a directional bias and a per-weekday
 // schedule. Status is derived from the current Eastern-Time clock. `neutral` was
@@ -54,42 +61,6 @@ export function etDowKey(dow: number): Weekday {
     case 5: return 'fri';
     default: return 'sat'; // 6
   }
-}
-
-// Current Eastern-Time clock as { minutes-since-midnight, weekday index }.
-export function etNow(now: Date = new Date()): { min: number; dow: number } {
-  const parts = new Intl.DateTimeFormat('en-US', {
-    timeZone: 'America/New_York',
-    weekday: 'short',
-    hour: '2-digit',
-    minute: '2-digit',
-    hour12: false,
-  }).formatToParts(now);
-  const h = Number(parts.find((p) => p.type === 'hour')?.value ?? '0') % 24;
-  const m = Number(parts.find((p) => p.type === 'minute')?.value ?? '0');
-  const wd = parts.find((p) => p.type === 'weekday')?.value ?? 'Sun';
-  const dow = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 }[wd] ?? 0;
-  return { min: h * 60 + m, dow };
-}
-
-// A stable ET calendar-day stamp ('YYYY-MM-DD'), used by the notification watch
-// to fire each per-day event at most once.
-export function etDayStamp(now: Date = new Date()): string {
-  return new Intl.DateTimeFormat('en-CA', {
-    timeZone: 'America/New_York',
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-  }).format(now);
-}
-
-export function parseHHMM(s: string): number | null {
-  const m = /^(\d{1,2}):(\d{2})$/.exec(s.trim());
-  if (!m) return null;
-  const h = +m[1];
-  const min = +m[2];
-  if (h > 23 || min > 59) return null;
-  return h * 60 + min;
 }
 
 // Is minute t inside [a, b)? Handles windows that wrap past midnight.

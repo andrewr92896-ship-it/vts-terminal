@@ -5,6 +5,7 @@ import type { BoardTile, HistoryRecord, SessionBias, SessionStatus } from '../..
 import { FAINT, GOLD, GREEN, MONO, MUTED, RED, TEXT } from '../tvChart';
 import { TradeTimesCell } from '../tradeTime';
 import { excludedNote, excludedShort } from '../excludedNote';
+import { costColor, legLabel } from '../ReentryCheck';
 import {
   HIDDEN,
   TileFrame,
@@ -321,6 +322,66 @@ export function ManualBookTile({ tile, editing, onChange, onRemove }: TileProps)
             />
           )}
           <TileRow label="Trades" value={account.tradeCount} />
+        </>
+      )}
+    </TileFrame>
+  );
+}
+
+// ---- Re-entry check ------------------------------------------------------
+//
+// What getting back into a funded trade you just closed would cost right now.
+// The compact form of the Funded Trades panel: same endpoint, same server-side
+// arithmetic, same formatters — so the tile and the screen cannot disagree about
+// what re-entry costs. Only the leading (most recently closed) trade is drawn,
+// because a tile is read at a glance and that is the one the decision is about.
+export function ReentryTile({ tile, editing, onRemove }: TileProps) {
+  const { privacy } = usePrivacy();
+  const { data, error } = useTileData('trading:reentry', () => api.fundedReentry(), MEDIUM);
+  const c = data?.checks[0] ?? null;
+  const hide = privacy;
+
+  return (
+    <TileFrame
+      title={tile.title || 'Re-entry check'}
+      icon="refresh-cw"
+      editing={editing}
+      onRemove={onRemove}
+      status={c ? <span style={stamp}>{c.instrument}</span> : null}
+      footer={
+        data?.priceSource === 'broker'
+          ? 'Priced from your OANDA account.'
+          : data?.priceSource === 'install'
+            ? 'Priced from the terminal’s own feed.'
+            : undefined
+      }
+    >
+      {!data && !error && <TileMessage>{'Loading…'}</TileMessage>}
+      {error && !data && <TileMessage tone="error">{error}</TileMessage>}
+      {/* Nothing closed recently is an ordinary state, not a fault. */}
+      {data && !c && <TileMessage>{'No funded trade closed recently.'}</TileMessage>}
+      {c && (
+        <>
+          <TileStat
+            label={`Closed ${c.side === 'long' ? 'long' : 'short'} at`}
+            value={String(c.exitPrice)}
+            sub={c.reentryPrice != null ? `Back on at ${c.reentryPrice}` : 'Not priced right now'}
+          />
+          {c.drift && <TileRow label="Drift" value={hide ? HIDDEN : legLabel(c.drift, c.unit, c.currency)} color={costColor(c.drift.price)} />}
+          {c.spread && <TileRow label="Spread" value={hide ? HIDDEN : legLabel(c.spread, c.unit, c.currency)} />}
+          <TileRow
+            label="Commission"
+            value={c.commission == null ? '—' : hide ? HIDDEN : money(c.commission, c.currency)}
+          />
+          {/* Null total means a part of it is unknown, and it stays a dash
+              rather than being drawn as the sum of what happens to be known —
+              the same refusal the screen makes. */}
+          <TileRow
+            label="Cost to get back on"
+            value={c.total == null ? '—' : hide ? HIDDEN : signedMoney(c.total, c.currency)}
+            color={c.total == null ? FAINT : costColor(c.total)}
+            strong
+          />
         </>
       )}
     </TileFrame>

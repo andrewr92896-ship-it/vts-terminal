@@ -3,6 +3,7 @@ import { api, ApiError } from '../../api/client';
 import { useAuth } from '../../auth/AuthContext';
 import { useResponsive } from '../../hooks/useMediaQuery';
 import { ScreenTitle } from './ScreenTitle';
+import { RolloverAlertSettings } from './alertPanels';
 import type {
   DayWindow,
   SessionBias,
@@ -125,7 +126,18 @@ export function StrategySessions() {
       {/* (The open / close / pre-open notification toggles were the top card
           here and moved to Advanced Trading ▸ Alert Settings — owner
           instruction, 2026-08 — where every alert opt-in reads in one list.
-          This screen still builds and edits the sessions themselves.) */}
+          This screen still builds and edits the sessions themselves.)
+
+          Rollover close is the exception, and deliberately: it is a plan for the
+          trading day rather than an opt-in about one of the sessions below, so
+          it belongs beside them. It is the SAME component Alert Settings
+          renders, over the same route — one control in two places, the way
+          GroupAlertSender already works, so neither can drift from the other. */}
+      {!readOnly && (
+        <div style={{ maxWidth: 640, marginBottom: 18 }}>
+          <RolloverAlertSettings />
+        </div>
+      )}
 
       {adding && (
         <SessionForm busy={busy} submitLabel="Add session" onSubmit={async (input) => { if (await run(api.addSession(input))) setAdding(false); }} onCancel={() => setAdding(false)} />

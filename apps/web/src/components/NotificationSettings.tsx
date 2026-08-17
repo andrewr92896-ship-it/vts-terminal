@@ -718,8 +718,10 @@ const LEVEL_ROWS: { key: NotifLevel; label: string; hint: string }[] = [
 ];
 
 // Pushover only — web push has no equivalent, so this never changes whether the
-// phone-alert copy is sent, just how Pushover delivers its own.
-function LevelPicker({ value, onChange }: { value: NotifLevel; onChange: (v: NotifLevel) => void }) {
+// phone-alert copy is sent, just how Pushover delivers its own. Exported so the
+// rollover-close panel picks its levels with this same control — a second copy
+// is how two screens come to describe "Repeating" differently.
+export function LevelPicker({ value, onChange }: { value: NotifLevel; onChange: (v: NotifLevel) => void }) {
   const active = LEVEL_ROWS.find((r) => r.key === value) ?? LEVEL_ROWS[2];
   return (
     <div style={{ marginTop: 8 }}>
