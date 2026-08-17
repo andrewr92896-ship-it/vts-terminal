@@ -189,6 +189,7 @@ export const FEATURE_LABELS: Record<PremiumFeature, string> = {
   suggestions: 'Suggestions',
   supportChat: 'General support',
   alertSettings: 'Alert settings',
+  tradingNotes: 'Trading Notes',
 };
 
 // One line on what each buys, for the tier boxes on the Premium Features screen.
@@ -213,6 +214,7 @@ export const FEATURE_BLURBS: Record<PremiumFeature, string> = {
   suggestions: 'Send ideas straight to the developers.',
   supportChat: 'Talk to a person about anything that is not a bug.',
   alertSettings: 'Tune which trade events buzz you, and send yourself a test alert.',
+  tradingNotes: 'Write down a call before the week runs, and settle it against what happened.',
 };
 
 // The colour and glyph each tier is marked with across the terminal — the badge
@@ -261,6 +263,7 @@ export const SECTION_FEATURE: Record<string, PremiumFeature> = {
   // alerts on, and price alerts) are free for anyone who reaches the screen —
   // the same shape as `data`, whose board is Premium while its calendar is not.
   alerts: 'alertSettings',
+  notes: 'tradingNotes',
 };
 
 // The same, for a whole WORKSPACE. Empty today — no workspace is entirely paid,

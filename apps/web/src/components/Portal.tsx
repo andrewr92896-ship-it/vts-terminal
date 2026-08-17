@@ -68,6 +68,7 @@ import { TradeHistory } from '../workspaces/trading/TradeHistory';
 import { FundedScreen } from '../workspaces/trading/FundedScreen';
 import { FundedChallengeScreen } from '../workspaces/trading/FundedChallenge';
 import { StrategySessions } from '../workspaces/trading/StrategySessions';
+import { TradingNotes } from '../workspaces/trading/TradingNotes';
 import { AlertSettings } from '../workspaces/trading/AlertSettings';
 import { TradingTodo } from '../workspaces/trading/TradingTodo';
 import { MarketData } from '../workspaces/trading/MarketData';
@@ -159,6 +160,8 @@ function renderScreen(
       return <FundedScreen />;
     case 'prop':
       return <FundedChallengeScreen />;
+    case 'notes':
+      return <TradingNotes />;
     case 'sessions':
       return <StrategySessions />;
     case 'data':

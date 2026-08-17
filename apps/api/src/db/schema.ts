@@ -2765,3 +2765,91 @@ export const wallTemplates = sqliteTable('wall_templates', {
   updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
 });
 export type WallTemplateRow = typeof wallTemplates.$inferSelect;
+
+// ---- Trading Notes (migration 0129) ----
+//
+// A trader's own predictions and observations, optionally shared with their
+// private group. Two kinds in one table: a PREDICTION carries a window, a
+// deadline and an outcome it still owes; an OBSERVATION leaves all of those null
+// and is never settled.
+//
+// The rule that makes the feature worth having is that a published call is
+// FROZEN — see the migration comment. `lockedAt` is stamped on sharing, and a
+// window that has opened locks the call regardless. Only the reflection may be
+// written afterwards.
+export const NOTE_KINDS = ['prediction', 'observation'] as const;
+export type NoteKind = (typeof NOTE_KINDS)[number];
+
+// Private by default. Sharing is a deliberate act per note — the same posture
+// study package sharing takes, and what keeps a half-formed idea from reaching
+// the group because somebody forgot to set something.
+export const NOTE_VISIBILITIES = ['private', 'group'] as const;
+export type NoteVisibility = (typeof NOTE_VISIBILITIES)[number];
+
+// Deliberately only up/down. These are the two a price feed can settle without
+// being told what "flat" means for this instrument, and a call the terminal
+// cannot settle on its own is better written freeform (no direction) and settled
+// by the person who made it than graded against a band nobody chose.
+export const NOTE_DIRECTIONS = ['up', 'down'] as const;
+export type NoteDirection = (typeof NOTE_DIRECTIONS)[number];
+
+// `unsettleable` is the honest fourth state and is NEVER scored as a miss: the
+// instrument could not be priced, so nothing was established either way. Same
+// rule the Live Wall's `unavailable` source and Market Data's `sample: true`
+// follow — a figure that could not be measured must not be reported as measured.
+// `partial` only ever comes from a person; an automatic settlement returns hit,
+// miss or unsettleable.
+export const NOTE_OUTCOMES = ['hit', 'miss', 'partial', 'unsettleable'] as const;
+export type NoteOutcome = (typeof NOTE_OUTCOMES)[number];
+
+export const NOTE_SETTLERS = ['auto', 'self'] as const;
+export type NoteSettler = (typeof NOTE_SETTLERS)[number];
+
+export const tradingNotes = sqliteTable(
+  'trading_notes',
+  {
+    id: text('id').primaryKey(),
+    userId: text('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    kind: text('kind', { enum: NOTE_KINDS }).notNull().default('observation'),
+    visibility: text('visibility', { enum: NOTE_VISIBILITIES }).notNull().default('private'),
+    title: text('title').notNull(),
+    body: text('body'),
+    instrument: text('instrument'),
+    direction: text('direction', { enum: NOTE_DIRECTIONS }),
+    targetPrice: real('target_price'),
+    // 1–5. Kept as a coarse scale rather than a free percent because the point of
+    // it is the calibration table (what you said vs what happened at each level),
+    // and that needs buckets with enough calls in them to mean anything.
+    confidence: integer('confidence'),
+    // ET week stamp 'YYYY-Www', Monday-based, computed at write time. See the
+    // migration comment for why it is stored rather than derived per reader.
+    weekKey: text('week_key').notNull(),
+    windowOpensAt: integer('window_opens_at', { mode: 'timestamp_ms' }),
+    deadlineAt: integer('deadline_at', { mode: 'timestamp_ms' }),
+    // The mark the call was made against, stamped when the window opens. What an
+    // automatic settlement compares to when no explicit target was named; null
+    // means it was never readable, and such a call is not settled automatically.
+    openPrice: real('open_price'),
+    lockedAt: integer('locked_at', { mode: 'timestamp_ms' }),
+    outcome: text('outcome', { enum: NOTE_OUTCOMES }),
+    settledAt: integer('settled_at', { mode: 'timestamp_ms' }),
+    settledBy: text('settled_by', { enum: NOTE_SETTLERS }),
+    settlePrice: real('settle_price'),
+    // Why an automatic settlement could not reach a verdict, in the words shown
+    // to the trader. An unsettleable call has to say what stopped it, or it reads
+    // as the terminal having lost the answer.
+    settleNote: text('settle_note'),
+    reflection: text('reflection'),
+    reflectedAt: integer('reflected_at', { mode: 'timestamp_ms' }),
+    createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+    updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
+  },
+  (t) => ({
+    userWeekIdx: index('trading_notes_user_week_idx').on(t.userId, t.weekKey),
+    settleIdx: index('trading_notes_settle_idx').on(t.kind, t.outcome, t.deadlineAt),
+  }),
+);
+
+export type TradingNoteRow = typeof tradingNotes.$inferSelect;

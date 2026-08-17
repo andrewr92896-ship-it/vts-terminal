@@ -11,17 +11,29 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 7.24';
+export const APP_VERSION = 'Beta V 7.25';
 
 export const PATCH_NOTES: PatchNote[] = [
   {
-    version: 'Beta V 7.24',
-    date: 'August 16, 2026',
+    version: 'Beta V 7.25',
+    date: 'August 17, 2026',
     notes: [
       'Study games now show a level bar. A full bar is the whole level you are on — on Orange it fills across all five of Orange’s stars and completes as Corn begins.',
       'The bar is ticked at each sub-level, and the ticks are spaced by what each one actually costs. Sub-levels get longer as you climb, so the last star of a level sits further along the bar than the first.',
       'It shows on the game screen, on Progress, and on the Live Wall’s Study Progress tile. Nothing about your progress, level or streak changed — this only draws what was already there.',
       'The Study Progress tile was reading a lower level than the game screen for the same play. Both now read the same.',
+    ],
+  },
+  {
+    version: 'Beta V 7.24',
+    date: 'August 16, 2026',
+    notes: [
+      'New: Trading Notes, in Advanced Trading. Write down what you think the market does next before it does, then settle it against what actually happened.',
+      'Give a call an instrument and a direction and the terminal settles it for you at the end of the week. A call it could not price says so and is left out of your record rather than counted as wrong.',
+      'A call is fixed once you share it or once its week opens \u2014 only the reflection underneath can change after that. Nobody in your group sees anyone\u2019s call until the window opens.',
+      'Where a call names an instrument, the screen shows what you actually traded in it that week, and says so when you traded against your own call.',
+      'Your record is yours alone, and shows calibration \u2014 what you said, against how often you were right at that level \u2014 rather than ranking anyone.',
+      'A matching Live Wall tile carries this week\u2019s calls and anything waiting on a reflection.',
     ],
   },
   {

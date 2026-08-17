@@ -115,6 +115,11 @@ export const NAV: NavWorkspace[] = [
       // plenty of traders keep a manual book without ever running a challenge.
       { key: 'funded', label: 'Manual Trades', icon: 'pencil' },
       { key: 'deleted', label: 'Deleted Trades', icon: 'trash-2' },
+      // Premium. Third-to-last, with the other two rows that are not records of
+      // trades. This one is what you THOUGHT — the call written before the week
+      // runs, and what you make of it afterwards — so it sits beside the plan
+      // rather than among the trades it may or may not have produced.
+      { key: 'notes', label: 'Trading Notes', icon: 'notebook-pen' },
       // Premium. Second-to-last because it is not a record of trades — it is a
       // plan for making them.
       { key: 'sessions', label: 'Strategy Sessions', icon: 'calendar-clock' },

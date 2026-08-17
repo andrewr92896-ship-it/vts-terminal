@@ -63,6 +63,12 @@ import type {
   HistoryData,
   SessionInput,
   StrategySession,
+  NotesData,
+  NoteInput,
+  NoteKind,
+  NoteOutcome,
+  NoteVisibility,
+  TradingNote,
   MarketHoursResult,
   SessionAlertPrefs,
   TradingBoard,
@@ -721,6 +727,40 @@ export const api = {
   },
   removeSession(id: string): Promise<{ sessions: StrategySession[] }> {
     return request(`/api/trading/sessions/${id}`, { method: 'DELETE' });
+  },
+  // ---- Trading Notes ----
+  // One read serves the whole screen (the week board, the reflection queue, the
+  // viewer's own record and the observations feed), so the screen can never
+  // render half of itself from a partly-failed set of round trips.
+  tradingNotes(week?: string): Promise<NotesData> {
+    return request(`/api/trading/notes${week ? `?week=${encodeURIComponent(week)}` : ''}`);
+  },
+  createNote(input: NoteInput & { kind: NoteKind; title: string }): Promise<{ note: TradingNote }> {
+    return request('/api/trading/notes', { method: 'POST', body: JSON.stringify(input) });
+  },
+  updateNote(id: string, patch: NoteInput): Promise<{ note: TradingNote }> {
+    return request(`/api/trading/notes/${id}`, { method: 'PATCH', body: JSON.stringify(patch) });
+  },
+  setNoteVisibility(id: string, visibility: NoteVisibility): Promise<{ note: TradingNote }> {
+    return request(`/api/trading/notes/${id}/visibility`, {
+      method: 'POST',
+      body: JSON.stringify({ visibility }),
+    });
+  },
+  settleNote(id: string, outcome: NoteOutcome, reflection?: string | null): Promise<{ note: TradingNote }> {
+    return request(`/api/trading/notes/${id}/settle`, {
+      method: 'POST',
+      body: JSON.stringify({ outcome, reflection }),
+    });
+  },
+  reflectOnNote(id: string, reflection: string): Promise<{ note: TradingNote }> {
+    return request(`/api/trading/notes/${id}/reflect`, {
+      method: 'POST',
+      body: JSON.stringify({ reflection }),
+    });
+  },
+  removeNote(id: string): Promise<{ ok: true }> {
+    return request(`/api/trading/notes/${id}`, { method: 'DELETE' });
   },
   marketHours(symbol: string): Promise<MarketHoursResult> {
     return request('/api/trading/market-hours', { method: 'POST', body: JSON.stringify({ symbol }) });

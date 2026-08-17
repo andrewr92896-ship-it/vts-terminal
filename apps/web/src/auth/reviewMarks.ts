@@ -44,6 +44,7 @@ export type ReviewKey =
   | 'groupAlerts'
   | 'tradingAlerts'
   | 'strategySessions'
+  | 'tradingNotes'
   | 'newsBias'
   | 'ai'
   | 'metricsCoach'
@@ -90,6 +91,16 @@ export const REVIEW_MARKS: Record<ReviewKey, ReviewMark> = {
     risk: 'An inbound TradingView signal reaching more than the person who created it is distribution.',
   },
   strategySessions: { risk: 'A directional bias label is advice-flavoured.' },
+  // Owner instruction, 2026-08. A prediction shared with a group is one customer
+  // telling others where the market is going, before it goes there — which is
+  // the most advice-shaped thing in the terminal, closer than the session bias
+  // above because it is directional, forward-looking and aimed at named people.
+  // The screen already says "a personal record, not a recommendation" and no
+  // notification ever pushes one member's call at another; what wants reviewing
+  // is whether that is enough once the group half is public.
+  tradingNotes: {
+    risk: 'A directional call shared with other users is forward-looking advice aimed at named people.',
+  },
   newsBias: { risk: 'A directional cue on a headline is advice-flavoured.' },
   ai: {
     risk: 'The largest advice surface in the terminal. Guardrails exist; it stays under permanent review.',
@@ -129,6 +140,7 @@ export const SECTION_REVIEW: Record<string, ReviewKey> = {
   tradedesk: 'tradeDesk',
   my_team: 'teams',
   sessions: 'strategySessions',
+  notes: 'tradingNotes',
   prop: 'funded',
 
   // Finances and Investments are marked on the WORKSPACE row and on every
@@ -175,6 +187,9 @@ export const TILE_REVIEW: Partial<Record<string, ReviewKey>> = {
   // screen, so it carries the same flag. A surface that can place a real trade
   // must not be reachable without the note that says so.
   ticket: 'tradeDesk',
+  // The Trading Notes tile carries other members' calls on a board, which is the
+  // same distribution the screen is flagged for.
+  tradingnotes: 'tradingNotes',
 };
 
 // Amber. Deliberately none of the three colours already carrying meaning in the

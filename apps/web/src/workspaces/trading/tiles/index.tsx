@@ -30,6 +30,7 @@ import {
   ManualBookTile,
   SessionsTile,
   TradeLogTile,
+  TradingNotesTile,
 } from './DeskTiles';
 import { ClockTile, MarketDataTile, StreamTile } from './MarketTiles';
 import { TicketTile } from './TicketTile';
@@ -102,6 +103,8 @@ export function BoardTileView({
       return <ClosedTradesTile {...props} />;
     case 'sessions':
       return <SessionsTile {...props} />;
+    case 'tradingnotes':
+      return <TradingNotesTile {...props} />;
     case 'funded':
       return <ManualBookTile {...props} />;
     case 'challenge':
