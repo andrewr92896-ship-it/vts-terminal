@@ -22,6 +22,7 @@ export const PATCH_NOTES: PatchNote[] = [
       'You choose how long the answer shows, from 1 to 30 seconds, and that choice carries across every game you play.',
       'There is no clock on choosing your answer. The timer only covers how long the result stays up.',
       'It stops on its own if you open the tutor, start fixing the question, or leave the tab, so nothing is taken off the screen while you are reading it. “Stay on this” stops it by hand.',
+      'The “Adjust” button on the Progress card is now “Settings”, and it is where a study game is set up: Practice mode, Rapid fire and Reset have moved in there alongside the progress-bar settings, instead of sitting in a row of buttons above.',
     ],
   },
   {

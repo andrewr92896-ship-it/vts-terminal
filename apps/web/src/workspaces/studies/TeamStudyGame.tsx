@@ -16,7 +16,7 @@ import {
   recordDeckAnswer,
   type DeckGameState,
 } from './studyEngine';
-import { StudyProgressBars } from './StudyProgress';
+import { SettingField, StudyProgressBars } from './StudyProgress';
 import { ScoreNote, StudyDisclaimer } from './StudyDisclaimer';
 import { clampRapidSeconds, loadStudyPrefs, saveStudyPrefs, type StudyPrefs } from './studyPrefs';
 import { loadDeckSession, saveDeckSession } from './studySession';
@@ -522,6 +522,79 @@ export function TeamStudyGame({ theme, deckId, onBack }: { theme: Theme; deckId:
   // game's creator, or an admin/founder. Never the read-only demo.
   const canEdit = !readOnly && !!user && (isAdmin(user.roles) || (deck.createdBy != null && deck.createdBy === user.id));
 
+  // How this game is played, rendered at the top of the Settings panel behind
+  // the cog on the Progress card — the one place a study game is set up. Kept in
+  // the panel's own `SettingField` rows so it reads as one panel with the
+  // progress-bar prefs underneath, rather than as two stacked ones.
+  const playSettings = (
+    <>
+      <SettingField label="Practice mode">
+        <input
+          type="checkbox"
+          checked={practice}
+          onChange={(e) => setPractice(e.target.checked)}
+          style={{ width: 16, height: 16, accentColor: theme.accent, cursor: 'pointer' }}
+        />
+      </SettingField>
+
+      <SettingField label="Rapid fire">
+        <input
+          type="checkbox"
+          checked={rapidFire}
+          onChange={(e) => {
+            setRapidFire(e.target.checked);
+            if (!e.target.checked) return;
+            // Switching it on while an answer is already on screen takes effect
+            // from the next question — it must not start counting down the
+            // reveal the learner is in the middle of reading.
+            if (revealed) setCountdownHeld(true);
+            // Switching it on over a highlighted-but-unsubmitted choice drops
+            // the highlight, because the confirm button that would have
+            // submitted it has just gone. Left lit, the option reads as answered
+            // when nothing has been recorded.
+            else setSelected(null);
+          }}
+          style={{ width: 16, height: 16, accentColor: theme.accent, cursor: 'pointer' }}
+        />
+      </SettingField>
+
+      {/* Only meaningful with rapid fire on, so it is drawn only then rather
+          than sitting there disabled. */}
+      {rapidFire && (
+        <SettingField label="Show the answer for">
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <button
+              onClick={() => updatePrefs({ ...prefs, rapidSeconds: clampRapidSeconds(prefs.rapidSeconds - 1) })}
+              style={stepBtn(theme)}
+              aria-label="Show the answer for less time"
+            >
+              −
+            </button>
+            <span style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 13, fontWeight: 600, color: '#fff', minWidth: 34, textAlign: 'center' }}>
+              {prefs.rapidSeconds}s
+            </span>
+            <button
+              onClick={() => updatePrefs({ ...prefs, rapidSeconds: clampRapidSeconds(prefs.rapidSeconds + 1) })}
+              style={stepBtn(theme)}
+              aria-label="Show the answer for longer"
+            >
+              +
+            </button>
+          </div>
+        </SettingField>
+      )}
+
+      {/* The demo may not reset — it writes, and its run is canned. */}
+      {!readOnly && (
+        <SettingField label="Progress on this game">
+          <button onClick={() => setResetConfirm(true)} style={{ ...ghostBtn(theme), minHeight: 34, fontSize: 12 }}>
+            {"Reset"}
+          </button>
+        </SettingField>
+      )}
+    </>
+  );
+
   const header = (
     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14, gap: 10, flexWrap: 'wrap' }}>
       <div style={{ minWidth: 0 }}>
@@ -611,113 +684,25 @@ export function TeamStudyGame({ theme, deckId, onBack }: { theme: Theme; deckId:
             <div style={{ fontSize: 10.5, color: muted, fontFamily: "'IBM Plex Mono', monospace" }}>{game.streak} in a row</div>
           </div>
         </div>
-        <label
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: 7,
-            fontSize: 11.5,
-            fontWeight: 600,
-            cursor: 'pointer',
-            color: practice ? theme.accent : muted,
-            border: `1px solid ${practice ? theme.accent : theme.navBorder}`,
-            background: practice ? 'rgba(255,255,255,.07)' : 'transparent',
-            borderRadius: 999,
-            padding: '6px 12px',
-          }}
-        >
-          <input
-            type="checkbox"
-            checked={practice}
-            onChange={(e) => setPractice(e.target.checked)}
-            style={{ width: 15, height: 15, accentColor: theme.accent }}
-          />
-          {"Practice mode"}
-        </label>
-        <label
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: 7,
-            fontSize: 11.5,
-            fontWeight: 600,
-            cursor: 'pointer',
-            color: rapidFire ? theme.accent : muted,
-            border: `1px solid ${rapidFire ? theme.accent : theme.navBorder}`,
-            background: rapidFire ? 'rgba(255,255,255,.07)' : 'transparent',
-            borderRadius: 999,
-            padding: '6px 12px',
-          }}
-        >
-          <input
-            type="checkbox"
-            checked={rapidFire}
-            onChange={(e) => {
-              setRapidFire(e.target.checked);
-              if (!e.target.checked) return;
-              // Switching it on while an answer is already on screen takes
-              // effect from the next question — it must not start counting down
-              // the reveal the learner is in the middle of reading.
-              if (revealed) setCountdownHeld(true);
-              // Switching it on over a highlighted-but-unsubmitted choice drops
-              // the highlight, because the confirm button that would have
-              // submitted it has just gone. Left lit, the option reads as
-              // answered when nothing has been recorded.
-              else setSelected(null);
-            }}
-            style={{ width: 15, height: 15, accentColor: theme.accent }}
-          />
-          {"Rapid fire"}
-        </label>
-        {rapidFire && (
-          <div
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: 6,
-              fontSize: 11.5,
-              color: muted,
-              border: `1px solid ${theme.navBorder}`,
-              borderRadius: 999,
-              padding: '4px 9px',
-            }}
-          >
-            <span>{"Show answer for"}</span>
-            <button
-              onClick={() => updatePrefs({ ...prefs, rapidSeconds: clampRapidSeconds(prefs.rapidSeconds - 1) })}
-              style={stepBtn(theme)}
-              aria-label="Show the answer for less time"
-            >
-              −
-            </button>
-            <span style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 12, color: '#fff', minWidth: 30, textAlign: 'center' }}>
-              {prefs.rapidSeconds}s
-            </span>
-            <button
-              onClick={() => updatePrefs({ ...prefs, rapidSeconds: clampRapidSeconds(prefs.rapidSeconds + 1) })}
-              style={stepBtn(theme)}
-              aria-label="Show the answer for longer"
-            >
-              +
-            </button>
-          </div>
-        )}
         {sources.length > 0 && (
-          <label style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 11.5, color: muted, cursor: 'pointer', marginLeft: sources.length > 0 && !readOnly ? 0 : 'auto' }}>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 11.5, color: muted, cursor: 'pointer', marginLeft: 'auto' }}>
             <input type="checkbox" checked={guessMode} onChange={(e) => setGuessMode(e.target.checked)} style={{ width: 15, height: 15, accentColor: theme.accent }} />
             {"Guess the source"}
           </label>
         )}
-        {!readOnly && (
-          <button onClick={() => setResetConfirm(true)} style={{ ...ghostBtn(theme), marginLeft: 'auto', minHeight: 36 }}>
-            {"Reset"}
-          </button>
-        )}
       </div>
 
-      {/* Lifetime + session progress bars, with the learner's own thresholds. */}
+      {/* Lifetime + session progress bars, with the Settings panel behind the
+          cog carrying how the game is played as well as what the bars measure
+          against. */}
       <div style={{ ...card(theme), marginBottom: 14, padding: '14px 16px' }}>
-        <StudyProgressBars theme={theme} game={game} prefs={prefs} onPrefsChange={updatePrefs} />
+        <StudyProgressBars
+          theme={theme}
+          game={game}
+          prefs={prefs}
+          onPrefsChange={updatePrefs}
+          settingsExtra={playSettings}
+        />
       </div>
 
       {practice && (
