@@ -3,6 +3,10 @@
 //
 //   1. Practice mode — when on, answers reveal + explain but don't touch the
 //      score, level, streak, or leaderboard.
+//   1b. Rapid fire — when on, pressing an option submits it straight away (no
+//      confirm step) and the next question is drawn once the reveal has been on
+//      screen for the learner's chosen number of seconds. How long that is
+//      lives in studyPrefs, since it describes the learner rather than the deck.
 //   2. The question the learner is currently on (by its stable `seq`) and its
 //      reveal state, so leaving the tab, backgrounding the app, or relaunching
 //      restores the exact same question — even one that's already been answered
@@ -30,10 +34,11 @@ export interface DeckViewState {
 
 export interface DeckSessionState {
   practice: boolean;
+  rapidFire: boolean;
   current: DeckViewState | null;
 }
 
-export const emptyDeckSession: DeckSessionState = { practice: false, current: null };
+export const emptyDeckSession: DeckSessionState = { practice: false, rapidFire: false, current: null };
 
 // localStorage key for a deck's per-user session/view state.
 export function deckSessionKey(userId: string | undefined, deckId: string): string {
@@ -63,6 +68,7 @@ function normalizeSession(p: unknown): DeckSessionState {
   const src = p as Record<string, unknown>;
   return {
     practice: src.practice === true,
+    rapidFire: src.rapidFire === true,
     current: normalizeView(src.current),
   };
 }

@@ -16,9 +16,9 @@ import {
   recordDeckAnswer,
   type DeckGameState,
 } from './studyEngine';
-import { StudyProgressBars } from './StudyProgress';
+import { SettingField, StudyProgressBars } from './StudyProgress';
 import { ScoreNote, StudyDisclaimer } from './StudyDisclaimer';
-import { loadStudyPrefs, saveStudyPrefs, type StudyPrefs } from './studyPrefs';
+import { clampRapidSeconds, loadStudyPrefs, saveStudyPrefs, type StudyPrefs } from './studyPrefs';
 import { loadDeckSession, saveDeckSession } from './studySession';
 import { TutorChat } from './TutorChat';
 
@@ -101,6 +101,25 @@ export function TeamStudyGame({ theme, deckId, onBack }: { theme: Theme; deckId:
   // remember which game they came from.
   const [guessMode, setGuessMode] = useState(false);
   const [sourceGuess, setSourceGuess] = useState<string | null>(null);
+
+  // Rapid fire: pressing an option submits it — there is no confirm step — and
+  // the next question is drawn once the reveal has been on screen for the
+  // learner's chosen number of seconds. There is deliberately NO limit on how
+  // long they may take to answer: the timer is only ever the gap between seeing
+  // the result and being handed the next question. Persisted per deck, like
+  // practice mode; how long the reveal lasts is a personal pref (studyPrefs).
+  const [rapidFire, setRapidFire] = useState(false);
+  // Seconds left on the open reveal, or null when nothing is counting.
+  const [countdown, setCountdown] = useState<number | null>(null);
+  const counting = countdown != null;
+  // True once the learner has engaged with THIS reveal — opened the tutor or the
+  // fix editor, pressed "Stay on this", or left the tab. Rapid fire is a
+  // convenience for the ordinary case; the moment somebody is reading or typing,
+  // the screen must not be taken away from them. Cleared by advance().
+  const [countdownHeld, setCountdownHeld] = useState(false);
+  // In "guess the source" mode the reveal still owes the learner a question, so
+  // the countdown waits for their guess rather than answering it for them.
+  const guessOwed = guessMode && !!current?.sourceName && sourceGuess == null;
 
   // Inline "fix this question" editor (creator/admin only): correct a flawed
   // answer key or drop a bad question, without leaving the game.
@@ -202,6 +221,7 @@ export function TeamStudyGame({ theme, deckId, onBack }: { theme: Theme; deckId:
     if (!deck || viewReady) return;
     const sess = loadDeckSession(user?.id, deckId);
     setPractice(sess.practice);
+    setRapidFire(sess.rapidFire);
     const cur = sess.current;
     const q = cur ? deck.questions.find((x) => x.seq === cur.seq) : null;
     if (cur && q) {
@@ -211,6 +231,10 @@ export function TeamStudyGame({ theme, deckId, onBack }: { theme: Theme; deckId:
       setOutcome(cur.outcome);
       setSourceGuess(cur.sourceGuess);
       setPracticeAttempt(cur.practiceAttempt);
+      // Coming back to an answer that was already on screen must not start a
+      // countdown on it. They left mid-reveal; returning is not the same act as
+      // having just answered, and the point of the timer is time to read.
+      setCountdownHeld(cur.revealed);
       // Don't let the restored question resurface immediately in this run.
       poolRef.current = poolRef.current.filter((i) => deck.questions[i]?.seq !== q.seq);
     } else {
@@ -226,12 +250,47 @@ export function TeamStudyGame({ theme, deckId, onBack }: { theme: Theme; deckId:
     if (!deck || !viewReady) return;
     saveDeckSession(user?.id, deckId, {
       practice,
+      rapidFire,
       current: current
         ? { seq: current.seq, selected, revealed, outcome, sourceGuess, practiceAttempt }
         : null,
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [deck, viewReady, practice, current, selected, revealed, outcome, sourceGuess, practiceAttempt]);
+  }, [deck, viewReady, practice, rapidFire, current, selected, revealed, outcome, sourceGuess, practiceAttempt]);
+
+  // One interval drives the rapid-fire countdown on the open reveal. It restarts
+  // whenever the question or the chosen length changes, and stops outright the
+  // moment any of the conditions above says it must not run.
+  useEffect(() => {
+    if (!rapidFire || !revealed || countdownHeld || guessOwed) {
+      setCountdown(null);
+      return;
+    }
+    setCountdown(prefs.rapidSeconds);
+    const id = setInterval(() => setCountdown((s) => (s == null ? null : Math.max(0, s - 1))), 1000);
+    return () => clearInterval(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rapidFire, revealed, countdownHeld, guessOwed, prefs.rapidSeconds, current?.seq]);
+
+  // Drawing the next question is its own effect rather than something the
+  // interval callback does, so the advance happens in render order — advance()
+  // clears `revealed`, which is what tears the interval above down.
+  useEffect(() => {
+    if (countdown === 0) advance();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [countdown]);
+
+  // A backgrounded tab keeps ticking, so a learner who glances away would come
+  // back to a question they never saw the answer to. Hold the countdown instead
+  // — the reveal is still on screen when they return.
+  useEffect(() => {
+    if (!counting) return;
+    const onHide = () => {
+      if (document.hidden) setCountdownHeld(true);
+    };
+    document.addEventListener('visibilitychange', onHide);
+    return () => document.removeEventListener('visibilitychange', onHide);
+  }, [counting]);
 
   // Recolour the Studies workspace to the current level while this game is open,
   // and clear the tint when the player leaves.
@@ -249,6 +308,8 @@ export function TeamStudyGame({ theme, deckId, onBack }: { theme: Theme; deckId:
     setFixError(null);
     setFixNote(null);
     preAnswerRef.current = null;
+    setCountdown(null);
+    setCountdownHeld(false);
     if (!d || d.questions.length === 0) {
       setCurrent(null);
       return;
@@ -461,6 +522,79 @@ export function TeamStudyGame({ theme, deckId, onBack }: { theme: Theme; deckId:
   // game's creator, or an admin/founder. Never the read-only demo.
   const canEdit = !readOnly && !!user && (isAdmin(user.roles) || (deck.createdBy != null && deck.createdBy === user.id));
 
+  // How this game is played, rendered at the top of the Settings panel behind
+  // the cog on the Progress card — the one place a study game is set up. Kept in
+  // the panel's own `SettingField` rows so it reads as one panel with the
+  // progress-bar prefs underneath, rather than as two stacked ones.
+  const playSettings = (
+    <>
+      <SettingField label="Practice mode">
+        <input
+          type="checkbox"
+          checked={practice}
+          onChange={(e) => setPractice(e.target.checked)}
+          style={{ width: 16, height: 16, accentColor: theme.accent, cursor: 'pointer' }}
+        />
+      </SettingField>
+
+      <SettingField label="Rapid fire">
+        <input
+          type="checkbox"
+          checked={rapidFire}
+          onChange={(e) => {
+            setRapidFire(e.target.checked);
+            if (!e.target.checked) return;
+            // Switching it on while an answer is already on screen takes effect
+            // from the next question — it must not start counting down the
+            // reveal the learner is in the middle of reading.
+            if (revealed) setCountdownHeld(true);
+            // Switching it on over a highlighted-but-unsubmitted choice drops
+            // the highlight, because the confirm button that would have
+            // submitted it has just gone. Left lit, the option reads as answered
+            // when nothing has been recorded.
+            else setSelected(null);
+          }}
+          style={{ width: 16, height: 16, accentColor: theme.accent, cursor: 'pointer' }}
+        />
+      </SettingField>
+
+      {/* Only meaningful with rapid fire on, so it is drawn only then rather
+          than sitting there disabled. */}
+      {rapidFire && (
+        <SettingField label="Show the answer for">
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <button
+              onClick={() => updatePrefs({ ...prefs, rapidSeconds: clampRapidSeconds(prefs.rapidSeconds - 1) })}
+              style={stepBtn(theme)}
+              aria-label="Show the answer for less time"
+            >
+              −
+            </button>
+            <span style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 13, fontWeight: 600, color: '#fff', minWidth: 34, textAlign: 'center' }}>
+              {prefs.rapidSeconds}s
+            </span>
+            <button
+              onClick={() => updatePrefs({ ...prefs, rapidSeconds: clampRapidSeconds(prefs.rapidSeconds + 1) })}
+              style={stepBtn(theme)}
+              aria-label="Show the answer for longer"
+            >
+              +
+            </button>
+          </div>
+        </SettingField>
+      )}
+
+      {/* The demo may not reset — it writes, and its run is canned. */}
+      {!readOnly && (
+        <SettingField label="Progress on this game">
+          <button onClick={() => setResetConfirm(true)} style={{ ...ghostBtn(theme), minHeight: 34, fontSize: 12 }}>
+            {"Reset"}
+          </button>
+        </SettingField>
+      )}
+    </>
+  );
+
   const header = (
     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14, gap: 10, flexWrap: 'wrap' }}>
       <div style={{ minWidth: 0 }}>
@@ -550,45 +684,25 @@ export function TeamStudyGame({ theme, deckId, onBack }: { theme: Theme; deckId:
             <div style={{ fontSize: 10.5, color: muted, fontFamily: "'IBM Plex Mono', monospace" }}>{game.streak} in a row</div>
           </div>
         </div>
-        <label
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: 7,
-            fontSize: 11.5,
-            fontWeight: 600,
-            cursor: 'pointer',
-            color: practice ? theme.accent : muted,
-            border: `1px solid ${practice ? theme.accent : theme.navBorder}`,
-            background: practice ? 'rgba(255,255,255,.07)' : 'transparent',
-            borderRadius: 999,
-            padding: '6px 12px',
-          }}
-        >
-          <input
-            type="checkbox"
-            checked={practice}
-            onChange={(e) => setPractice(e.target.checked)}
-            style={{ width: 15, height: 15, accentColor: theme.accent }}
-          />
-          {"Practice mode"}
-        </label>
         {sources.length > 0 && (
-          <label style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 11.5, color: muted, cursor: 'pointer', marginLeft: sources.length > 0 && !readOnly ? 0 : 'auto' }}>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 11.5, color: muted, cursor: 'pointer', marginLeft: 'auto' }}>
             <input type="checkbox" checked={guessMode} onChange={(e) => setGuessMode(e.target.checked)} style={{ width: 15, height: 15, accentColor: theme.accent }} />
             {"Guess the source"}
           </label>
         )}
-        {!readOnly && (
-          <button onClick={() => setResetConfirm(true)} style={{ ...ghostBtn(theme), marginLeft: 'auto', minHeight: 36 }}>
-            {"Reset"}
-          </button>
-        )}
       </div>
 
-      {/* Lifetime + session progress bars, with the learner's own thresholds. */}
+      {/* Lifetime + session progress bars, with the Settings panel behind the
+          cog carrying how the game is played as well as what the bars measure
+          against. */}
       <div style={{ ...card(theme), marginBottom: 14, padding: '14px 16px' }}>
-        <StudyProgressBars theme={theme} game={game} prefs={prefs} onPrefsChange={updatePrefs} />
+        <StudyProgressBars
+          theme={theme}
+          game={game}
+          prefs={prefs}
+          onPrefsChange={updatePrefs}
+          settingsExtra={playSettings}
+        />
       </div>
 
       {practice && (
@@ -654,8 +768,19 @@ export function TeamStudyGame({ theme, deckId, onBack }: { theme: Theme; deckId:
         </div>
       ) : (
         <div style={card(theme)}>
-          <div style={{ fontSize: 10.5, color: muted, marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-            {current.topic}
+          {/* The topic, and — since the toggle itself now lives behind the
+              Settings cog — whether rapid fire is on. Without it the only sign
+              before answering is the confirm button being absent, which says
+              nothing on its own. */}
+          <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 10, marginBottom: 8 }}>
+            <div style={{ fontSize: 10.5, color: muted, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+              {current.topic}
+            </div>
+            {rapidFire && (
+              <div style={{ fontSize: 10.5, fontWeight: 700, color: RED, textTransform: 'uppercase', letterSpacing: '0.5px', whiteSpace: 'nowrap' }}>
+                {"Rapid fire mode enabled"}
+              </div>
+            )}
           </div>
           <div style={{ fontSize: isPhone ? 15 : 16, lineHeight: 1.55, color: '#fff', fontWeight: 600, marginBottom: 16 }}>
             {current.stem}
@@ -684,7 +809,12 @@ export function TeamStudyGame({ theme, deckId, onBack }: { theme: Theme; deckId:
               return (
                 <button
                   key={o.label}
-                  onClick={() => !revealed && setSelected(o.label)}
+                  onClick={() => {
+                    if (revealed) return;
+                    // Rapid fire: the press IS the answer — no confirm step.
+                    if (rapidFire) submit(o.label);
+                    else setSelected(o.label);
+                  }}
                   disabled={revealed}
                   style={{
                     display: 'flex',
@@ -713,14 +843,22 @@ export function TeamStudyGame({ theme, deckId, onBack }: { theme: Theme; deckId:
 
           {!revealed ? (
             <div style={{ marginTop: 12, display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+              {/* No confirm button in rapid fire — the option press submitted it
+                  already. "I Don’t Know" stays either way: it is one press and
+                  the only way to reveal an answer you can't attempt. */}
+              {!rapidFire && (
+                <button
+                  onClick={() => selected && submit(selected)}
+                  disabled={selected == null}
+                  style={{ ...primaryBtn(theme, accentGrad), flex: 1, minWidth: 160, opacity: selected == null ? 0.6 : 1 }}
+                >
+                  {selected == null ? "Select an answer" : `Confirm ${selected}`}
+                </button>
+              )}
               <button
-                onClick={() => selected && submit(selected)}
-                disabled={selected == null}
-                style={{ ...primaryBtn(theme, accentGrad), flex: 1, minWidth: 160, opacity: selected == null ? 0.6 : 1 }}
+                onClick={() => submit(null)}
+                style={{ ...ghostBtn(theme), borderStyle: 'dashed', ...(rapidFire ? { flex: 1, minWidth: 160 } : null) }}
               >
-                {selected == null ? "Select an answer" : `Confirm ${selected}`}
-              </button>
-              <button onClick={() => submit(null)} style={{ ...ghostBtn(theme), borderStyle: 'dashed' }}>
                 {"I Don’t Know"}
               </button>
             </div>
@@ -788,6 +926,7 @@ export function TeamStudyGame({ theme, deckId, onBack }: { theme: Theme; deckId:
                   seedLabel="💡 Break this down"
                   seedPrompt="Walk me through this question in plain, simple terms — why the correct answer is right, and why the other options are wrong. If I picked the wrong one, explain what I likely misunderstood."
                   placeholder="Ask about this question…"
+                  onActivity={() => setCountdownHeld(true)}
                 />
               </div>
 
@@ -801,6 +940,8 @@ export function TeamStudyGame({ theme, deckId, onBack }: { theme: Theme; deckId:
                         setFixOpen(true);
                         setFixError(null);
                         setFixNote(null);
+                        // Editing a question takes as long as it takes.
+                        setCountdownHeld(true);
                       }}
                       style={{ ...ghostBtn(theme), minHeight: 34, fontSize: 12 }}
                     >
@@ -896,9 +1037,35 @@ export function TeamStudyGame({ theme, deckId, onBack }: { theme: Theme; deckId:
                 </div>
               )}
 
-              <button onClick={() => advance()} style={primaryBtn(theme, accentGrad)}>
-                {"Next question ›"}
-              </button>
+              {/* Rapid fire draws the next question on its own, so the wait is
+                  shown rather than left to surprise the learner — and "Stay on
+                  this" stops it without turning the mode off. */}
+              {countdown != null ? (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 9 }}>
+                  <div style={{ height: 4, borderRadius: 999, background: 'rgba(255,255,255,.08)', overflow: 'hidden' }}>
+                    <div
+                      style={{
+                        height: '100%',
+                        width: `${(countdown / Math.max(1, prefs.rapidSeconds)) * 100}%`,
+                        background: accentGrad,
+                        transition: 'width 1s linear',
+                      }}
+                    />
+                  </div>
+                  <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+                    <button onClick={() => advance()} style={{ ...primaryBtn(theme, accentGrad), flex: 1, minWidth: 180 }}>
+                      {`Next question › · ${countdown}s`}
+                    </button>
+                    <button onClick={() => setCountdownHeld(true)} style={ghostBtn(theme)}>
+                      {"Stay on this"}
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <button onClick={() => advance()} style={primaryBtn(theme, accentGrad)}>
+                  {"Next question ›"}
+                </button>
+              )}
             </div>
           )}
         </div>
@@ -988,6 +1155,23 @@ function primaryBtn(theme: Theme, grad: string): CSSProperties {
     borderRadius: 8,
     cursor: 'pointer',
     minHeight: 44,
+  };
+}
+
+// The − / + on the rapid-fire seconds control. Small enough to sit inline in the
+// HUD row beside the toggle it belongs to.
+function stepBtn(theme: Theme): CSSProperties {
+  return {
+    width: 24,
+    height: 24,
+    borderRadius: 6,
+    border: `1px solid ${theme.navBorder}`,
+    background: 'rgba(255,255,255,.05)',
+    color: '#cdbcff',
+    fontSize: 14,
+    lineHeight: 1,
+    cursor: 'pointer',
+    padding: 0,
   };
 }
 

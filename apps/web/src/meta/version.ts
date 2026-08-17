@@ -11,9 +11,23 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 7.26';
+export const APP_VERSION = 'Beta V 7.27';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 7.27',
+    date: 'August 17, 2026',
+    notes: [
+      'Rapid fire on the study game: pressing an answer submits it straight away — no Confirm step — and the next question is drawn once the answer has been on screen for a few seconds.',
+      'You choose how long the answer shows, from 1 to 30 seconds, and that choice carries across every game you play.',
+      'There is no clock on choosing your answer. The timer only covers how long the result stays up.',
+      'It stops on its own if you open the tutor, start fixing the question, or leave the tab, so nothing is taken off the screen while you are reading it. “Stay on this” stops it by hand.',
+      'The “Adjust” button on the Progress card is now “Settings”, and it is where a study game is set up: Practice mode, Rapid fire and Reset have moved in there alongside the progress-bar settings, instead of sitting in a row of buttons above.',
+      'With rapid fire on, the question box says so in red in its top corner.',
+      'Practice tests no longer start over when you leave. Come back and you are offered “Continue where I left off” — the same paper, the same question, your answers still there — or you can discard it and start fresh.',
+      'The one time it cannot be resumed is when the game’s questions have changed since you started, because that would be grading you on a different test. It says so rather than quietly starting over.',
+    ],
+  },
   {
     version: 'Beta V 7.26',
     date: 'August 17, 2026',

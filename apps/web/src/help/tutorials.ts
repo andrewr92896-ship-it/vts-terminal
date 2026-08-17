@@ -342,6 +342,14 @@ export const TUTORIALS: Record<string, Tutorial> = {
         body: 'Click an option to highlight it, then Confirm to submit. When the answer is revealed the correct choice is highlighted, with a short explanation when the author included one. “I Don’t Know” reveals the answer and counts as incorrect.',
       },
       {
+        title: 'Settings',
+        body: '“⚙ Settings” on the Progress card is where the game is set up: Practice mode (answers reveal and explain but don’t count towards your score, level, streak, or the leaderboard), Rapid fire, Reset, and what the progress bars measure against.',
+      },
+      {
+        title: 'Rapid fire',
+        body: 'Switch “Rapid fire” on in Settings to study hands-free: pressing an option submits it straight away — no Confirm step — and the next question is drawn once the answer has been on screen for the number of seconds set beneath the toggle. There is no clock on choosing your answer; the timer only ever covers how long the result is shown. “Stay on this” stops the countdown on that answer, and it also stops on its own if you open the tutor, start fixing the question, or leave the tab.',
+      },
+      {
         title: 'Watch your score',
         body: 'Your score is your lifetime accuracy on that game — every correct answer divided by every question attempted — with the change from the previous question.',
       },
@@ -351,7 +359,7 @@ export const TUTORIALS: Record<string, Tutorial> = {
       },
       {
         title: 'Leaderboard & reset',
-        body: 'Flip to the Leaderboard tab to see how you stack up. “Reset” banks your current run to the leaderboard as a past run, then clears your level and score to start fresh — your best level ever reached is kept.',
+        body: 'Flip to the Leaderboard tab to see how you stack up. “Reset”, in Settings, banks your current run to the leaderboard as a past run, then clears your level and score to start fresh — your best level ever reached is kept.',
       },
     ],
   },
@@ -362,6 +370,10 @@ export const TUTORIALS: Record<string, Tutorial> = {
       {
         title: 'Pick a game and set it up',
         body: 'Choose a game, then set how many questions to draw and the pass line (default 72%). Choose “feedback as you go” to see each answer, or leave it off for a silent exam graded at the end.',
+      },
+      {
+        title: 'Leaving part-way through',
+        body: 'A test you leave part-way through is kept. Come back to Practice Tests and you are offered “Continue where I left off”, which picks up the same paper on the same question with your answers intact — or discard it and start a fresh one. The one case it cannot be resumed is when the game’s questions have changed since you started, which would make it a different test; it says so.',
       },
       {
         title: 'Your result',

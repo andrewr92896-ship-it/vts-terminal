@@ -10,12 +10,19 @@ import {
   type StudyPrefs,
 } from './studyPrefs';
 
-// The lifetime + session progress bars for a study game, plus the inline editor
-// for the (per-user) session window and passing thresholds. Shared by the game
-// HUD (TeamStudyGame) and the read-only summary (DeckProgress) so both read the
-// same. Lifetime = correct/attempted over the whole run (what the leaderboard
-// ranks by); session = the correct rate over your last N answers, N being the
-// learner's own setting.
+// The lifetime + session progress bars for a study game, plus the Settings
+// panel behind the cog. Shared by the game HUD (TeamStudyGame) and the read-only
+// summary (DeckProgress) so both read the same. Lifetime = correct/attempted
+// over the whole run (what the leaderboard ranks by); session = the correct rate
+// over your last N answers, N being the learner's own setting.
+//
+// The panel is the ONE place a study game is set up (owner instruction,
+// 2026-08): how you play it (practice mode, rapid fire) and what the bars
+// measure against, plus the reset. Those play controls belong to the player
+// rather than to this component — the read-only progress summary has no such
+// thing — so they are passed in as `settingsExtra` and rendered at the top of
+// the panel. Keep them in the same `SettingField` rows the prefs below use, or
+// the panel reads as two stacked panels rather than one.
 
 const GREEN = '#35c47b';
 const RED = '#ef5468';
@@ -103,11 +110,15 @@ export function StudyProgressBars({
   game,
   prefs,
   onPrefsChange,
+  settingsExtra,
 }: {
   theme: Theme;
   game: DeckGameState;
   prefs: StudyPrefs;
   onPrefsChange: (p: StudyPrefs) => void;
+  // The player's own controls (how you play, and the reset), rendered at the top
+  // of the Settings panel. Absent on the read-only progress summary.
+  settingsExtra?: ReactNode;
 }) {
   const [editing, setEditing] = useState(false);
 
@@ -134,11 +145,7 @@ export function StudyProgressBars({
             minHeight: 30,
           }}
         >
-          {editing ? (
-            "Done"
-          ) : (
-            "⚙ Adjust"
-          )}
+          {editing ? "Done" : "⚙ Settings"}
         </button>
       </div>
 
@@ -168,7 +175,7 @@ export function StudyProgressBars({
         passing={prefs.sessionPass}
       />
 
-      {editing && <PrefsEditor theme={theme} prefs={prefs} onPrefsChange={onPrefsChange} />}
+      {editing && <PrefsEditor theme={theme} prefs={prefs} onPrefsChange={onPrefsChange} extra={settingsExtra} />}
     </div>
   );
 }
@@ -177,10 +184,12 @@ function PrefsEditor({
   theme,
   prefs,
   onPrefsChange,
+  extra,
 }: {
   theme: Theme;
   prefs: StudyPrefs;
   onPrefsChange: (p: StudyPrefs) => void;
+  extra?: ReactNode;
 }) {
   return (
     <div
@@ -194,7 +203,10 @@ function PrefsEditor({
         gap: 12,
       }}
     >
-      <Field label="Session window (last N answers)">
+      {extra}
+      {extra != null && <div style={{ height: 1, background: theme.navBorder }} />}
+
+      <SettingField label="Session window (last N answers)">
         <input
           type="number"
           min={SESSION_WINDOW_MIN}
@@ -203,15 +215,15 @@ function PrefsEditor({
           onChange={(e) => onPrefsChange({ ...prefs, sessionWindow: clampWindow(Number(e.target.value)) })}
           style={numInput(theme)}
         />
-      </Field>
+      </SettingField>
 
-      <Field label="Lifetime passing %">
+      <SettingField label="Lifetime passing %">
         <PassInput theme={theme} value={prefs.lifetimePass} onChange={(v) => onPrefsChange({ ...prefs, lifetimePass: v })} />
-      </Field>
+      </SettingField>
 
-      <Field label="Session passing %">
+      <SettingField label="Session passing %">
         <PassInput theme={theme} value={prefs.sessionPass} onChange={(v) => onPrefsChange({ ...prefs, sessionPass: v })} />
-      </Field>
+      </SettingField>
 
       <div style={{ fontSize: 10.5, color: muted, lineHeight: 1.5 }}>
         {"Personal to you and saved on this device. Leave a passing % blank to hide its pass line. Leaderboards always rank by lifetime %."}
@@ -235,7 +247,10 @@ function PassInput({ theme, value, onChange }: { theme: Theme; value: number | n
   );
 }
 
-function Field({
+// One row of the Settings panel: its name on the left, its control on the right.
+// Exported so the player's own controls render as the same kind of row as the
+// prefs beneath them.
+export function SettingField({
   label,
   children,
 }: {
