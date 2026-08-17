@@ -160,6 +160,11 @@ function AccountCard({
 }) {
   const [editingBalance, setEditingBalance] = useState(false);
   const [balanceInput, setBalanceInput] = useState(String(a.balance ?? ''));
+  // The firm's round-turn commission per standard lot. Kept here rather than on
+  // the add form alone because it is a rate a trader looks up after opening the
+  // account, and the re-entry check is unusable until it is stated.
+  const [editingComm, setEditingComm] = useState(false);
+  const [commInput, setCommInput] = useState(String(a.commissionPerLot ?? ''));
   const [addingTrade, setAddingTrade] = useState(false);
   const [shotBusy, setShotBusy] = useState(false);
   const [shotMsg, setShotMsg] = useState<string | null>(null);
@@ -224,6 +229,13 @@ function AccountCard({
     if (await run(api.updateFundedAccount(a.id, { balance: num(balanceInput) ?? null }))) setEditingBalance(false);
   }
 
+  // A cleared box stores null — "not stated" — rather than zero. Zero would say
+  // the firm charges nothing, which is a different claim and makes re-entry look
+  // free on the check that exists to price it.
+  async function saveCommission() {
+    if (await run(api.updateFundedAccount(a.id, { commissionPerLot: num(commInput) ?? null }))) setEditingComm(false);
+  }
+
   return (
     <div style={{ ...card, padding: 0, overflow: 'hidden', borderTop: `2px solid ${GOLD}` }}>
       {/* Header */}
@@ -254,6 +266,23 @@ function AccountCard({
           <div style={{ fontSize: 11, color: FAINT, marginTop: 6 }}>
             Logged P/L <b style={{ color: a.realizedPl >= 0 ? GREEN : RED, fontFamily: MONO }}>{showMoney ? money(a.realizedPl, ccy) : '•••••'}</b> · {a.tradeCount} trade{a.tradeCount === 1 ? '' : 's'}
             {a.startingBalance != null && <> · started at {dollars(a.startingBalance)}</>}
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, color: FAINT, marginTop: 5, flexWrap: 'wrap' }}>
+            <span>{"Commission per lot (round turn)"}</span>
+            {editingComm ? (
+              <>
+                <input value={commInput} onChange={(e) => setCommInput(e.target.value)} type="number" step="any" min="0" autoFocus style={{ ...inputBase, width: 100 }} />
+                <button onClick={saveCommission} disabled={busy} style={miniGold}>{"Save"}</button>
+                <button onClick={() => { setEditingComm(false); setCommInput(String(a.commissionPerLot ?? '')); }} style={miniGhost}>{"Cancel"}</button>
+              </>
+            ) : (
+              <>
+                <b style={{ color: a.commissionPerLot == null ? FAINT : TEXT, fontFamily: MONO }}>
+                  {a.commissionPerLot == null ? 'not set' : money(a.commissionPerLot, ccy)}
+                </b>
+                {!readOnly && a.isMine && <button onClick={() => setEditingComm(true)} style={miniGhost}>{"Edit"}</button>}
+              </>
+            )}
           </div>
           {/* Capital gained from trades — deposits/withdrawals don't count */}
           <div style={{ display: 'flex', gap: 18, marginTop: 10, flexWrap: 'wrap' }}>

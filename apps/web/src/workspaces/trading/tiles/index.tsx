@@ -26,6 +26,7 @@ import {
 import {
   CapitalTile,
   ChallengeTile,
+  ReentryTile,
   ClosedTradesTile,
   ManualBookTile,
   SessionsTile,
@@ -109,6 +110,8 @@ export function BoardTileView({
       return <ManualBookTile {...props} />;
     case 'challenge':
       return <ChallengeTile {...props} />;
+    case 'reentry':
+      return <ReentryTile {...props} />;
     case 'capital':
       return <CapitalTile {...props} />;
 

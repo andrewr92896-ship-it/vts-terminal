@@ -2,10 +2,14 @@ import { useEffect, useState, type CSSProperties, type ReactNode } from 'react';
 import { api, ApiError } from '../../api/client';
 import { SYMBOL_SUGGESTIONS, symbolLabel } from './tvChart';
 import { zoneFmt } from '../../lib/timezone';
+import { LevelPicker } from '../../components/NotificationSettings';
 import type {
   PriceAlert,
   PriceAlertCondition,
   PriceAlertRepeat,
+  RolloverEvent,
+  RolloverEventPlan,
+  RolloverPlan,
   SessionAlertPrefs,
 } from '../../api/types';
 
@@ -153,6 +157,163 @@ function ToggleRow({ label, on, onChange }: { label: ReactNode; on: boolean; onC
         <span style={{ position: 'absolute', top: 2, left: on ? 22 : 2, width: 18, height: 18, borderRadius: '50%', background: on ? GREEN : FAINT, transition: 'left .15s ease' }} />
       </button>
     </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Rollover close
+// ---------------------------------------------------------------------------
+
+// The three timed alerts around the 5pm ET rollover, for a trader who cannot
+// hold a funded position through it.
+//
+// **Rendered in TWO places from this one component** — here on Alert Settings,
+// where every alert opt-in reads in one list, and on Strategy Sessions, which is
+// where a plan for the trading day belongs and where the owner asked for it.
+// The same arrangement GroupAlertSender already uses, and for the same reason:
+// two copies of a control with one route behind it drift within a month, and
+// whichever one somebody happens to open is the one that looks broken.
+//
+// Nothing here picks weekdays, deliberately. The first two alerts only fire when
+// a funded position is actually open, so a flat day — or a weekend — is silent
+// on its own. A day picker would be a second switch for a job one gate already
+// does.
+const ROLLOVER_ROWS: { key: RolloverEvent; label: string; note: string }[] = [
+  { key: 'evaluate', label: 'Evaluate', note: 'While something is still open' },
+  { key: 'close', label: 'Close', note: 'While something is still open' },
+  { key: 'recheck', label: 'Back in?', note: 'After a funded trade closed today' },
+];
+
+export function RolloverAlertSettings() {
+  const [plan, setPlan] = useState<RolloverPlan | null>(null);
+  const [status, setStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
+  const [open, setOpen] = useState(false);
+  const [openLevel, setOpenLevel] = useState<RolloverEvent | null>(null);
+
+  useEffect(() => {
+    let alive = true;
+    api.rolloverPlan()
+      .then((r) => { if (alive) setPlan(r.plan); })
+      .catch(() => { if (alive) setPlan(null); });
+    return () => { alive = false; };
+  }, []);
+
+  // Saves send only the part that changed. The server merges onto what is
+  // stored, so a stale cached bundle can never blank an event it does not know
+  // about — and the panel shows the change at once rather than after the round
+  // trip, because a toggle that lags reads as one that did not register.
+  async function persist(next: RolloverPlan, patch: Parameters<typeof api.saveRolloverPlan>[0]) {
+    setPlan(next);
+    setStatus('saving');
+    try {
+      const r = await api.saveRolloverPlan(patch);
+      setPlan(r.plan);
+      setStatus('saved');
+      window.setTimeout(() => setStatus((s) => (s === 'saved' ? 'idle' : s)), 1800);
+    } catch {
+      setStatus('error');
+    }
+  }
+
+  function patchEvent(key: RolloverEvent, change: Partial<RolloverEventPlan>) {
+    if (!plan) return;
+    const next = { ...plan, [key]: { ...plan[key], ...change } };
+    void persist(next, { [key]: change });
+  }
+
+  if (!plan) return null;
+
+  return (
+    <div style={{ ...card, padding: 0, overflow: 'hidden' }}>
+      <button
+        onClick={() => setOpen((v) => !v)}
+        style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, background: 'none', border: 'none', color: TEXT, cursor: 'pointer', padding: '13px 16px', textAlign: 'left' }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+          <span style={{ fontSize: 14, fontWeight: 700, color: '#fff' }}>{'\u{1F504}'} Rollover close</span>
+          {plan.enabled && <span style={{ ...badge, color: GREEN, border: `1px solid ${GREEN}` }}>ON</span>}
+        </div>
+        <span style={{ fontSize: 12, color: FAINT }}>{open ? '▾' : '▸'}</span>
+      </button>
+      {open && (
+        <div style={{ padding: '0 16px 14px' }}>
+          <ToggleRow
+            label={'Alert me around rollover'}
+            on={plan.enabled}
+            onChange={(v) => void persist({ ...plan, enabled: v }, { enabled: v })}
+          />
+          <p style={{ fontSize: 11.5, color: MUTED, margin: '8px 0 4px', lineHeight: 1.5 }}>
+            {'Evaluate and Close only fire while a funded position is open. Back in? fires when one was closed today.'}
+          </p>
+
+          {plan.enabled &&
+            ROLLOVER_ROWS.map((row) => {
+              const ev = plan[row.key];
+              return (
+                <div key={row.key} style={{ borderTop: `1px solid ${BORDER}`, padding: '10px 0 6px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
+                      <MiniSwitch on={ev.on} onChange={(v) => patchEvent(row.key, { on: v })} />
+                      <div style={{ minWidth: 0 }}>
+                        <div style={{ fontSize: 13, color: TEXT, fontWeight: 600 }}>{row.label}</div>
+                        <div style={{ fontSize: 10.5, color: FAINT }}>{row.note}</div>
+                      </div>
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <input
+                        type="time"
+                        value={ev.at}
+                        disabled={!ev.on}
+                        onChange={(e) => e.target.value && patchEvent(row.key, { at: e.target.value })}
+                        style={{ ...fieldInput, padding: '6px 8px', fontSize: 12.5, opacity: ev.on ? 1 : 0.45, colorScheme: 'dark' }}
+                      />
+                      <span style={{ fontSize: 10.5, color: FAINT }}>ET</span>
+                      <button
+                        onClick={() => setOpenLevel((k) => (k === row.key ? null : row.key))}
+                        disabled={!ev.on}
+                        style={{ ...ghostBtn, padding: '6px 10px', opacity: ev.on ? 1 : 0.45, textTransform: 'capitalize' }}
+                      >
+                        {ev.level}
+                      </button>
+                    </div>
+                  </div>
+                  {openLevel === row.key && ev.on && (
+                    <LevelPicker value={ev.level} onChange={(v) => patchEvent(row.key, { level: v })} />
+                  )}
+                </div>
+              );
+            })}
+
+          <div style={{ fontSize: 11, color: status === 'error' ? '#ffb4ab' : FAINT, marginTop: 8, minHeight: 14 }}>
+            {status === 'saving' ? 'Saving…' : status === 'saved' ? 'Saved' : status === 'error' ? 'Could not save — try again.' : ''}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// The compact form of the switch ToggleRow draws, for a row that already
+// carries a time and a level beside it.
+function MiniSwitch({ on, onChange }: { on: boolean; onChange: (v: boolean) => void }) {
+  return (
+    <button
+      onClick={() => onChange(!on)}
+      role="switch"
+      aria-checked={on}
+      style={{
+        width: 36,
+        height: 20,
+        borderRadius: 999,
+        border: `1px solid ${on ? GREEN : BORDER2}`,
+        background: on ? 'rgba(53,196,123,.25)' : INPUT_BG,
+        position: 'relative',
+        cursor: 'pointer',
+        flex: '0 0 auto',
+      }}
+    >
+      <span style={{ position: 'absolute', top: 2, left: on ? 18 : 2, width: 14, height: 14, borderRadius: '50%', background: on ? GREEN : FAINT, transition: 'left .15s ease' }} />
+    </button>
   );
 }
 

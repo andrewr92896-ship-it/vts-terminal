@@ -58,6 +58,7 @@ import { startFeeds } from './trading/feeds.js';
 import { startDeskWatch } from './trading/service.js';
 import { warmMarketMacro } from './trading/marketMacro.js';
 import { startSessionWatch } from './trading/sessionWatch.js';
+import { startRolloverWatch } from './trading/rolloverWatch.js';
 import { startYoutubeWatch } from './trading/youtubeWatch.js';
 import { startPriceAlertWatch } from './trading/priceAlertWatch.js';
 import { startNoteSettleWatch } from './trading/noteSettle.js';
@@ -264,6 +265,9 @@ async function main() {
     // Watch Strategy Session windows so a trader's session open/close/pre-open
     // notifications fire on their own schedule (production + push/Pushover only).
     startSessionWatch();
+    // Fire the rollover-close alerts around 5pm ET, but only for a trader who
+    // actually has a funded position open (production + push/Pushover only).
+    startRolloverWatch();
     // Watch user-authored price alerts against live OANDA prices, firing each
     // trader's own level-cross notifications (production + push/Pushover only).
     startPriceAlertWatch();

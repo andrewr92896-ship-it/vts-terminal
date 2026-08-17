@@ -16,7 +16,7 @@ import { usePushNotifications } from '../../push/usePushNotifications';
 import { useAlertSound, ALERT_SOUNDS } from '../../sound/alertSound';
 import { THEMES, accentGradient } from '../../theme/themes';
 import { ScreenTitle } from './ScreenTitle';
-import { PriceAlertSettings, SessionAlertSettings } from './alertPanels';
+import { PriceAlertSettings, RolloverAlertSettings, SessionAlertSettings } from './alertPanels';
 
 // Advanced Trading ▸ Alert Settings — the ONE home for everything the terminal
 // can buzz you about (owner instruction, 2026-08). Before this, the controls
@@ -164,6 +164,17 @@ export function AlertSettings() {
           <>
             <Divider />
             <SessionAlertSettings />
+          </>
+        )}
+
+        {/* Rollover close — the timed alerts around 5pm ET for a trader who
+            cannot hold a funded position through it. The SAME component renders
+            on Strategy Sessions, where the plan sits beside the rest of the
+            trading day; one component and one route, so the two cannot drift. */}
+        {paid && canTrade && !isDemo && (
+          <>
+            <Divider />
+            <RolloverAlertSettings />
           </>
         )}
 

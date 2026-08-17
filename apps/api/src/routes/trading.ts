@@ -55,6 +55,9 @@ import {
 } from '../trading/funded.js';
 import { addSession, listSessions, removeSession, updateSession } from '../trading/sessions.js';
 import { getSessionAlertPrefs, setSessionAlertPrefs } from '../trading/sessionAlertPrefs.js';
+import { getRolloverPlan, setRolloverPlan } from '../trading/rollover.js';
+import { NOTIF_LEVELS } from '../notifications/prefs.js';
+import { getReentryChecks } from '../trading/reentry.js';
 import {
   FOMC_MEETING_YEAR,
   FOMC_MEETINGS_2026,
@@ -636,6 +639,28 @@ export async function tradingRoutes(app: FastifyInstance) {
     const prefs = await setSessionAlertPrefs(request.currentUser!.id, parsed.data);
     return { prefs };
   });
+
+  // ---- Rollover close (the timed alerts around the 5pm ET rollover) ----
+  // On the same guards the session alert preferences use. The SCREENS that host
+  // the panel are Premium (Strategy Sessions / Alert Settings); the plumbing
+  // behind it answers any signed-in desk caller, which is the split the alert
+  // routes already make and the half that is correct.
+  app.get('/api/trading/rollover', read, async (request) => ({
+    plan: await getRolloverPlan(request.currentUser!.id),
+  }));
+  app.put('/api/trading/rollover', write, async (request, reply) => {
+    const parsed = rolloverPlanSchema.safeParse(request.body);
+    if (!parsed.success) return reply.code(400).send({ error: 'Check the rollover times and try again' });
+    const plan = await setRolloverPlan(request.currentUser!.id, parsed.data);
+    return { plan };
+  });
+
+  // What re-entering a funded trade you just closed would cost right now. Reads
+  // the caller's own closed funded trades and prices them; the trader's own
+  // OANDA connection is preferred so the spread is the one they would pay.
+  app.get('/api/trading/funded/reentry', fundedRead, async (request) =>
+    getReentryChecks(request.currentUser!.id, auditActorFor(request)),
+  );
 
   // ---- Live Wall boards (the per-user saved arrangements) ----
   // Reading is open to everyone — a free account gets the three built-in
@@ -1689,12 +1714,31 @@ const historyEditSchema = z
   })
   .refine((v) => Object.values(v).some((x) => x !== undefined), { message: 'Nothing to update' });
 
+// A rollover-close plan. Each event may be patched on its own and a missing one
+// leaves the stored value alone — the service merges — so a cached PWA bundle
+// posting a subset cannot reset an event it does not know about.
+const rolloverEventSchema = z
+  .object({
+    on: z.boolean().optional(),
+    at: z.string().trim().regex(/^\d{1,2}:\d{2}$/).optional(),
+    level: z.enum(NOTIF_LEVELS).optional(),
+  })
+  .optional();
+const rolloverPlanSchema = z.object({
+  enabled: z.boolean().optional(),
+  evaluate: rolloverEventSchema,
+  close: rolloverEventSchema,
+  recheck: rolloverEventSchema,
+});
+
+const commissionPerLot = z.number().finite().min(0).max(10_000);
 const fundedAccountSchema = z.object({
   platform: z.string().trim().max(40).optional(),
   label: z.string().trim().min(1).max(80),
   currency: z.string().trim().max(8).optional(),
   balance: z.number().finite().nullish(),
   startingBalance: z.number().finite().nullish(),
+  commissionPerLot: commissionPerLot.nullish(),
   notes: z.string().trim().max(2000).nullish(),
 });
 const editFundedAccountSchema = z
@@ -1704,6 +1748,7 @@ const editFundedAccountSchema = z
     currency: z.string().trim().max(8).optional(),
     balance: z.number().finite().nullish(),
     startingBalance: z.number().finite().nullish(),
+    commissionPerLot: commissionPerLot.nullish(),
     notes: z.string().trim().max(2000).nullish(),
   })
   .refine((v) => Object.values(v).some((x) => x !== undefined), { message: 'Nothing to update' });

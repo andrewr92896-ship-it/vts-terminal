@@ -11,9 +11,21 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 7.25';
+export const APP_VERSION = 'Beta V 7.26';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 7.26',
+    date: 'August 17, 2026',
+    notes: [
+      'Rollover close — three timed alerts around the 5pm ET rollover, for when a funded position cannot be held through it. One to evaluate, one to close, and one afterwards to check whether you are getting back in.',
+      'They only fire when you actually have a funded position open, so a flat day is silent. The last one also fires when you closed a funded trade earlier that day, which is the case it exists for.',
+      'Set the times and how loud each one is on Advanced Trading ▸ Strategy Sessions, or on Alert Settings — it is the same control in both places.',
+      'Re-entry check on Funded Trades: after you close a funded trade, it shows what getting back on would cost right now — how far price has drifted from your exit, the spread to cross back, and the commission.',
+      'It prices from your own OANDA account where it can, so the spread is the one you would pay. There is a Live Wall tile for it too.',
+      'Commission comes from a round-turn-per-lot rate you set on the funded account. Until you set one there is no total — the drift and spread are still shown, and the missing part says so rather than making re-entry look free.',
+    ],
+  },
   {
     version: 'Beta V 7.25',
     date: 'August 17, 2026',

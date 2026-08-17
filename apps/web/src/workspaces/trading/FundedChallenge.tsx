@@ -9,6 +9,7 @@ import { readClipboardImage, imageFromPasteEvent } from '../../lib/clipboard';
 import { FundedLiveTrades } from './FundedLiveTrades';
 import { FundedPastTrades } from './FundedPastTrades';
 import { FundedStats } from './FundedStats';
+import { ReentryPanel } from './ReentryCheck';
 import { useLivePrices } from './useLivePrices';
 import type { ChallengeData, ChallengeInput, ChallengesData, FundedData } from '../../api/types';
 
@@ -396,6 +397,10 @@ function FundedBook({ showMoney, readOnly }: { showMoney: boolean; readOnly: boo
     <>
       {data && <FundedStats accounts={data.accounts} showMoney={showMoney} live={live} />}
       <FundedLiveTrades data={data} loadError={loadError} live={live} onData={setData} showMoney={showMoney} readOnly={readOnly} />
+      {/* Sits between the live positions and the history because that is where
+          it is in the trade's life: what you just closed, and what getting back
+          on would cost. It draws nothing when nothing closed recently. */}
+      {!readOnly && <ReentryPanel showMoney={showMoney} />}
       <FundedPastTrades data={data} loadError={loadError} onData={setData} showMoney={showMoney} readOnly={readOnly} />
     </>
   );

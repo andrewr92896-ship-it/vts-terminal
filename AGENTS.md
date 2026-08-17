@@ -313,7 +313,9 @@ workspaces list** (see `theme/nav.ts` order).
   bias; each session picks its own Mon–Fri days + hours, or is filled to the
   instrument's full market hours via the `/api/trading/market-hours` AI lookup.
   Open/close/pre-open notifications are opt-in from **Alert Settings**, not from
-  this screen — it builds and edits the sessions themselves),
+  this screen — it builds and edits the sessions themselves. The one alert
+  control that IS here is **Rollover close**, and it is the same component Alert
+  Settings renders — see its own section below),
   Manual Trades (`funded` key, `FundedScreen`), **Funded Trades**
   (`prop` key — the nested opt-in; the desk's prop-firm accounts, see below.
   Labelled "Funded Account" until 2026-08; the key, the opt-in and the paid
@@ -659,6 +661,95 @@ workspaces list** (see `theme/nav.ts` order).
       recommendation" and no notification ever pushes one member's call at
       another; what awaits the attorney pass is whether that is enough once the
       group half is public.
+  - **ROLLOVER CLOSE — three timed alerts around the 5pm ET rollover** (owner
+    request, 2026-08; `trading/rolloverMath.ts` + `rollover.ts` +
+    `rolloverWatch.ts`, routes `GET|PUT /api/trading/rollover`; `rollover_plans`,
+    migration `0130`. The panel is `RolloverAlertSettings` in
+    `workspaces/trading/alertPanels.tsx`). A funded position cannot be held
+    through rollover, so the trader needs telling to come off it — and then
+    telling again, once it has passed, to decide about getting back on.
+    - **Three events, three different questions**: `evaluate` ("you are still
+      holding; decide what comes off"), `close` ("close it now"), and `recheck`
+      ("rollover has passed; are you getting back in?"). Defaults 16:30 / 16:45 /
+      17:15 ET, each with its own time and its own rung on the existing
+      notification ladder — `close` defaults to `alert` because it is the only
+      one with a deadline attached.
+    - **THE FIRST TWO ONLY FIRE WHEN A FUNDED POSITION IS ACTUALLY OPEN, AND
+      THAT GATE IS WHY THERE IS NO WEEKDAY PICKER.** A flat day, or a weekend
+      with nothing on, is silent by itself. A day picker would be a second
+      switch for a job one gate already does — and one more thing to be wrong
+      when a trader is holding over a bank holiday.
+    - **THE RECHECK IS DELIBERATELY THE EXCEPTION.** By the time it is due the
+      position it is about has usually been closed, so gating it on "still open"
+      would silence it in precisely the case it exists for. It fires when
+      something is open **or** a funded trade closed **today** — an ET day,
+      matched on the day stamp rather than a midnight instant, so it needs no
+      zone arithmetic to get wrong across DST. That also makes it restart-proof:
+      the fact is read from the database rather than from the watch's in-memory
+      dedup set, so a restart at 4:50pm does not swallow the 5:15 alert.
+    - **THE SAME COMPONENT RENDERS ON STRATEGY SESSIONS AND ON ALERT SETTINGS.**
+      Strategy Sessions is where a plan for the trading day belongs and where the
+      owner asked for it; Alert Settings is the one home for alert opt-ins. One
+      component over one route, exactly as `GroupAlertSender` already renders in
+      two places — two copies with one route behind them drift within a month,
+      and whichever one somebody happens to open is the one that looks broken.
+    - **A save is a PATCH and the server merges.** The web app is a
+      service-worker-cached PWA, so an old bundle posts a subset of the plan —
+      and that must never blank an event it does not know about. Same rule the
+      trade-event prefs follow with their flags-only save.
+    - A time that does not parse **keeps the stored one** rather than being
+      written as a time no minute ever matches, and an unrecognised level falls
+      back to `alert` rather than silencing something somebody relies on.
+    - Delivery is personal — each alert reaches only the account whose plan
+      produced it, like the session and price-alert watches. A `repeating` close
+      alert goes through `sendPushoverToUsers` like everything else, so it picks
+      up the trader's own repeat timing and its Acknowledge button from
+      `deliver`, the one place a priority-2 message is sent.
+  - **THE RE-ENTRY CHECK — what getting back on would cost**
+    (`trading/reentryMath.ts` + `reentry.ts`, `GET /api/trading/funded/reentry`;
+    `workspaces/trading/ReentryCheck.tsx`, on **Funded Trades** between the live
+    positions and the history, plus the `reentry` Live Wall tile). After a
+    rollover close the trader has one decision left, and it needs three figures.
+    - **THEY ITEMIZE WITHOUT DOUBLE-COUNTING, and that is the whole design.**
+      **Drift is measured against the SAME SIDE the trade exited at** — a long
+      exits at the bid, so it is compared with the current bid; a short exits at
+      the ask. Done that way, `drift + spread` comes to exactly the distance
+      from the exit fill to the re-entry fill (`ask − exit` for a long,
+      `exit − bid` for a short). Measured against the **mid** instead, half a
+      spread lands in both terms and every figure on the panel is quietly
+      overstated. `verify:rollover` pins that identity.
+    - **Sign convention: POSITIVE IS WORSE.** A negative drift is the market
+      having come back to you while you were flat, which makes re-entry cheaper
+      than the exit — exactly as useful to know, and it must never be reported
+      as a cost.
+    - **Quotes prefer the trader's OWN OANDA connection** (purpose `quotes`,
+      written **after** the broker answers so the row carries the real outcome),
+      because the point of the spread line is what *they* would pay to cross.
+      It falls back to the install pricing account, and the payload **says
+      which** — a figure whose source is unstated is one the reader cannot
+      judge. Neither available means `bid`/`ask` are null and the check renders
+      "not priced" rather than a cost of zero.
+    - **COMMISSION IS STATED BY THE TRADER, NEVER GUESSED**
+      (`funded_accounts.commission_per_lot`, round-turn per standard lot,
+      editable on the account card). Nothing can look a prop firm's commission
+      schedule up. **Null is "not stated" and is never read as zero**, and it is
+      **applied to currency pairs only** — a standard lot is 100,000 units for a
+      pair and something else entirely for gold, an index or a coin, so applying
+      the rate there would be wrong by orders of magnitude while looking
+      plausible.
+    - **THE TOTAL IS REFUSED RATHER THAN APPROXIMATED.** With no commission rate,
+      or an instrument not quoted in the account's currency, there is no total —
+      the drift and spread are still shown as the real figures they are, and the
+      missing part says so. Same rule Net Worth follows: a total silently missing
+      a part reads complete while understating, which is the one error this panel
+      exists to prevent. **Do not fold an unknown commission in as zero.**
+    - Money is only stated when the instrument is **quoted in the account's own
+      currency**, where a price move times the size *is* the money with no rate
+      involved. Anything else shows pips (or points) alone rather than a figure
+      converted at a rate this has no source for.
+    - Only trades closed in the last 18 hours are listed: a re-entry decision is
+      a right-now decision, and a trade closed yesterday is one you did not
+      re-enter. Nothing closed recently draws no panel at all.
   - **Alert Settings** (`alerts`, `workspaces/trading/AlertSettings.tsx` over
     `components/NotificationSettings.tsx` + `workspaces/trading/alertPanels.tsx`)
     is the **ONE home for everything the terminal can buzz you about** (owner
@@ -5244,8 +5335,28 @@ guard, same scratch-file rule:
     DATABASE_URL="file:/tmp/x.db" npm run db:migrate
     DATABASE_URL="file:/tmp/x.db" npm run db:check-notes
 
-All four are in `verify:db`, so `npm run verify` and CI run them without being
+**Rollover close and re-entry:** `npm run db:check-rollover` covers the storage
+half of both — above all that **a partial save of the rollover plan leaves the
+other events alone**, which is the one failure here that is completely silent
+(nothing errors, an alert just stops arriving), plus that an unusable time is
+never stored, that the recheck gate counts an Eastern day, and that an unpriced
+re-entry check reports no total rather than a flattering one. Same writing
+guard, same scratch-file rule:
+
+    DATABASE_URL="file:/tmp/x.db" npm run db:migrate
+    DATABASE_URL="file:/tmp/x.db" npm run db:check-rollover
+
+All five are in `verify:db`, so `npm run verify` and CI run them without being
 asked.
+
+**Rollover / re-entry math:** `npm run verify:rollover` checks the two pure
+halves offline — the firing decision (`rolloverMath.ts`) and the re-entry
+arithmetic (`reentryMath.ts`) — because neither can be checked by running the
+app: the watch acts on one ET minute a day and only when a funded position
+happens to be open, and the re-entry figures need a live two-sided quote. It
+pins the reconciliation identity (drift + spread === the distance from the exit
+fill to the re-entry fill) that the same-side measurement exists to produce.
+Run it after touching either file, or `etTime.ts`.
 
 ## Deployment workflow (owner preference)
 

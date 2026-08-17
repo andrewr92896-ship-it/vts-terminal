@@ -1,4 +1,5 @@
 import type { WorkspaceKey } from '../theme/themes';
+import type { NotifLevel } from './client';
 
 // Granular, admin-assigned roles (mirror of backend auth/rbac.ts ROLE_KEYS).
 // A user can hold any combination. (`funded` is retired — the Funded tracker is
@@ -1103,6 +1104,10 @@ export interface FundedAccount {
   currency: string;
   balance: number | null;
   startingBalance: number | null;
+  // Round-turn commission per standard lot (100,000 units) in this account's
+  // currency, as the firm charges it. Null is "not stated" and is never read as
+  // zero — the re-entry check says so rather than making re-entry look free.
+  commissionPerLot: number | null;
   notes: string | null;
   realizedPl: number;
   tradeCount: number;
@@ -1124,6 +1129,7 @@ export interface FundedAccountInput {
   currency?: string;
   balance?: number | null;
   startingBalance?: number | null;
+  commissionPerLot?: number | null;
   notes?: string | null;
 }
 export interface FundedTradeInput {
@@ -1335,6 +1341,76 @@ export interface MarketHoursResult {
 }
 
 // A user's Strategy Session notification preferences (Trading Alerts screen).
+// ---- Rollover close ----------------------------------------------------
+// The three timed alerts around the 5pm ET rollover, for a trader who cannot
+// hold a funded position through it. Times are ET wall-clock 'HH:MM' — rollover
+// is an Eastern event, not a per-reader one.
+export type RolloverEvent = 'evaluate' | 'close' | 'recheck';
+
+export interface RolloverEventPlan {
+  on: boolean;
+  at: string;
+  level: NotifLevel;
+}
+
+export interface RolloverPlan {
+  enabled: boolean;
+  evaluate: RolloverEventPlan;
+  close: RolloverEventPlan;
+  recheck: RolloverEventPlan;
+}
+
+export interface RolloverPlanInput {
+  enabled?: boolean;
+  evaluate?: Partial<RolloverEventPlan>;
+  close?: Partial<RolloverEventPlan>;
+  recheck?: Partial<RolloverEventPlan>;
+}
+
+// ---- Re-entry check ----------------------------------------------------
+// What getting back into a funded trade you just closed would cost right now,
+// itemized so the three parts do not double-count each other: drift is measured
+// against the SIDE the trade exited at, so drift + spread is exactly the
+// distance from the exit fill to the re-entry fill.
+export type ReentryUnit = 'pips' | 'points';
+
+export interface ReentryLeg {
+  price: number;
+  units: number; // pips on a currency pair, points on anything else
+  money: number | null; // null when it cannot be stated in the account's currency
+}
+
+export interface ReentryCheck {
+  tradeId: string;
+  accountId: string;
+  accountLabel: string;
+  platform: string;
+  currency: string;
+  instrument: string;
+  side: TradeSide;
+  size: number;
+  exitPrice: number;
+  closedAt: number;
+  realizedPl: number | null;
+  bid: number | null;
+  ask: number | null;
+  reentryPrice: number | null;
+  unit: ReentryUnit;
+  drift: ReentryLeg | null;
+  spread: ReentryLeg | null;
+  commission: number | null;
+  commissionNote: string | null;
+  // drift + spread + commission, and NULL when any part is unknown. An
+  // incomplete total is refused rather than approximated.
+  total: number | null;
+  source: 'broker' | 'install' | null;
+}
+
+export interface ReentryReport {
+  checks: ReentryCheck[];
+  priceSource: 'broker' | 'install' | null;
+}
+
 export interface SessionAlertPrefs {
   notifyOpen: boolean;
   notifyClose: boolean;
@@ -1371,6 +1447,7 @@ export type BoardTileKind =
   | 'tradingnotes'
   | 'funded'
   | 'challenge'
+  | 'reentry'
   | 'capital'
   // Personal — the user's own money, lists and reading.
   | 'networth'

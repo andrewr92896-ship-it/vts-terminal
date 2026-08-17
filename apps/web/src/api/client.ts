@@ -71,6 +71,9 @@ import type {
   TradingNote,
   MarketHoursResult,
   SessionAlertPrefs,
+  RolloverPlan,
+  RolloverPlanInput,
+  ReentryReport,
   TradingBoard,
   BoardsResponse,
   BoardInput,
@@ -770,6 +773,19 @@ export const api = {
   },
   saveSessionAlertPrefs(prefs: SessionAlertPrefs): Promise<{ prefs: SessionAlertPrefs }> {
     return request('/api/trading/session-alert-prefs', { method: 'PUT', body: JSON.stringify(prefs) });
+  },
+  // Rollover close — the timed alerts around the 5pm ET rollover. The save takes
+  // a patch: the server merges onto what is stored, so sending one event never
+  // resets the other two.
+  rolloverPlan(): Promise<{ plan: RolloverPlan }> {
+    return request('/api/trading/rollover');
+  },
+  saveRolloverPlan(patch: RolloverPlanInput): Promise<{ plan: RolloverPlan }> {
+    return request('/api/trading/rollover', { method: 'PUT', body: JSON.stringify(patch) });
+  },
+  // What re-entering a recently closed funded trade would cost right now.
+  fundedReentry(): Promise<ReentryReport> {
+    return request('/api/trading/funded/reentry');
   },
   // Every board response carries `teamBoards` — what this reader's teammates
   // have published — so the picker never needs a second round trip to fill its

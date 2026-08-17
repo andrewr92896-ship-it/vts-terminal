@@ -60,6 +60,10 @@ export interface FundedAccountView {
   currency: string;
   balance: number | null;
   startingBalance: number | null;
+  // Round-turn commission per standard lot, as the firm charges it. Null means
+  // the trader has not stated one, and the re-entry check says so rather than
+  // treating it as free.
+  commissionPerLot: number | null;
   notes: string | null;
   // Derived: realized P/L summed across this account's logged trades.
   realizedPl: number;
@@ -88,6 +92,7 @@ export interface FundedAccountInput {
   currency?: string;
   balance?: number | null;
   startingBalance?: number | null;
+  commissionPerLot?: number | null;
   notes?: string | null;
 }
 
@@ -198,6 +203,7 @@ function toAccountView(
     currency: row.currency,
     balance: row.balance,
     startingBalance: row.startingBalance,
+    commissionPerLot: row.commissionPerLot,
     notes: row.notes,
     realizedPl: Number(realizedPl.toFixed(2)),
     tradeCount: trades.length,
@@ -263,6 +269,7 @@ export async function addFundedAccount(userId: string, input: FundedAccountInput
     currency: (cleanText(input.currency, 8) ?? 'USD').toUpperCase(),
     balance: cleanNum(input.balance),
     startingBalance: cleanNum(input.startingBalance),
+    commissionPerLot: cleanNum(input.commissionPerLot),
     notes: cleanText(input.notes, 2000),
     createdAt: now,
     updatedAt: now,
@@ -293,6 +300,7 @@ export async function updateFundedAccount(
   if (input.currency !== undefined) patch.currency = (cleanText(input.currency, 8) ?? 'USD').toUpperCase();
   if (input.balance !== undefined) patch.balance = cleanNum(input.balance);
   if (input.startingBalance !== undefined) patch.startingBalance = cleanNum(input.startingBalance);
+  if (input.commissionPerLot !== undefined) patch.commissionPerLot = cleanNum(input.commissionPerLot);
   if (input.notes !== undefined) patch.notes = cleanText(input.notes, 2000);
   await db
     .update(fundedAccounts)
