@@ -1,5 +1,6 @@
 import { useState, type CSSProperties, type ReactNode } from 'react';
 import type { Theme } from '../../theme/themes';
+import { LevelBar } from './LevelBar';
 import { deckLifetimeAccuracy, deckSessionAccuracy, type DeckGameState } from './studyEngine';
 import {
   clampPass,
@@ -140,6 +141,13 @@ export function StudyProgressBars({
           )}
         </button>
       </div>
+
+      {/* Progress up the level ladder, which the two accuracy bars below say
+          nothing about: they measure how well the answers are going, this
+          measures how far the answers have got. Fed `levelCorrect` (the
+          streak-scaled count the ladder actually advances on), never
+          `totalCorrect`, so it agrees with the level badge on screen. */}
+      <LevelBar correct={game.levelCorrect} borderColor={theme.navBorder} />
 
       <ScoreBar
         theme={theme}

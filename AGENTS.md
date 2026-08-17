@@ -1883,6 +1883,34 @@ workspaces list** (see `theme/nav.ts` order).
   The shared level ladder / streak / scoring math lives in `gameEngine.ts` (used
   by `studyEngine.ts` for per-deck state and mirrored server-side in
   `gameStats.ts`). Studies is lazy-loaded.
+  - **THE LEVEL BAR IS SCALED BY WHAT EACH SUB-LEVEL COSTS, NEVER INTO EVEN
+    FIFTHS** (`mainLevelProgress` in `gameEngine.ts`, drawn by `LevelBar.tsx`).
+    A full bar is the whole **main** level — on 🍊 Orange it fills across all
+    five of Orange's stars and completes as 🌽 Corn begins — with a tick at each
+    sub-level.
+    - A sub-level costs one more correct answer than the one before it
+      (`subLevelCost`, 10, 11, 12, … continuously up the ladder), so the ticks
+      are deliberately uneven: Lv1's land at 16.7 / 35 / 55 / 76.7%, not at
+      20 / 40 / 60 / 80. Five equal fifths would tell a learner their remaining
+      work was smaller than it is, on the one screen that exists to say how far
+      off the next level is. The bar's span is per level too — Lv1 is 60 correct
+      answers, Lv12 is 335.
+    - **The segment boundaries are built from the per-sub-level costs and the
+      span is their sum**, rather than a start/end subtraction, so the last
+      segment ends at exactly 100% and the drawing cannot drift from the ladder
+      it is drawing.
+    - **The top of the ladder reads FULL.** There is no sixth sub-level to work
+      toward at Lv12 ★★★★★, so `isMax` fills the bar rather than parking it at
+      the fourth tick for good.
+    - **It is fed `levelCorrect`, never `totalCorrect`.** The ladder advances on
+      the streak-scaled count; the raw one is lower, so reading it draws a bar
+      that disagrees with the level badge beside it. That is exactly what the
+      Live Wall's Study Progress tile was doing before this landed.
+    - **Ticks sit INSIDE the track, alongside the fills.** Positioned outside
+      it they are shifted by the track's own 1px border, so a tick lands a pixel
+      or two off the colour change it marks and reads as a rendering fault.
+    - Purely a drawing of state that was already stored: no state field, no
+      route and no migration, so nobody's progress moves.
   - **STUDY PACKAGES — study content can belong to a PERSON, not a group**
     (`study_packages`, migration `0114`; `studies/packageStore.ts` over
     `studies/packageAccess.ts`, routes `/api/studies/packages/*`). A package is
@@ -2120,7 +2148,6 @@ workspaces list** (see `theme/nav.ts` order).
           with their stored ids and weights. So the handoff asks the creator's
           AI for exactly what fits, and the importer checks the answer against
           the same thing. **Zero VTS AI calls**, like the rest of this path.
-<<<<<<< HEAD
         - **"I ALREADY HAVE THE FILE" IS A SECOND ROUTE, AND IT IS PERMISSIVE**
           (`finishBlueprint(…, permissive)`). Somebody whose AI has already
           written the content does not need a prompt composed for them — and
@@ -2145,8 +2172,6 @@ workspaces list** (see `theme/nav.ts` order).
             one-category package meeting a four-category file, with the strict
             blueprint asserted to refuse the same file. The paired service-side
             case is in `db:check-package-add`.
-=======
->>>>>>> origin/main
         - **One importer, not two.** `PackageImport` takes an optional
           `addToPackageId` and changes only where the confirmed content is
           written; the reading, checking and editing are identical. A second

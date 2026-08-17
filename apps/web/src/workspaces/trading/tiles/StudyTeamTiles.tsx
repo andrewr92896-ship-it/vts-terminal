@@ -7,6 +7,7 @@ import { BORDER2, FAINT, GOLD, GREEN, MONO, MUTED, TEXT } from '../tvChart';
 import { fmtRelative } from '../newsFormat';
 import { deckGameKey, deckLifetimeAccuracy, parseDeckGame } from '../../studies/studyEngine';
 import { overallLevel } from '../../studies/gameEngine';
+import { LevelBar } from '../../studies/LevelBar';
 import { TileFrame, TileMessage, TileRow, TileSelect, TileStat, useTileData } from './TileFrame';
 import type { TileProps } from './PersonalTiles';
 
@@ -51,7 +52,10 @@ export function StudyStatsTile({ tile, editing, onChange, onRemove }: TileProps)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [deck, user?.id, tick]);
 
-  const level = state ? overallLevel(state.totalCorrect) : null;
+  // `levelCorrect` is the streak-scaled count the ladder advances on;
+  // `totalCorrect` is the raw one. Reading the raw count here showed a lower
+  // level on the wall than the game screen was showing for the same play.
+  const level = state ? overallLevel(state.levelCorrect) : null;
   const accuracy = state ? deckLifetimeAccuracy(state) : null;
 
   return (
@@ -87,6 +91,12 @@ export function StudyStatsTile({ tile, editing, onChange, onRemove }: TileProps)
             }
             sub={level.isMax ? 'Top of the ladder.' : `${level.toNext} correct to the next sub-level`}
           />
+          {/* The same level bar the game screen draws — a full bar is this
+              whole main level, ticked at each sub-level. Compact and without
+              its own header, since the stat above already names the level. */}
+          <div style={{ padding: '0 14px 12px' }}>
+            <LevelBar correct={state.levelCorrect} borderColor={BORDER2} compact showHeader={false} />
+          </div>
           <TileRow label="Correct answers" value={state.totalCorrect} strong />
           <TileRow label="Best streak" value={state.bestStreak} color={GOLD} />
           {accuracy != null && (
