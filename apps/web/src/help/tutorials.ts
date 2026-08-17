@@ -342,6 +342,10 @@ export const TUTORIALS: Record<string, Tutorial> = {
         body: 'Click an option to highlight it, then Confirm to submit. When the answer is revealed the correct choice is highlighted, with a short explanation when the author included one. “I Don’t Know” reveals the answer and counts as incorrect.',
       },
       {
+        title: 'Rapid fire',
+        body: 'Switch “Rapid fire” on to study hands-free: pressing an option submits it straight away — no Confirm step — and the next question is drawn once the answer has been on screen for the number of seconds set beside the toggle. There is no clock on choosing your answer; the timer only ever covers how long the result is shown. “Stay on this” stops the countdown on that answer, and it also stops on its own if you open the tutor, start fixing the question, or leave the tab.',
+      },
+      {
         title: 'Watch your score',
         body: 'Your score is your lifetime accuracy on that game — every correct answer divided by every question attempted — with the change from the previous question.',
       },
