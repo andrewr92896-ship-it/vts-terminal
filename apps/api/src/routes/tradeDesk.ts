@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { requireWorkspace, requireWorkspaceWrite, requirePremium } from '../auth/middleware.js';
 import { TRADE_ORDER_TYPES, TRADE_SIDES } from '../db/schema.js';
 import { auditActorFor } from '../trading/credentialAudit.js';
+import { autoInviteAfterFill } from '../trading/founderTrades.js';
 import {
   cancelDeskOrder,
   closeDeskPosition,
@@ -167,7 +168,14 @@ export async function tradeDeskRoutes(app: FastifyInstance) {
       return reply.code(400).send({ error: parsed.error.errors[0]?.message ?? 'Invalid order' });
     }
     try {
-      return await placeDeskOrder(request.currentUser!, parsed.data, auditActorFor(request));
+      const result = await placeDeskOrder(request.currentUser!, parsed.data, auditActorFor(request));
+      // Founder auto-send: if this trader has asked for their trades to go to
+      // another Founder, the invitation is raised here rather than by the
+      // browser — so it happens whether or not the tab that placed the order is
+      // still open. Deliberately NOT awaited and it swallows its own errors: a
+      // side effect of the fill must never delay or fail the order response.
+      void autoInviteAfterFill(request.currentUser!, result.orderRecordId, result.status);
+      return result;
     } catch (e) {
       return fail(reply, e);
     }

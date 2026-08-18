@@ -1283,6 +1283,14 @@ export const founderTradePrefs = sqliteTable('founder_trade_prefs', {
     .references(() => users.id, { onDelete: 'cascade' }),
   defaultConnectionId: text('default_connection_id'),
   defaultUnits: real('default_units'),
+  // AUTO-SEND: a standing choice to invite one other Founder onto every trade
+  // that fills, rather than being asked per trade. Two columns because "on" and
+  // "who" are different facts — turning it off must not lose the recipient.
+  // Default off: switching it on makes somebody else's phone sound, so it is
+  // never inherited. The recipient's eligibility is re-read from their roles on
+  // every fill, so a stale id sends nothing rather than needing a cascade.
+  autoInvite: integer('auto_invite', { mode: 'boolean' }).notNull().default(false),
+  autoInviteUserId: text('auto_invite_user_id'),
   reminderEverySeconds: integer('reminder_every_seconds').notNull().default(300),
   reminderLevel: text('reminder_level').notNull().default('repeating'),
   updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
