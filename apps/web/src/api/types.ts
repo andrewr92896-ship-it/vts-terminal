@@ -838,6 +838,10 @@ export interface PlaceOrderInput {
 
 export interface PlaceOrderResult {
   status: 'filled' | 'accepted';
+  /** This attempt's row in the desk's own order journal — what a Founder trade
+   *  invitation names as its source, so an invite can only describe a trade the
+   *  terminal actually placed. */
+  orderRecordId: string;
   orderId: string | null;
   tradeId: string | null;
   fillPrice: number | null;
@@ -3114,4 +3118,85 @@ export interface StudyLibraryEntry {
   questionCount: number;
   added: boolean;
   publishedAt: number;
+}
+
+
+// ---- Founder trade coordination ----
+// One Founder invites another onto a trade; the recipient authorizes their own
+// primary trade, answers separately about their funded account, and proves the
+// funded leg with a screenshot. The SERVER owns every bit of this state — the
+// blocking modal renders `status` and nothing it remembers itself, which is what
+// makes an unresolved invitation survive a refresh, a relogin and a redeploy.
+export type FounderTradeStatus = 'primary_pending' | 'funded_pending' | 'proof_pending' | 'complete';
+export type FounderPrimaryDecision = 'joined' | 'declined';
+export type FounderFundedDecision = 'yes' | 'no';
+
+export interface FounderPerson {
+  userId: string;
+  displayName: string;
+  username: string;
+}
+
+export interface FounderInvite {
+  id: string;
+  status: FounderTradeStatus;
+  inviter: FounderPerson;
+  recipient: FounderPerson;
+  isRecipient: boolean;
+  instrument: string;
+  side: TradeSide;
+  entryPrice: number | null;
+  stopLoss: number | null;
+  takeProfit: number | null;
+  /** The inviter's size, shown for context only — never what the recipient trades. */
+  inviterUnits: number | null;
+  primaryDecision: FounderPrimaryDecision | null;
+  primaryDecidedAt: number | null;
+  primaryFillPrice: number | null;
+  primaryUnits: number | null;
+  /** The last failed JOIN, kept on the row so it is still on screen at the retry. */
+  primaryError: string | null;
+  fundedDecision: FounderFundedDecision | null;
+  fundedDecidedAt: number | null;
+  hasProof: boolean;
+  proofUploadedAt: number | null;
+  completedAt: number | null;
+  createdAt: number;
+  /** The recipient's OWN configured size, so the modal states it before they press JOIN. */
+  recipientUnits: number | null;
+  /** A JOIN is being sent right now — from this tab or another one. */
+  sending: boolean;
+}
+
+export interface FounderTradeEvent {
+  id: string;
+  kind: string;
+  actorUserId: string | null;
+  detail: string | null;
+  createdAt: number;
+}
+
+export interface FounderTradePrefs {
+  /** Null is "not stated" and is never read as a size — a JOIN is refused instead. */
+  defaultUnits: number | null;
+  defaultConnectionId: string | null;
+  reminderEverySeconds: number;
+  reminderLevel: NotifLevel;
+}
+
+// One of the recipient's own live broker accounts, for the "which account" picker.
+// Read from the connection rows rather than the desk's accounts endpoint, so the
+// blocking modal works on any screen without depending on the desk's guards.
+export interface FounderAccountView {
+  connectionId: string;
+  label: string;
+  broker: string;
+  env: string | null;
+}
+
+export interface FounderTradePrefsPatch {
+  defaultUnits?: number | null;
+  defaultConnectionId?: string | null;
+  reminderEverySeconds?: number;
+  reminderLevel?: NotifLevel;
 }

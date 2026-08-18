@@ -23,6 +23,9 @@ import {
   notificationPrefs,
   sessionAlertPrefs,
   rolloverPlans,
+  founderTradeEvents,
+  founderTradeInvites,
+  founderTradePrefs,
   alertPrefs,
   pushoverReceipts,
   userFeatures,
@@ -505,6 +508,31 @@ export async function deleteUser(actingUserId: string, targetId: string): Promis
     await tx.delete(tradingSessions).where(eq(tradingSessions.userId, targetId));
     await tx.delete(sessionAlertPrefs).where(eq(sessionAlertPrefs.userId, targetId));
     await tx.delete(rolloverPlans).where(eq(rolloverPlans.userId, targetId));
+    // Founder trade coordination. The invitations this account raised or was
+    // sent go with it — each one carries a trade snapshot and, on the funded
+    // branch, a screenshot of their own account, so it is personal on both
+    // sides. The audit timeline is keyed to the invitation and follows it out
+    // through the cascade. Their own default size goes too.
+    //
+    // The timeline is removed EXPLICITLY rather than left to its declared
+    // cascade: foreign keys never fire on this database (PRAGMA foreign_keys is
+    // off — see db/index.ts), so an ON DELETE clause here is documentation, not
+    // behaviour.
+    const founderInviteRows = await tx
+      .select({ id: founderTradeInvites.id })
+      .from(founderTradeInvites)
+      .where(
+        or(
+          eq(founderTradeInvites.inviterUserId, targetId),
+          eq(founderTradeInvites.recipientUserId, targetId),
+        ),
+      );
+    const founderInviteIds = founderInviteRows.map((r) => r.id);
+    if (founderInviteIds.length > 0) {
+      await tx.delete(founderTradeEvents).where(inArray(founderTradeEvents.inviteId, founderInviteIds));
+      await tx.delete(founderTradeInvites).where(inArray(founderTradeInvites.id, founderInviteIds));
+    }
+    await tx.delete(founderTradePrefs).where(eq(founderTradePrefs.userId, targetId));
     // Trading Notes — their predictions, observations and reflections. Personal
     // writing, so it goes with the person: unlike credential_audit and the
     // employee audit log, nothing here records access to money or to a hardened

@@ -11,9 +11,23 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 7.27';
+export const APP_VERSION = 'Beta V 7.28';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 7.28',
+    date: 'August 18, 2026',
+    notes: [
+      'Founder trades: after you place a trade you can invite another Founder onto it. They are asked to join, at their own size, on their own account.',
+      'The invitation arrives as a card that covers the whole terminal wherever they happen to be, and it cannot be clicked away, closed with Escape, or lost by refreshing, signing out, or opening another tab. It comes straight back until it is answered.',
+      'Joining sends the trade with the instrument, the direction and the inviter’s stop — and the joiner’s own position size, which is never copied from whoever invited them. Set yours on Live Trades, or on the card itself the first time.',
+      'Pressing JOIN twice, in one tab or two, cannot place two orders. If an order is refused the card stays where it was and says what the broker said.',
+      'Either answer moves on to a second, separate question: are you placing this on your funded account? Declining the first trade does not decline the funded one.',
+      'Saying yes there asks for a screenshot of the funded trade, and the alerts keep coming until it is uploaded — acknowledging the alert on your phone does not finish it.',
+      'The terminal never places a funded trade for you. You place that one at the firm, as always.',
+      'Live Trades carries the record: what was invited, what was decided, and the screenshot behind it.',
+    ],
+  },
   {
     version: 'Beta V 7.27',
     date: 'August 17, 2026',

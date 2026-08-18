@@ -3,6 +3,7 @@ import { api, ApiError } from '../../api/client';
 import { fmtMoney, fmtUnits } from './TradeCard';
 import { forexPair } from './pips';
 import { TicketPresetMenu, fmtPct } from './TicketPresetMenu';
+import { FounderInvitePrompt } from './FounderInvitePrompt';
 import {
   DEFAULT_PRESETS,
   costOfSize,
@@ -135,6 +136,10 @@ export function OrderTicket({ account, instruments, instrument, onInstrument, re
   const [confirming, setConfirming] = useState(false);
   const [sending, setSending] = useState(false);
   const [result, setResult] = useState<Placed | null>(null);
+  // The desk journal row of the trade just placed. It is what a Founder trade
+  // invitation names as its source, so the server reads the trade's own
+  // instrument, direction and stop rather than trusting the ticket.
+  const [placedOrderId, setPlacedOrderId] = useState<string | null>(null);
   // The trader's own quick-size buttons. Rendered from the built-in ladders
   // until this lands, so the chips are never missing while it loads.
   const [presets, setPresets] = useState<TicketPresets>(DEFAULT_PRESETS);
@@ -487,6 +492,7 @@ export function OrderTicket({ account, instruments, instrument, onInstrument, re
         stopLoss,
         takeProfit,
       });
+      setPlacedOrderId(res.orderRecordId);
       const verb = side === 'long' ? 'Bought' : 'Sold';
       setResult({
         kind: 'ok',
@@ -498,6 +504,7 @@ export function OrderTicket({ account, instruments, instrument, onInstrument, re
       setConfirming(false);
       onPlaced();
     } catch (e) {
+      setPlacedOrderId(null);
       setResult({ kind: 'error', message: e instanceof ApiError ? e.message : 'The order could not be placed' });
       setConfirming(false);
     } finally {
@@ -777,8 +784,16 @@ export function OrderTicket({ account, instruments, instrument, onInstrument, re
       {result && (
         <div style={{ ...banner, borderColor: result.kind === 'ok' ? 'rgba(53,196,123,.5)' : 'rgba(239,84,104,.5)', color: result.kind === 'ok' ? GREEN : RED }}>
           <span style={{ flex: 1 }}>{result.message}</span>
-          <button onClick={() => setResult(null)} style={dismissBtn} aria-label="Dismiss">{"×"}</button>
+          <button onClick={() => { setResult(null); setPlacedOrderId(null); }} style={dismissBtn} aria-label="Dismiss">{"×"}</button>
         </div>
+      )}
+
+      {/* Founder-only, and drawn from the FILL rather than the ticket: it is
+          offered once the trade has actually gone in, and it names the journal
+          row so the invitation describes the trade the desk really placed.
+          Renders nothing for anybody who is not founder-level. */}
+      {result?.kind === 'ok' && placedOrderId && (
+        <FounderInvitePrompt sourceOrderId={placedOrderId} instrument={instrument} />
       )}
 
       {readOnly ? (

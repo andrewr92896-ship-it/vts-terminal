@@ -38,6 +38,12 @@ import type {
   SupportKind,
   SupportRequest,
   BrokerConnection,
+  FounderAccountView,
+  FounderInvite,
+  FounderPerson,
+  FounderTradeEvent,
+  FounderTradePrefs,
+  FounderTradePrefsPatch,
   BrokerStatus,
   ChallengeData,
   ChallengesData,
@@ -654,6 +660,75 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ connectionId, orderId, instrument }),
     });
+  },
+
+  // ---- Founder trade coordination ----
+  // Every one of these is founder-only on the SERVER; the terminal hiding the
+  // feature from everybody else is what makes that hiding cosmetic rather than
+  // the protection. A non-Founder calling any of them gets a 403.
+  //
+  // `founderPending` is the one the blocking modal polls: it answers with what
+  // is still owed, oldest first, and is the only thing that decides whether the
+  // modal is up — which is why an unresolved workflow survives a refresh.
+  founderPending(): Promise<{
+    invites: FounderInvite[];
+    prefs: FounderTradePrefs;
+    accounts: FounderAccountView[];
+    canTrade: boolean;
+  }> {
+    return request('/api/founder-trades/pending');
+  },
+  founderTrades(): Promise<{
+    invites: FounderInvite[];
+    recipients: FounderPerson[];
+    prefs: FounderTradePrefs;
+    accounts: FounderAccountView[];
+    canTrade: boolean;
+  }> {
+    return request('/api/founder-trades');
+  },
+  founderRecipients(): Promise<{ recipients: FounderPerson[] }> {
+    return request('/api/founder-trades/recipients');
+  },
+  founderPrefs(): Promise<{ prefs: FounderTradePrefs; accounts: FounderAccountView[]; canTrade: boolean }> {
+    return request('/api/founder-trades/prefs');
+  },
+  saveFounderPrefs(patch: FounderTradePrefsPatch): Promise<{ prefs: FounderTradePrefs }> {
+    return request('/api/founder-trades/prefs', { method: 'PUT', body: JSON.stringify(patch) });
+  },
+  founderInvite(id: string): Promise<{ invite: FounderInvite; events: FounderTradeEvent[] }> {
+    return request(`/api/founder-trades/${id}`);
+  },
+  founderProof(id: string): Promise<{ image: string }> {
+    return request(`/api/founder-trades/${id}/proof`);
+  },
+  // Raising the same invitation twice returns the one that already exists, so a
+  // retried request never puts a second modal in front of the recipient.
+  createFounderInvite(recipientUserId: string, sourceOrderId: string): Promise<{ invite: FounderInvite }> {
+    return request('/api/founder-trades', {
+      method: 'POST',
+      body: JSON.stringify({ recipientUserId, sourceOrderId }),
+    });
+  },
+  // The press that authorizes one order: the instrument, direction and stop come
+  // from the invitation, the size from the caller's own settings.
+  joinFounderTrade(id: string): Promise<{ invite: FounderInvite }> {
+    return request(`/api/founder-trades/${id}/join`, { method: 'POST' });
+  },
+  // Declining deliberately does not end the workflow — the funded question is
+  // separate and still owed afterwards.
+  declineFounderTrade(id: string): Promise<{ invite: FounderInvite }> {
+    return request(`/api/founder-trades/${id}/decline`, { method: 'POST' });
+  },
+  founderFundedDecision(id: string, decision: 'yes' | 'no'): Promise<{ invite: FounderInvite }> {
+    return request(`/api/founder-trades/${id}/funded`, {
+      method: 'POST',
+      body: JSON.stringify({ decision }),
+    });
+  },
+  // The screenshot is what completes the funded branch — not the YES before it.
+  uploadFounderProof(id: string, image: string): Promise<{ invite: FounderInvite }> {
+    return request(`/api/founder-trades/${id}/proof`, { method: 'POST', body: JSON.stringify({ image }) });
   },
   // ---- Home-screen widget token (read-only bearer for the phone widget) ----
   widgetTokenStatus(): Promise<WidgetTokenStatus> {

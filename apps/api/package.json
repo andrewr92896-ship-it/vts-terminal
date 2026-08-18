@@ -19,6 +19,7 @@
     "db:check-capital": "tsx src/trading/checkCapital.ts",
     "db:check-notes": "tsx src/trading/checkNotes.ts",
     "db:check-rollover": "tsx src/trading/checkRollover.ts",
+    "db:check-founder-trades": "tsx src/trading/checkFounderTrades.ts",
     "verify:market-macro": "tsx src/trading/verifyMarketMacro.ts",
     "verify:rollover": "tsx src/trading/verifyRollover.ts",
     "verify:investments": "tsx src/investments/verifyInvestments.ts",

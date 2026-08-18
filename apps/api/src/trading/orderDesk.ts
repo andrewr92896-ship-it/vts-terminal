@@ -284,12 +284,16 @@ export interface DeskOrderRecord {
   createdAt: number;
 }
 
+// Returns the journal row's own id. That id is what a Founder trade invitation
+// names as its source, so an invite can only ever describe a trade this desk
+// actually placed, at the levels it actually sent.
 async function journal(
   userId: string,
   row: Omit<DeskOrderRecord, 'id' | 'createdAt'>,
-): Promise<void> {
+): Promise<string> {
+  const id = crypto.randomUUID();
   await db.insert(tradingOrders).values({
-    id: crypto.randomUUID(),
+    id,
     userId,
     connectionId: row.connectionId,
     broker: row.broker,
@@ -310,6 +314,7 @@ async function journal(
     error: row.error,
     createdAt: new Date(),
   });
+  return id;
 }
 
 export async function recentDeskOrders(userId: string, limit = 40): Promise<DeskOrderRecord[]> {
@@ -357,6 +362,8 @@ export interface PlaceInput {
 
 export interface PlaceResult {
   status: 'filled' | 'accepted';
+  /** This attempt's row in the desk's own order journal (`trading_orders.id`). */
+  orderRecordId: string;
   orderId: string | null;
   tradeId: string | null;
   fillPrice: number | null;
@@ -534,7 +541,7 @@ async function placeOrderImpl(user: UserRow, input: PlaceInput, actor: AuditActo
 
   try {
     const res = await broker.place({ spec, side: input.side, units, type: input.type, price, takeProfit, stopLoss });
-    await journal(user.id, {
+    const orderRecordId = await journal(user.id, {
       ...shared,
       status: res.status,
       brokerOrderId: res.orderId,
@@ -548,6 +555,7 @@ async function placeOrderImpl(user: UserRow, input: PlaceInput, actor: AuditActo
     invalidateDeskSnapshot(user.teamId ?? `solo:${user.id}`);
     return {
       status: res.status,
+      orderRecordId,
       orderId: res.orderId,
       tradeId: res.tradeId,
       fillPrice: res.fillPrice,

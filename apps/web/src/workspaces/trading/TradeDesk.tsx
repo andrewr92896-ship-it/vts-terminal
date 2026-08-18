@@ -4,6 +4,7 @@ import { useAuth } from '../../auth/AuthContext';
 import { useResponsive } from '../../hooks/useMediaQuery';
 import { usePrivacy } from '../../privacy/privacy';
 import { BrokerConnections } from './BrokerConnections';
+import { FounderTradePanel } from './FounderTradePanel';
 import { OrderTicket, type TicketPrefill } from './OrderTicket';
 import { Holdings, OrderJournal, TeamPositions, WorkingOrders } from './DeskPositions';
 import { ScreenTitle } from './ScreenTitle';
@@ -313,6 +314,11 @@ export function TradeDesk() {
       <div style={{ fontSize: 10.5, color: FAINT, marginTop: 16, lineHeight: 1.6, maxWidth: 820 }}>
         {"Orders are sent to the broker account you connected, under your own credentials. The terminal does not hold funds, route orders, or give investment advice — every decision, and every fill, is yours."}
       </div>
+
+      {/* Founder trade coordination: the settings a joined trade goes out at,
+          and the record of every invitation this Founder sent or received.
+          Renders nothing for anybody who is not founder-level. */}
+      <FounderTradePanel />
 
       <BrokerConnections open={connOpen} onClose={() => setConnOpen(false)} onChanged={afterAction} />
     </div>
