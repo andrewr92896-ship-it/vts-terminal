@@ -2102,11 +2102,11 @@ workspaces list** (see `theme/nav.ts` order).
       unweighted however its sources were: two blueprints do not add up to a
       third.
     - **Progress shows the weighted score too**, beside the lifetime accuracy,
-      for any weighted game. Playing does not draw to the blueprint the way a
-      test does, so this is the figure that says what the exam would give for
-      the understanding shown so far however lopsided the practice was — on a
-      book of practice heavy in one easy area it reads far below the plain
-      accuracy, which is the whole point of it being there.
+      for any weighted game. Playing draws evenly across the deck unless the
+      learner asks otherwise (below), so this is the figure that says what the
+      exam would give for the understanding shown so far however lopsided the
+      practice was — on a book of practice heavy in one easy area it reads far
+      below the plain accuracy, which is the whole point of it being there.
       - It is **lifetime**, from `cats[c].correct/answered`, because it sits
         beside the Lifetime accuracy card and must be measured over the same
         answers. So the weighted breakdown **restates each category on that same
@@ -2120,6 +2120,71 @@ workspaces list** (see `theme/nav.ts` order).
       The public board spans every copy of a built-in game
       (`leaderboardDeckIds`), and those copies could carry different weights, so
       a weighted board would rank people against different papers.
+    - **THE BREAKDOWN IS ON THE GAME SCREEN TOO, AND IT IS ONE COMPONENT**
+      (owner request, 2026-08; `workspaces/studies/CategoryBreakdown.tsx` —
+      `buildCategoryReport` computes, `CategoryBreakdown` draws). Weights could
+      be set in the editor and then said nothing anywhere a learner could see
+      while playing: the weighted score and the per-category standing lived only
+      on Progress, a screen you have to leave the game to reach. **Both screens
+      now render the same component from the same report** — `DeckProgress` was
+      rewritten onto it rather than copied from, since two screens computing one
+      learner's standing separately is how they come to disagree about it.
+      - **`askedShare` is the figure that is genuinely new**: what share of the
+        learner's answers came from each area, printed beside what share of the
+        exam it carries. A deck holding a different mix of questions than the
+        exam does serves a different mix, and until this was drawn there was no
+        way to see that from inside the game — the owner noticed one area
+        "feeling rare" and the terminal could not say whether it was.
+      - **The exam share is the BLUEPRINT share, never `pointsAvailable`.** The
+        points are rescaled across the areas actually covered, so before
+        everything has been practised the two differ — and reading one as the
+        other would claim the exam had changed shape. The rescaling is still
+        what the points reconcile against, and the panel names the unpractised
+        areas that caused it.
+      - **Every weighted area is listed whether or not it has been practised.**
+        An untouched one is exactly what the panel exists to surface, so it must
+        not be the thing missing from it, and it still shows no accuracy and no
+        points rather than a zero.
+      - On the game screen it is **folded away by default**, with the weighted
+        score and the costliest area on its header — a closed panel still says
+        something rather than only offering to. Open or closed is remembered
+        (`studyPrefs.categoriesOpen`), since somebody who wants the detail wants
+        it every time.
+      - The Live Wall's **Study Progress tile** states the weighted score and
+        the costliest area too, off the same report. A tile showing only the
+        plain accuracy on a game that carries a blueprint is showing the
+        flattering half of two numbers.
+    - **THE DRAW CAN FOLLOW THE BLUEPRINT, AND IT IS THE LEARNER'S CHOICE**
+      (`workspaces/studies/deckDraw.ts`; "Draw by exam weight" in the game's
+      Settings panel, stored per deck in `studySession.blueprintDraw`).
+      - **`even` is the default and is exactly what the game always did**: one
+        shuffled pass over every question, so each is asked once before any is
+        asked twice. The mix that produces is whatever mix the DECK holds — four
+        areas of 100 questions serve a quarter each however the exam splits — so
+        a deck already shaped like its blueprint plays identically either way
+        and nobody's game changed on deploy.
+      - **`blueprint` picks the area first and the question second**: whichever
+        weighted area is furthest behind its share (highest averages, the same
+        rule `allocateDraw` composes a practice test with), then from that
+        area's **own** shuffled pass. That second half is what stops a
+        heavily-weighted area becoming the same handful of questions over and
+        over.
+      - **An area carrying no weight is never drawn** — it is off the exam — and
+        a blueprint no question in the deck matches **falls back to the even
+        pass** rather than leaving the game with nothing to ask.
+      - Changing it takes effect from the **next** question: the one on screen
+        has already been asked, and swapping it out would throw away an answer
+        in progress.
+      - **Scoring, levels, streaks and the leaderboard are untouched by any of
+        this.** The draw decides what is asked, never what an answer is worth.
+    - `npm run verify:study-categories` checks both halves offline — the draw's
+      proportions over a thousand questions, that an area is never re-asked
+      before its pass completes, that a 0% area is never served, and that the
+      report's points reconcile (`sum(pointsEarned) === score`, covered
+      `sum(pointsAvailable) === 100`) with an unpractised area named rather than
+      scored. Neither half can be checked by looking at the running app: the
+      draw is a proportion that only appears over hundreds of questions. In
+      `verify`, so CI runs it.
   The shared level ladder / streak / scoring math lives in `gameEngine.ts` (used
   by `studyEngine.ts` for per-deck state and mirrored server-side in
   `gameStats.ts`). Studies is lazy-loaded.
@@ -5414,6 +5479,11 @@ fails it fails at one of them and that one is the fastest thing to re-run:
 - Build: `npm run build` (api `tsc` + web `vite build`). The web build emits
   **two** HTML entries — `dist/index.html` and `dist/employee.html`; if the
   latter is missing, `/employee` serves a plain "not built" 404.
+- **Study category draw + breakdown: `npm run verify:study-categories`** after
+  touching `deckDraw.ts` or `CategoryBreakdown.tsx`. Both are things a running
+  app cannot show you: the draw is a proportion that only appears over hundreds
+  of questions, and the breakdown's arithmetic is right or wrong in ways a
+  screenshot cannot tell you.
 - **Credential encryption: `npm run verify:secretbox`** after touching
   `security/secretbox.ts` or `security/credentialsKey.ts`. Everything it checks
   fails *silently* in production: a ciphertext not bound to its row still

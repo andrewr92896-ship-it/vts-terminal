@@ -11,9 +11,20 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 7.29';
+export const APP_VERSION = 'Beta V 7.30';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 7.30',
+    date: 'August 18, 2026',
+    notes: [
+      'Study Game: a “By category” panel on the game screen itself. It shows your weighted score and, area by area, your accuracy, the share of the exam that area carries, and the share of your answers that have actually come from it.',
+      'That last figure answers a question the terminal could not answer before: whether an area feels rare because it is rare. Playing draws evenly across the deck, so an area with fewer questions in it comes up less often however much of the exam it is worth.',
+      'New setting on a weighted game — “Draw by exam weight”. Turn it on and questions come up in the proportions your categories describe: a 30% area twice as often as a 15% one, and an area weighted 0% not at all.',
+      'The panel is folded away by default, with the weighted score and the area costing you the most marks on its header. Open it once and it stays open.',
+      'The Progress screen’s breakdown now reads from the same place, so the two screens cannot disagree, and the Live Wall’s Study Progress tile carries the weighted score too.',
+    ],
+  },
   {
     version: 'Beta V 7.29',
     date: 'August 18, 2026',
