@@ -750,6 +750,133 @@ workspaces list** (see `theme/nav.ts` order).
     - Only trades closed in the last 18 hours are listed: a re-entry decision is
       a right-now decision, and a trade closed yesterday is one you did not
       re-enter. Nothing closed recently draws no panel at all.
+  - **FOUNDER TRADE COORDINATION — one Founder invites another onto a trade**
+    (`trading/founderTrades.ts` + `founderTradeWatch.ts`, routes
+    `/api/founder-trades/*`; `founder_trade_invites` / `founder_trade_events` /
+    `founder_trade_prefs`, migration `0131`. On the web:
+    `components/FounderTradeModal.tsx` mounted in `Portal.tsx`,
+    `workspaces/trading/FounderInvitePrompt.tsx` inside the ticket, and
+    `FounderTradePanel.tsx` on Live Trades). The inviter places a trade and is
+    asked whether to invite another Founder onto it; the recipient authorizes
+    their **own** primary trade, answers **separately** about their funded
+    account, and proves the funded leg with a screenshot.
+    - **THE DATABASE ROW IS THE WORKFLOW, and every other property here follows
+      from that.** `status` (`primary_pending` → `funded_pending` →
+      `proof_pending` → `complete`) is the single statement of what is still
+      owed, and the blocking modal renders it and nothing it remembers itself —
+      so an unresolved invitation survives a refresh, a relogin, a second tab
+      and a redeploy. **Do not add a client-side "seen" or "dismissed" flag**;
+      there is nothing for one to mean.
+    - **ELIGIBILITY IS READ FROM THE ROLES, EVERY TIME, AND THERE IS NO NAME
+      ANYWHERE.** `eligibleFounders()` is the one computation — founder-level
+      (`founder` or the permission-equivalent `software_developer`), active,
+      never the demo — and the picker, the invite guard, the audit read and the
+      reminder watch all call it. A third Founder appears the day they are
+      granted the role, with no schema change and no code change. Revoking the
+      role stops the reminders and closes the reads on the next request.
+      **Every route is on `requireFounder`, reads included**: a workflow carries
+      a trade, its levels and a screenshot of somebody's funded account, so
+      there is no half of it that is safe to serve more widely. The terminal
+      hiding the feature is discoverability, never the protection.
+    - **THE RECIPIENT'S SIZE IS THEIR OWN, AND AN UNSET ONE IS REFUSED RATHER
+      THAN DEFAULTED** (`founder_trade_prefs.default_units`). The invitation
+      snapshots the inviter's size for **display** and the join never reads it.
+      Null is "not stated" and is never read as a number — sending an order at a
+      size nobody chose is the one failure this feature must not have. What IS
+      copied is the instrument, the direction and the inviter's **initial stop**
+      (an absolute level on the same instrument); the take profit deliberately
+      is not.
+    - **A JOIN IS CLAIMED BEFORE IT IS SENT.** One conditional `UPDATE` decides
+      which caller reaches the broker, so two tabs, a double-click and a retried
+      request cannot become two positions — and the desk's own five-second
+      duplicate window sits behind it as a second lock. A claim that goes stale
+      (a request that never reported back) is **released with a recorded warning
+      rather than retried silently**: the previous order may have reached the
+      broker, so the recipient is told to check before it happens again.
+    - **DECLINING THE PRIMARY TRADE DOES NOT END THE WORKFLOW**, and neither
+      does saying YES to the funded one. Both answers advance to
+      `funded_pending`, because the funded question is genuinely separate — all
+      four combinations are valid. YES moves to `proof_pending`, and **the
+      SCREENSHOT is what completes that branch**, which is the whole reason the
+      reminders go on after it. Only NO completes the workflow outright.
+    - **PUSHOVER ACKNOWLEDGEMENT IS NOT AN ANSWER, and `founderTradeWatch.ts` is
+      what makes that true.** Pushover's own emergency retries stop when
+      somebody acknowledges on their phone; this watch reads the DATABASE on
+      every pass and, while a row still owes an action, sends a **fresh**
+      notification. Silencing a phone buys quiet until the next interval and
+      nothing more. It is bounded four ways so it can never become an endless
+      siren: it only reads unresolved rows (so finishing a step stops it with
+      nothing to unschedule), it honours each recipient's own interval, it skips
+      a row being answered right now, and reminders **lapse after 24 hours**
+      (`REMINDER_MAX_AGE_MS`) — the modal stays, because the workflow is server
+      state and does not expire, but a phone that has repeated for a day is no
+      longer saying anything new. One loop, one timer, started once from
+      `server.ts`: adding invitations lengthens a pass, never adds a job.
+    - **THE MODAL IS MOUNTED IN `Portal.tsx`, NOT ON A SCREEN**, and it has no
+      close button, no backdrop click handler and no Escape handler anywhere in
+      the file. An invitation has to be answerable from wherever the recipient
+      is, and the funded question outlives the walk to the Funded section. After
+      the primary decision it routes to **`prop`** (Funded Trades) — once per
+      workflow — and the modal deliberately does not depend on that working, so
+      navigating elsewhere or a failed route never loses it.
+    - **IT IS BUILT FOR SOMEBODY WHO WAS JUST WOKEN UP**: one question per
+      screen, the direction and instrument set larger than anything else, the
+      trade's facts **restated on every step** rather than remembered from the
+      last one, the size the order will actually go out at stated before the
+      button, and two full-width buttons labelled with what they do rather than
+      yes/no. **There is deliberately no confirmation step** — the JOIN press IS
+      the confirmation, and a second dialog at 3am is how somebody taps through
+      both. A trade with **no stop** says so in amber rather than leaving a
+      blank field.
+    - **BEING FOUNDER-LEVEL IS AUTHORITY TO TAKE PART, NOT CONSENT TO TRADE.**
+      Joining requires the **Advanced Trading opt-in** like every other write on
+      the desk (`canSendOrders`), since that is where the terminal asks somebody
+      to acknowledge that it places real orders with their own broker.
+      **DECLINE stays available either way** — an invitation nobody can answer
+      is the one way this workflow could trap somebody.
+    - **SEVERAL INVITATIONS QUEUE, OLDEST FIRST, AND NONE IS DISCARDED.** The
+      modal shows the head of the queue and says how many are behind it. One
+      trade raises **one** invitation per recipient (a unique index on
+      `(source_ref, recipient_user_id)`), so a retried create returns the
+      invitation that already exists rather than raising a second modal about
+      one trade.
+    - **The invite prompt rides the shared `OrderTicket`, so the Live Wall's
+      Order Ticket tile gets it too** — that tile renders the same component,
+      which is exactly why it does. Nothing else on the wall needed a tile: the
+      blocking modal is already global, so a board tile could only restate what
+      is already covering the screen.
+    - **The invitation is raised from the FILL, not from the ticket.**
+      `sourceRef` is the desk's own `trading_orders` row, so the server reads the
+      instrument, direction and stop off the trade it actually placed instead of
+      trusting anything the client sends — which is why `placeDeskOrder` returns
+      `orderRecordId`. It carries no foreign key: an invitation is a record of
+      what was asked and must outlive the journal row it points at.
+    - **`founder_trade_events` is the audit timeline**, append-only, and a null
+      actor means the terminal acted on its own schedule (a reminder, a released
+      claim) — the convention `credential_audit` already uses. It records the
+      source trade, the invitation, every reminder, both decisions, the order
+      result, the screenshot and the completion, **plus the refusals**: a JOIN
+      refused before anything was sent, a duplicate blocked by the claim, and a
+      repeat invitation folded into the existing one. All of it is fire and
+      forget — the timeline must never be what stops a decision being recorded.
+    - **VTS never places the funded trade** and never will: the recipient places
+      it at the firm by hand, and the terminal handles the reminders, the
+      routing, the decision state, the screenshot and the log. There is no
+      Funded Trading Plus integration and no Match-Trader automation.
+    - Reading a workflow is **the two parties and nobody else** — not a
+      teammate, not a plain admin, not another Founder — and an id that is not
+      the caller's answers **404**, so a guessed id cannot be probed. **Only the
+      recipient can decide**; the inviter may read and never answer.
+    - Screenshots are stored inline as client-scaled JPEG data URLs, like
+      avatars and study-guide slides (this deploy has no blob store), and served
+      from their own route so a list never carries every image on the desk.
+    - `npm run db:check-founder-trades` walks the whole state machine through
+      the real services against a scratch database — the decline that does not
+      end the workflow, the YES that completes nothing, the refused JOIN that
+      leaves the row where it was, the size that is never the inviter's, the
+      two-party read boundary and the reminder pacing. Like `db:check-sharing`
+      it **writes**, so it refuses any database that already holds a user. In
+      `verify:db`, so CI runs it.
   - **Alert Settings** (`alerts`, `workspaces/trading/AlertSettings.tsx` over
     `components/NotificationSettings.tsx` + `workspaces/trading/alertPanels.tsx`)
     is the **ONE home for everything the terminal can buzz you about** (owner
@@ -5346,7 +5473,19 @@ guard, same scratch-file rule:
     DATABASE_URL="file:/tmp/x.db" npm run db:migrate
     DATABASE_URL="file:/tmp/x.db" npm run db:check-rollover
 
-All five are in `verify:db`, so `npm run verify` and CI run them without being
+**Founder trades:** `npm run db:check-founder-trades` walks the whole state
+machine through the real services, and exists for the four rules that make it a
+workflow rather than a sequence of pop-ups: **declining the primary trade does
+not end it** (the funded question is separate and still owed), **funded YES
+completes nothing** (the screenshot does), **a second JOIN cannot reach the
+broker**, and **the recipient's size is never the inviter's** — an unset one is
+refused rather than defaulted. It also pins the two-party read boundary and the
+reminder pacing. Same writing guard, same scratch-file rule:
+
+    DATABASE_URL="file:/tmp/x.db" npm run db:migrate
+    DATABASE_URL="file:/tmp/x.db" npm run db:check-founder-trades
+
+All six are in `verify:db`, so `npm run verify` and CI run them without being
 asked.
 
 **Rollover / re-entry math:** `npm run verify:rollover` checks the two pure

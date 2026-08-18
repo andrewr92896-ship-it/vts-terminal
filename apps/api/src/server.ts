@@ -15,6 +15,7 @@ import { healthRoutes } from './routes/health.js';
 import { todoRoutes } from './routes/todo.js';
 import { tradingRoutes } from './routes/trading.js';
 import { tradeDeskRoutes } from './routes/tradeDesk.js';
+import { founderTradeRoutes } from './routes/founderTrades.js';
 import { tradingNotesRoutes } from './routes/tradingNotes.js';
 import { webhookRoutes } from './routes/webhooks.js';
 import { aiRoutes } from './routes/ai.js';
@@ -59,6 +60,7 @@ import { startDeskWatch } from './trading/service.js';
 import { warmMarketMacro } from './trading/marketMacro.js';
 import { startSessionWatch } from './trading/sessionWatch.js';
 import { startRolloverWatch } from './trading/rolloverWatch.js';
+import { startFounderTradeWatch } from './trading/founderTradeWatch.js';
 import { startYoutubeWatch } from './trading/youtubeWatch.js';
 import { startPriceAlertWatch } from './trading/priceAlertWatch.js';
 import { startNoteSettleWatch } from './trading/noteSettle.js';
@@ -114,6 +116,7 @@ export async function buildServer() {
   await app.register(brokerRoutes);
   await app.register(tradingRoutes);
   await app.register(tradeDeskRoutes);
+  await app.register(founderTradeRoutes);
   await app.register(tradingNotesRoutes);
   await app.register(webhookRoutes);
   await app.register(todoRoutes);
@@ -268,6 +271,11 @@ async function main() {
     // Fire the rollover-close alerts around 5pm ET, but only for a trader who
     // actually has a funded position open (production + push/Pushover only).
     startRolloverWatch();
+    // Remind a Founder about a trade invitation they have not answered. Reads
+    // the workflow rows on every pass, so a Pushover acknowledgement buys quiet
+    // until the next interval and never resolves anything (production +
+    // push/Pushover only).
+    startFounderTradeWatch();
     // Watch user-authored price alerts against live OANDA prices, firing each
     // trader's own level-cross notifications (production + push/Pushover only).
     startPriceAlertWatch();

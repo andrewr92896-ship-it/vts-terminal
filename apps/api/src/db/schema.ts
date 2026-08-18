@@ -1177,6 +1177,118 @@ export const rolloverPlans = sqliteTable('rollover_plans', {
 });
 export type RolloverPlanRow = typeof rolloverPlans.$inferSelect;
 
+// ---- Founder trade coordination ----
+// One Founder invites another onto a trade they have just placed; the recipient
+// authorizes their own primary trade, decides separately about their funded
+// account, and proves the funded leg with a screenshot.
+//
+// THE ROW IS THE WORKFLOW. The terminal's blocking modal reads its required
+// action from `status` and nothing else, which is what makes the workflow
+// survive a refresh, a relogin, a second tab and a deploy. Nothing about it is
+// derived from client state.
+//
+// There is deliberately no role column here. Who may take part is read from
+// `users.roles` through the existing authorization on every request, so
+// revoking Founder takes effect immediately rather than leaving a stale grant.
+export const FOUNDER_TRADE_STATUSES = [
+  'primary_pending',
+  'funded_pending',
+  'proof_pending',
+  'complete',
+] as const;
+export type FounderTradeStatus = (typeof FOUNDER_TRADE_STATUSES)[number];
+
+export const FOUNDER_PRIMARY_DECISIONS = ['joined', 'declined'] as const;
+export type FounderPrimaryDecision = (typeof FOUNDER_PRIMARY_DECISIONS)[number];
+
+export const FOUNDER_FUNDED_DECISIONS = ['yes', 'no'] as const;
+export type FounderFundedDecision = (typeof FOUNDER_FUNDED_DECISIONS)[number];
+
+export const founderTradeInvites = sqliteTable('founder_trade_invites', {
+  id: text('id').primaryKey(),
+  inviterUserId: text('inviter_user_id')
+    .notNull()
+    .references(() => users.id, { onDelete: 'cascade' }),
+  recipientUserId: text('recipient_user_id')
+    .notNull()
+    .references(() => users.id, { onDelete: 'cascade' }),
+  // The inviter's own order-journal row this invite was raised from. Carries no
+  // foreign key on purpose: an invite is a record of what was asked and must
+  // outlive the journal row it points at.
+  sourceRef: text('source_ref').notNull(),
+  sourceConnectionId: text('source_connection_id'),
+  sourceTradeId: text('source_trade_id'),
+  // The trade AS IT STOOD when the invite was made. Snapshotted rather than
+  // read back later — the recipient is deciding about the trade they were told
+  // about, and the inviter may have moved their stop since.
+  instrument: text('instrument').notNull(),
+  side: text('side', { enum: TRADE_SIDES }).notNull(),
+  entryPrice: real('entry_price'),
+  stopLoss: real('stop_loss'),
+  takeProfit: real('take_profit'),
+  // The inviter's size, for display only. Never what the recipient trades.
+  inviterUnits: real('inviter_units'),
+  status: text('status', { enum: FOUNDER_TRADE_STATUSES }).notNull().default('primary_pending'),
+  primaryDecision: text('primary_decision', { enum: FOUNDER_PRIMARY_DECISIONS }),
+  primaryDecidedAt: integer('primary_decided_at', { mode: 'timestamp_ms' }),
+  primaryOrderRef: text('primary_order_ref'),
+  primaryFillPrice: real('primary_fill_price'),
+  primaryUnits: real('primary_units'),
+  primaryConnectionId: text('primary_connection_id'),
+  // The last failure, kept on the row so a failed JOIN is still on screen when
+  // the recipient comes back to it.
+  primaryError: text('primary_error'),
+  fundedDecision: text('funded_decision', { enum: FOUNDER_FUNDED_DECISIONS }),
+  fundedDecidedAt: integer('funded_decided_at', { mode: 'timestamp_ms' }),
+  // The funded-trade screenshot, as a client-scaled JPEG data URL — stored
+  // inline like avatars and study-guide slides, since this deploy has no blob
+  // store.
+  proofImage: text('proof_image'),
+  proofUploadedAt: integer('proof_uploaded_at', { mode: 'timestamp_ms' }),
+  completedAt: integer('completed_at', { mode: 'timestamp_ms' }),
+  lastNotifiedAt: integer('last_notified_at', { mode: 'timestamp_ms' }),
+  notifyCount: integer('notify_count').notNull().default(0),
+  // An in-flight JOIN, held briefly so two tabs or a double-click cannot both
+  // reach the broker.
+  claimToken: text('claim_token'),
+  claimedAt: integer('claimed_at', { mode: 'timestamp_ms' }),
+  createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+  updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
+});
+export type FounderTradeInviteRow = typeof founderTradeInvites.$inferSelect;
+
+// The audit timeline. Append-only: nothing updates or deletes a row, so a
+// workflow can be reconstructed exactly. A null actor means the terminal acted
+// on its own schedule (a reminder, a lapsed claim) rather than a person — the
+// convention credential_audit already uses for its background rows.
+export const founderTradeEvents = sqliteTable('founder_trade_events', {
+  id: text('id').primaryKey(),
+  inviteId: text('invite_id')
+    .notNull()
+    .references(() => founderTradeInvites.id, { onDelete: 'cascade' }),
+  actorUserId: text('actor_user_id'),
+  kind: text('kind').notNull(),
+  detail: text('detail'),
+  createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+});
+export type FounderTradeEventRow = typeof founderTradeEvents.$inferSelect;
+
+// The recipient's own size for this workflow. A null `defaultUnits` is "not
+// stated" and is NEVER read as a number: a JOIN with no configured size is
+// refused and the modal asks for one, rather than sending an order at a size
+// nobody chose.
+export const founderTradePrefs = sqliteTable('founder_trade_prefs', {
+  userId: text('user_id')
+    .primaryKey()
+    .references(() => users.id, { onDelete: 'cascade' }),
+  defaultConnectionId: text('default_connection_id'),
+  defaultUnits: real('default_units'),
+  reminderEverySeconds: integer('reminder_every_seconds').notNull().default(300),
+  reminderLevel: text('reminder_level').notNull().default('repeating'),
+  updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
+});
+export type FounderTradePrefsRow = typeof founderTradePrefs.$inferSelect;
+
 // ---- Feature Access (My Terminal ▸ Premium Features) ----
 // One row per user recording which optional parts of the terminal they have turned
 // on for themselves. Everything here is OFF for a new account — Markets,

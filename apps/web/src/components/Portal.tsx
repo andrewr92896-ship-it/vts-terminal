@@ -22,6 +22,7 @@ import {
 import { useResponsive } from '../hooks/useMediaQuery';
 import { AlertSoundProvider } from '../sound/alertSound';
 import { LiveAlertBanner } from './LiveAlertBanner';
+import { FounderTradeModal } from './FounderTradeModal';
 import { AlertSoundWatcher } from '../sound/AlertSoundWatcher';
 import { DemoTour } from './DemoTour';
 import { ErrorBoundary } from './ErrorBoundary';
@@ -855,6 +856,18 @@ export function Portal() {
           {isDemo && tourOpen && (
             <DemoTour theme={theme} onGo={goTo} onOpenClaude={() => setAiOpen(true)} onClose={closeTour} />
           )}
+
+          {/* The Founder trade coordination modal — the terminal's one blocking
+              alert, and the reason it is mounted HERE rather than on a screen:
+              an invitation has to be answerable from wherever the recipient
+              happens to be, and the funded question outlives the walk to the
+              Funded section. It renders nothing for anybody who is not
+              founder-level, and nothing at all when nothing is pending.
+
+              `goToSection` is what takes the recipient to Funded once the
+              primary decision is made — the modal does not depend on that
+              working, so navigating away or a failed route never loses it. */}
+          <FounderTradeModal onGoFunded={() => goToSection('prop')} />
       </AlertSoundProvider>
       </BadgesProvider>
     </PrivacyProvider>
