@@ -3,6 +3,7 @@ import { ApiError, api } from '../../api/client';
 import type {
   FounderAccountView,
   FounderInvite,
+  FounderPerson,
   FounderTradeEvent,
   FounderTradePrefs,
 } from '../../api/types';
@@ -34,6 +35,7 @@ export function FounderTradePanel() {
   const [invites, setInvites] = useState<FounderInvite[]>([]);
   const [prefs, setPrefs] = useState<FounderTradePrefs | null>(null);
   const [accounts, setAccounts] = useState<FounderAccountView[]>([]);
+  const [recipients, setRecipients] = useState<FounderPerson[]>([]);
   const [canTrade, setCanTrade] = useState(true);
   const [open, setOpen] = useState<string | null>(null);
 
@@ -44,6 +46,7 @@ export function FounderTradePanel() {
       setInvites(res.invites);
       setPrefs(res.prefs);
       setAccounts(res.accounts);
+      setRecipients(res.recipients);
       setCanTrade(res.canTrade);
     } catch {
       /* leave whatever is on screen */
@@ -72,6 +75,8 @@ export function FounderTradePanel() {
         own size, and place any funded trade at the firm by hand.
       </p>
 
+      <AutoSend prefs={prefs} recipients={recipients} onSaved={(p) => setPrefs(p)} />
+
       <SizeSettings
         prefs={prefs}
         accounts={accounts}
@@ -94,6 +99,111 @@ export function FounderTradePanel() {
         </div>
       )}
     </section>
+  );
+}
+
+// AUTO-SEND — the standing choice to put every trade you place in front of one
+// other Founder, instead of being asked about each one.
+//
+// It is a setting rather than a per-trade question because that is what it
+// actually is: a trader either works this way with somebody or they do not, and
+// asking on every fill is a prompt to click past. Off by default and per person,
+// so it is never symmetric by accident — switching yours on says nothing about
+// whether theirs is on.
+function AutoSend({
+  prefs,
+  recipients,
+  onSaved,
+}: {
+  prefs: FounderTradePrefs;
+  recipients: FounderPerson[];
+  onSaved: (p: FounderTradePrefs) => void;
+}) {
+  const [saving, setSaving] = useState(false);
+  const [problem, setProblem] = useState<string | null>(null);
+  // Who a tick would send to: whoever is chosen, or the only other Founder there
+  // is. With one other person there is nothing to pick, so the row is one tick.
+  const target = prefs.autoInviteUserId ?? (recipients.length === 1 ? recipients[0].userId : null);
+  const targetName = recipients.find((r) => r.userId === target)?.displayName ?? null;
+
+  const save = async (patch: { autoInvite?: boolean; autoInviteUserId?: string | null }) => {
+    setSaving(true);
+    setProblem(null);
+    try {
+      onSaved((await api.saveFounderPrefs(patch)).prefs);
+    } catch (e) {
+      setProblem(e instanceof ApiError ? e.message : 'That could not be saved');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  if (recipients.length === 0) {
+    return (
+      <div style={{ ...cardStyle, marginBottom: 12 }}>
+        <div style={{ fontSize: 13, fontWeight: 700, color: C.text }}>Send my trades to another Founder</div>
+        <div style={{ fontSize: 12, color: C.muted, marginTop: 6 }}>
+          There is nobody else with Founder access to send to yet.
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ ...cardStyle, marginBottom: 12 }}>
+      <label style={{ display: 'flex', alignItems: 'flex-start', gap: 10, cursor: 'pointer' }}>
+        <input
+          type="checkbox"
+          checked={prefs.autoInvite}
+          disabled={saving || !target}
+          onChange={(e) =>
+            void save(
+              e.target.checked
+                ? { autoInvite: true, autoInviteUserId: target }
+                : { autoInvite: false },
+            )
+          }
+          style={{ width: 18, height: 18, marginTop: 1, accentColor: C.gold, flex: 'none' }}
+        />
+        <span>
+          <span style={{ fontSize: 13, fontWeight: 700, color: C.text }}>
+            Send my trades to {targetName ?? 'another Founder'}
+          </span>
+          <span style={{ display: 'block', fontSize: 12, color: C.muted, marginTop: 4, lineHeight: 1.5 }}>
+            Every trade you place is put in front of them to join or decline, without asking you each
+            time. Only trades that fill are sent — a limit or stop order that has not triggered is not.
+          </span>
+        </span>
+      </label>
+
+      {/* Only worth a picker once there is a choice to make. */}
+      {recipients.length > 1 && (
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 10 }}>
+          {recipients.map((r) => (
+            <button
+              key={r.userId}
+              type="button"
+              disabled={saving}
+              onClick={() => void save({ autoInviteUserId: r.userId })}
+              style={{
+                padding: '7px 12px',
+                borderRadius: 8,
+                border: `1px solid ${target === r.userId ? C.gold : C.line2}`,
+                background: target === r.userId ? 'rgba(235,203,116,.14)' : 'transparent',
+                color: C.text,
+                fontSize: 12.5,
+                fontWeight: 600,
+                cursor: 'pointer',
+                fontFamily: C.sans,
+              }}
+            >
+              {r.displayName}
+            </button>
+          ))}
+        </div>
+      )}
+      {problem && <div style={{ fontSize: 12, color: C.red, marginTop: 8, fontWeight: 600 }}>{problem}</div>}
+    </div>
   );
 }
 
@@ -137,7 +247,7 @@ function SizeSettings({
   };
 
   return (
-    <div style={{ border: `1px solid ${C.line2}`, borderRadius: 10, padding: 14, background: C.panel2 }}>
+    <div style={cardStyle}>
       <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 4, color: C.text }}>
         When you join a trade
       </div>
@@ -321,6 +431,13 @@ function InviteRow({
 function fmt(v: number | null): string {
   return v == null ? '—' : v.toLocaleString(undefined, { maximumFractionDigits: 6 });
 }
+
+const cardStyle: React.CSSProperties = {
+  border: `1px solid ${C.line2}`,
+  borderRadius: 10,
+  padding: 14,
+  background: C.panel2,
+};
 
 const label: React.CSSProperties = {
   display: 'grid',

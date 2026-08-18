@@ -754,8 +754,7 @@ workspaces list** (see `theme/nav.ts` order).
     (`trading/founderTrades.ts` + `founderTradeWatch.ts`, routes
     `/api/founder-trades/*`; `founder_trade_invites` / `founder_trade_events` /
     `founder_trade_prefs`, migration `0131`. On the web:
-    `components/FounderTradeModal.tsx` mounted in `Portal.tsx`,
-    `workspaces/trading/FounderInvitePrompt.tsx` inside the ticket, and
+    `components/FounderTradeModal.tsx` mounted in `Portal.tsx` and
     `FounderTradePanel.tsx` on Live Trades). The inviter places a trade and is
     asked whether to invite another Founder onto it; the recipient authorizes
     their **own** primary trade, answers **separately** about their funded
@@ -840,11 +839,34 @@ workspaces list** (see `theme/nav.ts` order).
       `(source_ref, recipient_user_id)`), so a retried create returns the
       invitation that already exists rather than raising a second modal about
       one trade.
-    - **The invite prompt rides the shared `OrderTicket`, so the Live Wall's
-      Order Ticket tile gets it too** — that tile renders the same component,
-      which is exactly why it does. Nothing else on the wall needed a tile: the
-      blocking modal is already global, so a board tile could only restate what
-      is already covering the screen.
+    - **INVITING IS A STANDING SETTING, NOT A PER-TRADE QUESTION** (owner
+      instruction, 2026-08 — it shipped as a prompt on every fill and was
+      replaced the same day). The "Send my trades to [Founder]" checkbox on the
+      Live Trades panel (`AutoSend` in `FounderTradePanel.tsx`;
+      `founder_trade_prefs.auto_invite` / `auto_invite_user_id`, migration
+      `0132`) is the whole inviter-side surface — a question on every fill is a
+      prompt people learn to click past. **Do not reintroduce a per-trade
+      prompt.** Four rules carry it:
+      - **The invitation is raised SERVER-SIDE, from the fill**
+        (`autoInviteAfterFill`, called fire-and-forget from the place route), so
+        it happens whether or not the tab that placed the order is still open,
+        and can never delay or fail the order response.
+      - **Only a FILL is sent, never a resting order.** The recipient joins at
+        market, so inviting off an untriggered limit/stop would put them in at a
+        price the inviter has not paid, against a stop set for a different
+        entry. `status === 'filled'` is the gate.
+      - **"On" and "who" are two columns**, so switching it off keeps the
+        choice of recipient; switching it on with nobody chosen is refused
+        rather than stored, and aiming it at yourself or at a non-Founder is
+        refused too. The recipient's eligibility is re-read from their roles on
+        every fill — a revoked Founder simply stops receiving, with no cascade.
+      - **Default OFF and per person, never symmetric by accident**: switching
+        yours on says nothing about theirs. An auto-sent invitation records
+        `invite.auto_sent` on its timeline, so a standing setting and an
+        in-the-moment decision stay distinguishable afterwards.
+      Nothing else on the wall needed a tile: the blocking modal is already
+      global, so a board tile could only restate what is already covering the
+      screen.
     - **The invitation is raised from the FILL, not from the ticket.**
       `sourceRef` is the desk's own `trading_orders` row, so the server reads the
       instrument, direction and stop off the trade it actually placed instead of

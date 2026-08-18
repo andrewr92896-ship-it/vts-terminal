@@ -150,6 +150,11 @@ export interface FounderTradePrefs {
   defaultUnits: number | null;
   /** Which of the recipient's own connections a joined trade goes to. */
   defaultConnectionId: string | null;
+  /** Send every trade that fills to `autoInviteUserId`, without being asked. */
+  autoInvite: boolean;
+  /** Who those trades go to. Kept when auto-send is switched off, so turning it
+   *  back on does not lose the choice. */
+  autoInviteUserId: string | null;
   reminderEverySeconds: number;
   reminderLevel: NotifLevel;
 }
@@ -164,6 +169,10 @@ const MAX_REMINDER_SECONDS = 3600;
 export const DEFAULT_FOUNDER_PREFS: FounderTradePrefs = {
   defaultUnits: null,
   defaultConnectionId: null,
+  // Off until somebody asks for it: switching this on makes another person's
+  // phone sound for trades they did not ask about.
+  autoInvite: false,
+  autoInviteUserId: null,
   reminderEverySeconds: 300,
   reminderLevel: 'repeating',
 };
@@ -185,6 +194,11 @@ export async function getFounderPrefs(userId: string): Promise<FounderTradePrefs
   return {
     defaultUnits: row.defaultUnits != null && row.defaultUnits > 0 ? row.defaultUnits : null,
     defaultConnectionId: row.defaultConnectionId,
+    // Auto-send is only ever ON with somebody to send to. Reading it that way
+    // means a recipient who has since been removed cannot leave a switch that
+    // says it is sending while nothing goes anywhere.
+    autoInvite: row.autoInvite && !!row.autoInviteUserId,
+    autoInviteUserId: row.autoInviteUserId,
     reminderEverySeconds: clampSeconds(row.reminderEverySeconds),
     reminderLevel: toLevel(row.reminderLevel),
   };
@@ -193,6 +207,8 @@ export async function getFounderPrefs(userId: string): Promise<FounderTradePrefs
 export interface FounderPrefsPatch {
   defaultUnits?: number | null;
   defaultConnectionId?: string | null;
+  autoInvite?: boolean;
+  autoInviteUserId?: string | null;
   reminderEverySeconds?: number;
   reminderLevel?: NotifLevel;
 }
@@ -225,9 +241,31 @@ export async function setFounderPrefs(
   // join time so a stored id can never point at somebody else's account.
   if (connectionId) await assertOwnConnection(user.id, connectionId);
 
+  // Who auto-send goes to. Validated whenever it is set — it has to be somebody
+  // eligible and it can never be yourself, since inviting yourself onto your own
+  // trade is not a thing that means anything.
+  const autoInviteUserId =
+    patch.autoInviteUserId === undefined
+      ? current.autoInviteUserId
+      : patch.autoInviteUserId || null;
+  if (autoInviteUserId) {
+    if (autoInviteUserId === user.id) {
+      throw new FounderTradeError('You cannot send your own trades to yourself');
+    }
+    await assertEligible(autoInviteUserId);
+  }
+  const autoInvite = patch.autoInvite === undefined ? current.autoInvite : patch.autoInvite;
+  // Switching it on with nobody to send to is refused rather than stored: a
+  // switch that reads "on" and sends nothing is worse than being asked to pick.
+  if (autoInvite && !autoInviteUserId) {
+    throw new FounderTradeError('Choose which Founder your trades are sent to', 400, 'NO_RECIPIENT');
+  }
+
   const next: FounderTradePrefs = {
     defaultUnits: units,
     defaultConnectionId: connectionId,
+    autoInvite,
+    autoInviteUserId,
     reminderEverySeconds:
       patch.reminderEverySeconds === undefined
         ? current.reminderEverySeconds
@@ -241,6 +279,8 @@ export async function setFounderPrefs(
       userId: user.id,
       defaultUnits: next.defaultUnits,
       defaultConnectionId: next.defaultConnectionId,
+      autoInvite: next.autoInvite,
+      autoInviteUserId: next.autoInviteUserId,
       reminderEverySeconds: next.reminderEverySeconds,
       reminderLevel: next.reminderLevel,
       updatedAt: now,
@@ -250,6 +290,8 @@ export async function setFounderPrefs(
       set: {
         defaultUnits: next.defaultUnits,
         defaultConnectionId: next.defaultConnectionId,
+        autoInvite: next.autoInvite,
+        autoInviteUserId: next.autoInviteUserId,
         reminderEverySeconds: next.reminderEverySeconds,
         reminderLevel: next.reminderLevel,
         updatedAt: now,
@@ -518,6 +560,53 @@ export async function createInvite(
   );
   const full = (await db.select().from(founderTradeInvites).where(eq(founderTradeInvites.id, id)).limit(1))[0]!;
   return shape(full, await peopleFor([full]), inviter.id, await unitsOf(input.recipientUserId));
+}
+
+// ---- auto-send ----
+
+// Raise an invitation automatically, because the trader has asked for every
+// trade they place to go to one other Founder.
+//
+// **IT FIRES ON A FILL, AND DELIBERATELY NOT ON A RESTING ORDER.** A limit or
+// stop entry that has not triggered is not a trade anybody is in yet, and the
+// recipient joins at MARKET — so inviting them off an untriggered order would
+// put them in at a price the inviter has not paid, against a stop set for a
+// different entry, possibly in the middle of the night. Waiting until there is
+// an actual position is the whole safety property here.
+//
+// Everything about it fails QUIETLY. It is a side effect of somebody else's
+// order going in, so a founder-trade problem must never surface as an order
+// error or delay the fill being reported — the trader would have no idea what
+// the message was about, on the one screen where that matters most.
+export async function autoInviteAfterFill(
+  inviter: UserRow,
+  sourceOrderId: string,
+  status: 'filled' | 'accepted',
+): Promise<FounderInviteView | null> {
+  try {
+    if (status !== 'filled') return null;
+    if (isDemoUser(inviter) || !isFounder(parseRoles(inviter))) return null;
+    const prefs = await getFounderPrefs(inviter.id);
+    if (!prefs.autoInvite || !prefs.autoInviteUserId) return null;
+    // Eligibility is re-read here rather than trusted from the stored id, so a
+    // recipient who has lost the role simply stops receiving trades.
+    const eligible = await eligibleFounders();
+    if (!eligible.some((f) => f.userId === prefs.autoInviteUserId)) return null;
+    // createInvite carries the duplicate guard, so a retried request or a second
+    // fill reported twice still raises one invitation.
+    const invite = await createInvite(inviter, {
+      recipientUserId: prefs.autoInviteUserId,
+      sourceOrderId,
+    });
+    // Recorded so the timeline says an invitation was sent by a standing
+    // setting rather than by somebody deciding in the moment — the two read very
+    // differently when reconstructing what happened.
+    logEvent(invite.id, 'invite.auto_sent', null, 'Sent by the inviter’s auto-send setting');
+    return invite;
+  } catch (err) {
+    console.error('Founder auto-send failed:', err);
+    return null;
+  }
 }
 
 async function unitsOf(userId: string): Promise<number | null> {

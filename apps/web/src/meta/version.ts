@@ -11,9 +11,20 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 7.28';
+export const APP_VERSION = 'Beta V 7.29';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 7.29',
+    date: 'August 18, 2026',
+    notes: [
+      'Founder trades: inviting is now a setting, not a question on every trade. On Live Trades, tick “Send my trades to [Founder]” and every trade you place is put in front of them automatically — untick it and nothing is sent.',
+      'The choice is one-way and per person: switching yours on says nothing about theirs, so trades can flow in one direction only.',
+      'Only trades that actually fill are sent. A limit or stop order that has not triggered is not a position yet, so nobody is invited onto it.',
+      'With more than two Founders, the same panel is where you pick who your trades go to.',
+      'The “invite?” prompt that appeared after each trade is gone.',
+    ],
+  },
   {
     version: 'Beta V 7.28',
     date: 'August 18, 2026',

@@ -3180,6 +3180,11 @@ export interface FounderTradePrefs {
   /** Null is "not stated" and is never read as a size — a JOIN is refused instead. */
   defaultUnits: number | null;
   defaultConnectionId: string | null;
+  /** Send every trade that fills to `autoInviteUserId`, without being asked. */
+  autoInvite: boolean;
+  /** Who those trades go to. Kept when auto-send is off, so turning it back on
+   *  does not lose the choice. */
+  autoInviteUserId: string | null;
   reminderEverySeconds: number;
   reminderLevel: NotifLevel;
 }
@@ -3197,6 +3202,8 @@ export interface FounderAccountView {
 export interface FounderTradePrefsPatch {
   defaultUnits?: number | null;
   defaultConnectionId?: string | null;
+  autoInvite?: boolean;
+  autoInviteUserId?: string | null;
   reminderEverySeconds?: number;
   reminderLevel?: NotifLevel;
 }

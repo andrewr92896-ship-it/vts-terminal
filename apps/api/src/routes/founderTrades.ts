@@ -40,9 +40,14 @@ const inviteSchema = z.object({
   sourceOrderId: z.string().min(1).max(64),
 });
 
+// A PATCH: the server merges onto what is stored, so a browser on an old
+// service-worker-cached bundle posting a subset never blanks a setting it does
+// not know about.
 const prefsSchema = z.object({
   defaultUnits: z.number().finite().positive().max(100_000_000).nullish(),
   defaultConnectionId: z.string().max(64).nullish(),
+  autoInvite: z.boolean().optional(),
+  autoInviteUserId: z.string().max(64).nullish(),
   reminderEverySeconds: z.number().int().min(60).max(3600).optional(),
   reminderLevel: z.enum(NOTIF_LEVELS).optional(),
 });

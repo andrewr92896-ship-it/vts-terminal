@@ -41,6 +41,7 @@ import {
   type UserRow,
 } from '../db/schema.js';
 import {
+  autoInviteAfterFill,
   createInvite,
   declinePrimary,
   dueReminders,
@@ -342,6 +343,52 @@ async function main() {
   const no = await setFundedDecision(beta, second.id, 'no');
   ok('NO completes the workflow there and then', no.status === 'complete' && no.completedAt !== null);
 
+  section('auto-send: a standing setting, off until somebody asks for it');
+  ok('nothing is sent by default', (await getFounderPrefs(alpha.id)).autoInvite === false);
+  const quiet = await makeOrder(alpha.id, 1.07);
+  ok('so a fill raises nothing', (await autoInviteAfterFill(alpha, quiet, 'filled')) === null);
+  await expectRefusal(
+    'switching it on with nobody to send to is refused',
+    () => setFounderPrefs(alpha, { autoInvite: true }),
+    'Choose which Founder',
+  );
+  await expectRefusal(
+    'and it can never be aimed at yourself',
+    () => setFounderPrefs(alpha, { autoInvite: true, autoInviteUserId: alpha.id }),
+    'yourself',
+  );
+  await expectRefusal(
+    'nor at somebody without Founder access',
+    () => setFounderPrefs(alpha, { autoInvite: true, autoInviteUserId: member.id }),
+    'cannot take part',
+  );
+
+  section('switched on, a FILL is sent and a resting order is not');
+  await setFounderPrefs(alpha, { autoInvite: true, autoInviteUserId: beta.id });
+  const resting = await makeOrder(alpha.id, 1.06);
+  // A limit or stop entry that has not triggered is not a trade anybody is in,
+  // and the recipient would join at market — so it is deliberately not sent.
+  ok('a working order raises nothing', (await autoInviteAfterFill(alpha, resting, 'accepted')) === null);
+  const autoOrder = await makeOrder(alpha.id, 1.05);
+  const auto = await autoInviteAfterFill(alpha, autoOrder, 'filled');
+  ok('a fill raises the invitation by itself', auto?.recipient.userId === beta.id);
+  ok('and it carries the trade, as a manual one does', auto?.stopLoss === 1.05);
+  const twice = await autoInviteAfterFill(alpha, autoOrder, 'filled');
+  ok('the same fill reported twice still raises one', twice?.id === auto?.id);
+
+  section('auto-send is per person, never symmetric by accident');
+  ok("switching yours on says nothing about theirs", (await getFounderPrefs(beta.id)).autoInvite === false);
+  const betaOrder = await makeOrder(beta.id, 1.04);
+  ok('so their fill sends nothing back', (await autoInviteAfterFill(beta, betaOrder, 'filled')) === null);
+
+  section('a recipient who loses Founder access stops receiving trades');
+  await db.update(users).set({ roles: JSON.stringify(['member']) }).where(eq(users.id, beta.id));
+  const afterRevoke = await makeOrder(alpha.id, 1.03);
+  ok('nothing is sent to them', (await autoInviteAfterFill(alpha, afterRevoke, 'filled')) === null);
+  ok('and the switch reads as sending to nobody', (await getFounderPrefs(alpha.id)).autoInvite === true);
+  await db.update(users).set({ roles: JSON.stringify(['software_developer']) }).where(eq(users.id, beta.id));
+  await setFounderPrefs(alpha, { autoInvite: false });
+
   section('reminders are paced, and stop when the work is done');
   const order3 = await makeOrder(alpha.id, 1.08);
   const third = await createInvite(alpha, { recipientUserId: beta.id, sourceOrderId: order3 });
@@ -377,6 +424,11 @@ async function main() {
   ok('and the duplicate invitation that was folded in', timeline.includes('invite.duplicate_suppressed'));
   ok('the JOIN that was blocked as a duplicate', timeline.includes('primary.duplicate_blocked'));
   ok('and the abandoned claim that was released unsent', timeline.includes('primary.claim_recovered'));
+  await settle();
+  ok(
+    'an auto-sent invitation says so on its own timeline',
+    (await kinds(auto!.id)).includes('invite.auto_sent'),
+  );
 
   console.log(`\n${pass} passed, ${fail} failed`);
   if (fail > 0) process.exit(1);
