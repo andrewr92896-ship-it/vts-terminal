@@ -23,6 +23,8 @@ export const PATCH_NOTES: PatchNote[] = [
       'New setting on a weighted game — “Draw by exam weight”. Turn it on and questions come up in the proportions your categories describe: a 30% area twice as often as a 15% one, and an area weighted 0% not at all.',
       'The panel is folded away by default, with the weighted score and the area costing you the most marks on its header. Open it once and it stays open.',
       'The Progress screen’s breakdown now reads from the same place, so the two screens cannot disagree, and the Live Wall’s Study Progress tile carries the weighted score too.',
+      'Fixed: the game no longer reshuffles the deck every time you open it. It kept no record of where it was up to, so each visit started a fresh pass over all the questions — which meant seeing the same ones repeatedly while others never came up at all. It now works through the deck across sittings, and says how many are left before anything repeats.',
+      'The game editor now flags questions that ask the same thing as another one in the game, with a way to show only those. Merging two games, or importing a set twice, leaves real duplicates — and until now nothing said so.',
     ],
   },
   {

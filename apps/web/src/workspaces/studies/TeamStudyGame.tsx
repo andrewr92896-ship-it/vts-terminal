@@ -22,7 +22,18 @@ import { clampRapidSeconds, loadStudyPrefs, saveStudyPrefs, type StudyPrefs } fr
 import { loadDeckSession, saveDeckSession } from './studySession';
 import { TutorChat } from './TutorChat';
 import { buildCategoryReport, categorySummary, CategoryBreakdown } from './CategoryBreakdown';
-import { buildDraw, canDrawByBlueprint, drawNext, dropIndex, type DrawState } from './deckDraw';
+import {
+  buildDraw,
+  canDrawByBlueprint,
+  clearDraw,
+  drawNext,
+  dropSeq,
+  loadDraw,
+  passRemaining,
+  passSize,
+  saveDraw,
+  type DrawState,
+} from './deckDraw';
 
 const GREEN = '#35c47b';
 const RED = '#ef5468';
@@ -47,17 +58,10 @@ function sourcesForDeck(deck: TeamDeckDetail): string[] {
   return [...set];
 }
 
-// The draw for a deck, in the mode the learner has chosen. `blueprint` falls
-// back to an even pass by itself when the deck's questions carry no weighted
-// category, so this is safe to ask for on any game.
-function makeDraw(deck: TeamDeckDetail, blueprint: boolean): DrawState {
-  return buildDraw(
-    deck.questions.map((q) => q.topic),
-    deck.categories,
-    deck.categoryWeights,
-    blueprint ? 'blueprint' : 'even',
-  );
-}
+// A blueprint draw falls back to an even pass by itself when the deck's
+// questions carry no weighted category, so either mode is safe to ask for on
+// any game.
+const drawMode = (blueprint: boolean) => (blueprint ? 'blueprint' : 'even');
 
 // Play a team-built study deck. Uses the shared level ladder, streak
 // multiplier, and session/lifetime scoring (via studyEngine), just over the
@@ -83,9 +87,11 @@ export function TeamStudyGame({ theme, deckId, onBack }: { theme: Theme; deckId:
   }, [hasLeaderboard, view]);
 
   const [game, setGame] = useState<DeckGameState | null>(null);
-  // How the next question is picked (see deckDraw.ts). Rebuilt whenever the
-  // deck or the draw mode changes; the pass it holds is per visit, so leaving
-  // and coming back reshuffles.
+  // How the next question is picked (see deckDraw.ts). The pass it holds is
+  // SAVED, so leaving the game and coming back carries on through the deck
+  // instead of reshuffling it and starting again — which is what was serving
+  // the same questions over and over while whole stretches of a big deck went
+  // unasked.
   const drawRef = useRef<DrawState | null>(null);
   const [current, setCurrent] = useState<DeckQuestion | null>(null);
   const [selected, setSelected] = useState<Letter | null>(null);
@@ -121,6 +127,11 @@ export function TeamStudyGame({ theme, deckId, onBack }: { theme: Theme; deckId:
   // rather than evenly across the deck. Per deck, persisted with the rest of
   // the session; only offered on a game that carries a blueprint.
   const [blueprintDraw, setBlueprintDraw] = useState(false);
+  // Where the current pass is up to: how many questions are still to be asked
+  // before anything repeats, out of how many the pass holds. Read off the draw
+  // rather than counted from the score — the score counts answers, and a pass
+  // is about questions.
+  const [pass, setPass] = useState<{ left: number; of: number } | null>(null);
   // Seconds left on the open reveal, or null when nothing is counting.
   const [countdown, setCountdown] = useState<number | null>(null);
   const counting = countdown != null;
@@ -150,6 +161,13 @@ export function TeamStudyGame({ theme, deckId, onBack }: { theme: Theme; deckId:
     saveStudyPrefs(user?.id, p);
   }
 
+  // Pick up where this deck left off, in the mode asked for. Every rebuild goes
+  // through here rather than through `buildDraw`, so there is one place that
+  // decides what "carry on" means.
+  function continueDraw(d: TeamDeckDetail, blueprint: boolean): DrawState {
+    return loadDraw(user?.id, deckId, d.questions, d.categories, d.categoryWeights, drawMode(blueprint));
+  }
+
   const hydratedRef = useRef(false);
   const lastSavedRef = useRef<string | null>(null);
   // The game state + category as they were BEFORE the current question's answer
@@ -173,7 +191,14 @@ export function TeamStudyGame({ theme, deckId, onBack }: { theme: Theme; deckId:
         setGame(local);
         // Read the saved draw mode here rather than waiting for the restore
         // effect below, so the very first question already follows it.
-        drawRef.current = makeDraw(d, loadDeckSession(user?.id, deckId).blueprintDraw);
+        drawRef.current = loadDraw(
+          user?.id,
+          deckId,
+          d.questions,
+          d.categories,
+          d.categoryWeights,
+          drawMode(loadDeckSession(user?.id, deckId).blueprintDraw),
+        );
       })
       .catch(() => alive && setLoadError(true));
     return () => {
@@ -251,8 +276,11 @@ export function TeamStudyGame({ theme, deckId, onBack }: { theme: Theme; deckId:
       // having just answered, and the point of the timer is time to read.
       setCountdownHeld(cur.revealed);
       // Don't let the restored question resurface immediately in this run.
-      const at = deck.questions.findIndex((x) => x.seq === q.seq);
-      if (drawRef.current && at >= 0) dropIndex(drawRef.current, at);
+      if (drawRef.current) {
+        dropSeq(drawRef.current, q.seq);
+        saveDraw(user?.id, deckId, drawRef.current);
+        setPass({ left: passRemaining(drawRef.current), of: passSize(drawRef.current) });
+      }
     } else {
       advance();
     }
@@ -332,14 +360,20 @@ export function TeamStudyGame({ theme, deckId, onBack }: { theme: Theme; deckId:
       return;
     }
     if (!drawRef.current || drawRef.current.all.length !== d.questions.length) {
-      drawRef.current = makeDraw(d, blueprintDraw);
+      drawRef.current = continueDraw(d, blueprintDraw);
     }
-    const idx = drawNext(drawRef.current);
-    if (idx == null) {
+    const seq = drawNext(drawRef.current);
+    const next = seq == null ? null : d.questions.find((q) => q.seq === seq) ?? null;
+    if (!next) {
       setCurrent(null);
       return;
     }
-    setCurrent(d.questions[idx]);
+    // Written on every draw, not on unmount: the tab can be closed, the app can
+    // be killed from the app switcher, and the whole point is that where the
+    // learner is up to survives that.
+    saveDraw(user?.id, deckId, drawRef.current);
+    setPass({ left: passRemaining(drawRef.current), of: passSize(drawRef.current) });
+    setCurrent(next);
     setSelected(null);
     setRevealed(false);
     setOutcome(null);
@@ -488,8 +522,10 @@ export function TeamStudyGame({ theme, deckId, onBack }: { theme: Theme; deckId:
       const remaining = deck.questions.filter((q) => q.seq !== current.seq);
       const { deck: updated } = await api.updateStudyDeck(deckId, { questions: remaining.map(toQuestionInput) });
       setDeck(updated);
-      // The draw referenced the old question set; rebuild it for the new one.
-      drawRef.current = makeDraw(updated, blueprintDraw);
+      // The draw referenced the old question set; rebuild it against the new
+      // one. The saved pass carries over — the deleted question drops out of it
+      // rather than taking the rest of the pass with it.
+      drawRef.current = continueDraw(updated, blueprintDraw);
       advance(updated);
     } catch (e) {
       setFixError(fixErrorMessage(e));
@@ -505,7 +541,11 @@ export function TeamStudyGame({ theme, deckId, onBack }: { theme: Theme; deckId:
     }
     const carriedBest = Math.max(game.allTimeBestStep, game.bestStep);
     setGame({ ...emptyDeckGame(cats), allTimeBestStep: carriedBest });
-    drawRef.current = deck ? makeDraw(deck, blueprintDraw) : null;
+    // Resetting progress starts the deck again, so the pass starts again too.
+    clearDraw(user?.id, deckId);
+    drawRef.current = deck
+      ? buildDraw(deck.questions, deck.categories, deck.categoryWeights, drawMode(blueprintDraw))
+      : null;
     setResetConfirm(false);
     advance();
   }
@@ -546,11 +586,7 @@ export function TeamStudyGame({ theme, deckId, onBack }: { theme: Theme; deckId:
   // function, so the two screens cannot disagree about it.
   const report = buildCategoryReport(deck.categories, deck.categoryWeights, game);
   const reportLine = categorySummary(report);
-  const canBlueprint = canDrawByBlueprint(
-    deck.questions.map((q) => q.topic),
-    deck.categories,
-    deck.categoryWeights,
-  );
+  const canBlueprint = canDrawByBlueprint(deck.questions, deck.categories, deck.categoryWeights);
   // Who may fix a question inline — mirrors the server's deck-edit rule: the
   // game's creator, or an admin/founder. Never the read-only demo.
   const canEdit = !readOnly && !!user && (isAdmin(user.roles) || (deck.createdBy != null && deck.createdBy === user.id));
@@ -630,7 +666,8 @@ export function TeamStudyGame({ theme, deckId, onBack }: { theme: Theme; deckId:
               // Takes effect from the next question: the one on screen has
               // already been asked, and swapping it out would throw away an
               // answer in progress.
-              drawRef.current = makeDraw(deck, on);
+              drawRef.current = continueDraw(deck, on);
+              setPass({ left: passRemaining(drawRef.current), of: passSize(drawRef.current) });
             }}
             style={{ width: 16, height: 16, accentColor: theme.accent, cursor: 'pointer' }}
           />
@@ -756,6 +793,18 @@ export function TeamStudyGame({ theme, deckId, onBack }: { theme: Theme; deckId:
           onPrefsChange={updatePrefs}
           settingsExtra={playSettings}
         />
+        {/* Where the pass is up to. A deck is worked through, not sampled from,
+            and this is the reading that says so — it is also the one thing that
+            makes an unexpected repeat legible rather than looking like a fault.
+            Stated as questions not yet asked, which is true in both draw modes;
+            in blueprint mode a heavier area finishes its own pass first. */}
+        {pass && pass.of > 0 && (
+          <div style={{ fontSize: 11, color: muted, fontFamily: "'IBM Plex Mono', monospace" }}>
+            {pass.left > 0
+              ? `${pass.left} of ${pass.of} not yet asked this round`
+              : `all ${pass.of} asked — the next question starts a new round`}
+          </div>
+        )}
       </div>
 
       {/* How the practice is going area by area, folded away by default so the

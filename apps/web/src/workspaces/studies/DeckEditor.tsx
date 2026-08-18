@@ -72,6 +72,7 @@ export function DeckEditor({
   const [weights, setWeights] = useState<Record<string, number> | null>(null);
   const [questions, setQuestions] = useState<EditQ[]>([]);
   const [sortByCat, setSortByCat] = useState(false);
+  const [onlyDuplicates, setOnlyDuplicates] = useState(false);
   const [newCat, setNewCat] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -314,18 +315,40 @@ export function DeckEditor({
     }
   }
 
+  // Questions that ask the same thing as another one in this game, matched on
+  // the stem alone (trimmed, lowercased, inner whitespace collapsed). A game
+  // built by merging two others, or by importing the same set twice, holds them
+  // — and there was nothing anywhere that would say so. The learner meets them
+  // as the same question coming round again, which is indistinguishable from
+  // the game repeating itself.
+  const duplicateUids = useMemo(() => {
+    const byStem = new Map<string, number[]>();
+    for (const q of questions) {
+      const k = q.stem.trim().toLowerCase().replace(/\s+/g, ' ');
+      if (!k) continue;
+      const list = byStem.get(k);
+      if (list) list.push(q.uid);
+      else byStem.set(k, [q.uid]);
+    }
+    const out = new Set<number>();
+    for (const uids of byStem.values()) if (uids.length > 1) for (const u of uids) out.add(u);
+    return out;
+  }, [questions]);
+
   // Display order: grouped by category (in category order, unknown last) or the
-  // natural question order.
+  // natural question order — narrowed to the repeats when that is asked for.
   const displayed = useMemo(() => {
-    if (!sortByCat) return questions.map((q, i) => ({ q, n: i + 1 }));
-    const withN = questions.map((q, i) => ({ q, n: i + 1 }));
+    const withN = questions
+      .map((q, i) => ({ q, n: i + 1 }))
+      .filter(({ q }) => !onlyDuplicates || duplicateUids.has(q.uid));
+    if (!sortByCat) return withN;
     const order = new Map(allCategories.map((c, i) => [c.toLowerCase(), i]));
     return [...withN].sort((a, b) => {
       const ai = order.get(a.q.topic.trim().toLowerCase()) ?? 999;
       const bi = order.get(b.q.topic.trim().toLowerCase()) ?? 999;
       return ai - bi || a.n - b.n;
     });
-  }, [questions, sortByCat, allCategories]);
+  }, [questions, sortByCat, allCategories, onlyDuplicates, duplicateUids]);
 
   const issueCount = Object.keys(auditIssues).length;
   const weighted = weights !== null;
@@ -511,8 +534,27 @@ export function DeckEditor({
 
       {/* Questions toolbar */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap', marginBottom: 10 }}>
-        <span style={{ fontSize: 13, fontWeight: 700, color: '#fff' }}>{"Questions"} · {questions.length}</span>
+        <span style={{ fontSize: 13, fontWeight: 700, color: '#fff' }}>
+          {"Questions"} · {questions.length}
+          {duplicateUids.size > 0 && (
+            <span style={{ fontSize: 12, fontWeight: 600, color: '#e0a23a' }}>
+              {' · '}
+              {duplicateUids.size} ask the same thing
+            </span>
+          )}
+        </span>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          {duplicateUids.size > 0 && (
+            <label style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 12, color: muted, cursor: 'pointer' }}>
+              <input
+                type="checkbox"
+                checked={onlyDuplicates}
+                onChange={(e) => setOnlyDuplicates(e.target.checked)}
+                style={{ width: 15, height: 15, accentColor: theme.accent }}
+              />
+              {"Show only repeats"}
+            </label>
+          )}
           <label style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 12, color: muted, cursor: 'pointer' }}>
             <input type="checkbox" checked={sortByCat} onChange={(e) => setSortByCat(e.target.checked)} style={{ width: 15, height: 15, accentColor: theme.accent }} />
             {"Sort by category"}

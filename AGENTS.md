@@ -2175,16 +2175,49 @@ workspaces list** (see `theme/nav.ts` order).
       - Changing it takes effect from the **next** question: the one on screen
         has already been asked, and swapping it out would throw away an answer
         in progress.
+      - **THE PASS IS SAVED, AND THAT IS THE POINT OF THE MODULE EXISTING**
+        (`vts_deck_draw_<user>_<deck>`, written after every draw). It lived in a
+        React ref, rebuilt on mount — so opening the game, answering twenty and
+        leaving reshuffled the deck and started again from the top. Across
+        sittings that is sampling **with replacement**: on the owner's
+        400-question deck, 237 answers reached about 180 distinct questions
+        rather than 237, which is exactly what "a lot of repeats, and questions
+        I never see" is. Nothing about the shuffle was wrong — it was being
+        thrown away. Reported by the owner, 2026-08.
+      - **It is keyed by question `seq`, NEVER by array index.** A stored index
+        means a different question the moment one is added or deleted, so a
+        saved pass would quietly start pointing at the wrong questions. `seq` is
+        the stable id the saved session already restores the current question
+        by; anything no longer in the deck simply drops out of the pass and the
+        rest of it is kept.
+      - **A pass saved in one mode is not carried into the other**, and
+        switching is the one deliberate act that starts a mode fresh. Blueprint
+        mode also carries each area's `served` count across visits — that is
+        what keeps the proportions right, or every visit would begin by serving
+        the heaviest area again.
+      - **Resetting progress clears it**; the game screen states where the pass
+        is up to ("312 of 400 not yet asked this round"), which is what makes an
+        unexpected repeat legible rather than looking like a fault.
       - **Scoring, levels, streaks and the leaderboard are untouched by any of
         this.** The draw decides what is asked, never what an answer is worth.
-    - `npm run verify:study-categories` checks both halves offline — the draw's
+    - **The EDITOR flags questions that ask the same thing** — matched on the
+      stem alone, with a "Show only repeats" narrowing beside the count. A game
+      built by merging two others, or by importing one set twice, holds literal
+      duplicates, and nothing anywhere said so: the learner meets them as the
+      game repeating itself, which is indistinguishable from a broken draw. It
+      **reports rather than hides** — the player still serves every question the
+      deck holds, because which of two copies to lose is the author's call.
+    - `npm run verify:study-categories` checks all of it offline — the draw's
       proportions over a thousand questions, that an area is never re-asked
-      before its pass completes, that a 0% area is never served, and that the
-      report's points reconcile (`sum(pointsEarned) === score`, covered
+      before its pass completes, that a 0% area is never served, that a whole
+      deck is worked through across many visits with **nothing asked twice**,
+      that a deleted question leaves a saved pass without resetting it, and that
+      the report's points reconcile (`sum(pointsEarned) === score`, covered
       `sum(pointsAvailable) === 100`) with an unpractised area named rather than
-      scored. Neither half can be checked by looking at the running app: the
-      draw is a proportion that only appears over hundreds of questions. In
-      `verify`, so CI runs it.
+      scored. None of it can be checked by looking at the running app: the draw
+      is a proportion that only appears over hundreds of questions, and the pass
+      bug was invisible from inside a single sitting. In `verify`, so CI runs
+      it.
   The shared level ladder / streak / scoring math lives in `gameEngine.ts` (used
   by `studyEngine.ts` for per-deck state and mirrored server-side in
   `gameStats.ts`). Studies is lazy-loaded.
