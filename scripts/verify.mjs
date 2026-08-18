@@ -37,6 +37,7 @@ const STEPS = [
   ['investments math', 'verify:investments'],
   ['rollover alerts and re-entry math', 'verify:rollover'],
   ['study packages', 'verify:study-packages'],
+  ['study category draw and breakdown', 'verify:study-categories'],
   ['study sharing, alerts and package edits', 'verify:db'],
   ['build', 'build'],
 ];

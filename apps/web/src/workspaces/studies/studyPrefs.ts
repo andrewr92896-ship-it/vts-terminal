@@ -20,6 +20,10 @@ export interface StudyPrefs {
   // it carries across every game they play on this device. The rapid-fire
   // toggle itself is per deck (studySession).
   rapidSeconds: number;
+  // Whether the game screen's category breakdown is open. A display choice
+  // about the learner rather than about one game, so it carries across every
+  // game they play on this device.
+  categoriesOpen: boolean;
 }
 
 export const SESSION_WINDOW_MIN = 5;
@@ -37,6 +41,7 @@ export const DEFAULT_STUDY_PREFS: StudyPrefs = {
   lifetimePass: 70,
   sessionPass: 70,
   rapidSeconds: 4,
+  categoriesOpen: false,
 };
 
 function prefsKey(userId: string | undefined): string {
@@ -76,6 +81,7 @@ export function normalizeStudyPrefs(p: unknown): StudyPrefs {
     // Absent means the prefs were stored before rapid fire existed, so take the
     // default rather than treating the missing value as a choice.
     rapidSeconds: 'rapidSeconds' in src ? clampRapidSeconds(src.rapidSeconds) : DEFAULT_STUDY_PREFS.rapidSeconds,
+    categoriesOpen: src.categoriesOpen === true,
   };
 }
 

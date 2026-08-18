@@ -7,6 +7,7 @@ import { BORDER2, FAINT, GOLD, GREEN, MONO, MUTED, TEXT } from '../tvChart';
 import { fmtRelative } from '../newsFormat';
 import { deckGameKey, deckLifetimeAccuracy, parseDeckGame } from '../../studies/studyEngine';
 import { overallLevel } from '../../studies/gameEngine';
+import { buildCategoryReport } from '../../studies/CategoryBreakdown';
 import { LevelBar } from '../../studies/LevelBar';
 import { TileFrame, TileMessage, TileRow, TileSelect, TileStat, useTileData } from './TileFrame';
 import type { TileProps } from './PersonalTiles';
@@ -57,6 +58,12 @@ export function StudyStatsTile({ tile, editing, onChange, onRemove }: TileProps)
   // level on the wall than the game screen was showing for the same play.
   const level = state ? overallLevel(state.levelCorrect) : null;
   const accuracy = state ? deckLifetimeAccuracy(state) : null;
+  // The same category report the game screen and the Progress summary draw. On
+  // a game carrying an exam blueprint the plain accuracy is not the score that
+  // exam would give, so the tile states both rather than only the flattering
+  // one — and names the area currently costing the most marks.
+  const report = deck && state ? buildCategoryReport(deck.categories, deck.categoryWeights, state) : null;
+  const weighted = report?.weighted && report.score != null ? report : null;
 
   return (
     <TileFrame
@@ -101,6 +108,16 @@ export function StudyStatsTile({ tile, editing, onChange, onRemove }: TileProps)
           <TileRow label="Best streak" value={state.bestStreak} color={GOLD} />
           {accuracy != null && (
             <TileRow label="Accuracy" value={`${accuracy.toFixed(0)}%`} color={accuracy >= 70 ? GREEN : TEXT} />
+          )}
+          {weighted && (
+            <TileRow
+              label="Weighted score"
+              value={`${(weighted.score as number).toFixed(0)}%`}
+              color={(weighted.score as number) >= 70 ? GREEN : TEXT}
+            />
+          )}
+          {weighted?.focus[0] && (
+            <TileRow label="Costing the most" value={`${weighted.focus[0].name} · −${weighted.focus[0].lost.toFixed(1)}`} />
           )}
           <TileRow label="Questions" value={deck.questionCount} />
         </>
