@@ -19,7 +19,8 @@ import { isFounder, parseRoles } from '../auth/rbac.js';
 import { featuresForUser } from '../features/service.js';
 import { isDemoUser } from '../demo/identity.js';
 import { NOTIF_LEVELS, type NotifLevel } from '../notifications/prefs.js';
-import { DeskError, placeDeskOrder } from './orderDesk.js';
+import { DeskError, deskInstruments, deskQuotes, placeDeskOrder } from './orderDesk.js';
+import { getShareConfig } from './founderTradeConfig.js';
 import type { AuditActor } from './credentialAudit.js';
 
 // Founder trade coordination — one Founder invites another onto a trade, and
@@ -300,7 +301,9 @@ export async function setFounderPrefs(
   return next;
 }
 
-async function assertOwnConnection(userId: string, connectionId: string): Promise<void> {
+// Returns the venue, which is how the join knows how many protective orders it
+// may attach without paying for a broker round trip to find out.
+async function assertOwnConnection(userId: string, connectionId: string): Promise<string> {
   const row = (
     await db
       .select({ id: brokerConnections.id, broker: brokerConnections.broker, active: brokerConnections.active })
@@ -313,6 +316,7 @@ async function assertOwnConnection(userId: string, connectionId: string): Promis
   if (row.broker === 'manual') {
     throw new FounderTradeError('A hand-kept book cannot place an order — pick a live broker account');
   }
+  return row.broker;
 }
 
 // ---- the invite ----
@@ -320,6 +324,8 @@ async function assertOwnConnection(userId: string, connectionId: string): Promis
 export interface FounderInviteView {
   id: string;
   status: FounderTradeStatus;
+  /** A drill. Real in every respect, and everything the recipient sees says so. */
+  isTest: boolean;
   inviter: FounderPerson;
   recipient: FounderPerson;
   isRecipient: boolean;
@@ -357,6 +363,7 @@ function shape(
   return {
     id: row.id,
     status: row.status,
+    isTest: row.isTest,
     inviter: people.get(row.inviterUserId) ?? unknown(row.inviterUserId),
     recipient: people.get(row.recipientUserId) ?? unknown(row.recipientUserId),
     isRecipient: row.recipientUserId === viewerId,
@@ -458,6 +465,9 @@ export interface CreateInviteInput {
   recipientUserId: string;
   /** The inviter's own order-journal row id (from the fill they just placed). */
   sourceOrderId: string;
+  /** Raise it as a drill. Changes nothing about the workflow, only that every
+   *  surface the recipient meets says it is a test. */
+  isTest?: boolean;
 }
 
 // Raise an invite from a trade the inviter has just placed.
@@ -525,6 +535,7 @@ export async function createInvite(
     stopLoss: order.stopLoss,
     takeProfit: order.takeProfit,
     inviterUnits: order.units,
+    isTest: !!input.isTest,
     status: 'primary_pending' as const,
     notifyCount: 0,
     createdAt: now,
@@ -552,6 +563,7 @@ export async function createInvite(
   }
 
   logEvent(id, 'source_trade.placed', inviter.id, `${order.instrument} ${order.side} · order ${order.id}`);
+  if (input.isTest) logEvent(id, 'invite.test', inviter.id, 'Raised as a test of the workflow');
   logEvent(
     id,
     'invite.created',
@@ -560,6 +572,166 @@ export async function createInvite(
   );
   const full = (await db.select().from(founderTradeInvites).where(eq(founderTradeInvites.id, id)).limit(1))[0]!;
   return shape(full, await peopleFor([full]), inviter.id, await unitsOf(input.recipientUserId));
+}
+
+// ---- the test drill ----
+
+// Pairs to reach for first when placing a test. Deliberately liquid majors and
+// deliberately NOT EUR/USD (owner instruction) — a test should not land on the
+// pair a real position is most likely already open on, where a stray extra
+// position is hardest to spot.
+const TEST_PAIR_PREFERENCE = ['GBP_USD', 'USD_JPY', 'AUD_USD', 'USD_CAD', 'USD_CHF', 'NZD_USD'];
+const EXCLUDED_TEST_PAIR = 'EUR_USD';
+
+// How far the test's protective levels sit from the market, in pips. Far enough
+// that a normal spread cannot trigger them the moment the order lands, close
+// enough that the test position is plainly a test.
+const TEST_STOP_PIPS = 30;
+const TEST_TARGET_PIPS = 60;
+
+export interface FounderTestPlan {
+  instrument: string;
+  displayName: string;
+  units: number;
+  side: TradeSide;
+  bid: number | null;
+  ask: number | null;
+  stopLoss: number | null;
+  takeProfit: number | null;
+  accountLabel: string;
+  recipientName: string;
+}
+
+// Work out exactly what a test would place, WITHOUT placing it — so the button
+// can state the pair, the size and the levels before anything is sent. A test
+// that puts a real order on somebody's account has to say what it is about to do
+// first.
+export async function planFounderTest(user: UserRow, actor: AuditActor): Promise<FounderTestPlan> {
+  assertFounder(user);
+  if (!(await canSendOrders(user))) {
+    throw new FounderTradeError(
+      'Turn Advanced Trading on in My Terminal ▸ Premium Features before running a test — it places a real order',
+      403,
+      'NO_DESK',
+    );
+  }
+  const prefs = await getFounderPrefs(user.id);
+  if (!prefs.defaultConnectionId) {
+    throw new FounderTradeError('Choose which of your broker accounts the test goes to', 400, 'NO_ACCOUNT');
+  }
+  const recipientId = prefs.autoInviteUserId;
+  if (!recipientId) {
+    throw new FounderTradeError('Choose which Founder the test is sent to', 400, 'NO_RECIPIENT');
+  }
+  const recipient = await assertEligible(recipientId);
+  await assertOwnConnection(user.id, prefs.defaultConnectionId);
+
+  // A genuine currency pair the account can actually trade, at the venue's own
+  // minimum size. Never EUR/USD.
+  const specs = await deskInstruments(user.id, prefs.defaultConnectionId, actor);
+  const forex = specs.filter(
+    (sp) => sp.type === 'CURRENCY' && sp.tradeable && sp.symbol.toUpperCase() !== EXCLUDED_TEST_PAIR,
+  );
+  if (forex.length === 0) {
+    throw new FounderTradeError(
+      'This account has no forex pair available to test on right now',
+      409,
+      'NO_TEST_INSTRUMENT',
+    );
+  }
+  const spec =
+    TEST_PAIR_PREFERENCE.map((sym) => forex.find((f) => f.symbol.toUpperCase() === sym)).find(Boolean) ??
+    forex[0];
+
+  const [quote] = await deskQuotes(user.id, prefs.defaultConnectionId, [spec!.instrument], actor).catch(
+    () => [],
+  );
+  // The levels are derived from the price the order will actually pay, exactly
+  // as the ticket derives them, and rounded to what the venue will accept.
+  const side: TradeSide = 'long';
+  const reference = quote?.ask ?? null;
+  const pip = spec!.pipSize > 0 ? spec!.pipSize : 0.0001;
+  const round = (v: number) => {
+    const f = Math.pow(10, Math.max(0, Math.min(10, spec!.displayPrecision)));
+    return Math.round(v * f) / f;
+  };
+  return {
+    instrument: spec!.instrument,
+    displayName: spec!.displayName,
+    units: spec!.minimumTradeSize,
+    side,
+    bid: quote?.bid ?? null,
+    ask: quote?.ask ?? null,
+    stopLoss: reference == null ? null : round(reference - TEST_STOP_PIPS * pip),
+    takeProfit: reference == null ? null : round(reference + TEST_TARGET_PIPS * pip),
+    accountLabel: (await founderAccounts(user.id)).find((a) => a.connectionId === prefs.defaultConnectionId)
+      ?.label ?? 'your account',
+    recipientName: recipient.displayName,
+  };
+}
+
+// Run the drill: place a real minimum-size order and raise a TEST invitation
+// from it.
+//
+// **IT IS A REAL TRADE, AND THAT IS THE POINT.** A simulation that stops short
+// of the broker proves nothing about the part most likely to be wrong — the
+// order path, the levels, the journal row the invitation is built from. It is
+// bounded instead: the venue's own minimum size, a liquid pair, and never
+// EUR/USD.
+//
+// **AND EVERY SURFACE THE RECIPIENT MEETS SAYS IT IS A TEST**, because a drill
+// indistinguishable from a real fill gets acted on at 3am — the rule every other
+// test in the terminal follows.
+export async function runFounderTest(
+  user: UserRow,
+  actor: AuditActor,
+): Promise<{ invite: FounderInviteView; plan: FounderTestPlan }> {
+  const plan = await planFounderTest(user, actor);
+  const prefs = await getFounderPrefs(user.id);
+  const share = await getShareConfig();
+
+  let res;
+  try {
+    res = await placeDeskOrder(
+      user,
+      {
+        connectionId: prefs.defaultConnectionId!,
+        instrument: plan.instrument,
+        side: plan.side,
+        units: plan.units,
+        type: 'market',
+        price: null,
+        // The test carries the levels the group has chosen to share, so the
+        // drill exercises the copying rather than only the notification.
+        stopLoss: share.copyStopLoss ? plan.stopLoss : null,
+        takeProfit: share.copyTakeProfit ? plan.takeProfit : null,
+      },
+      actor,
+    );
+  } catch (e) {
+    throw new FounderTradeError(
+      e instanceof Error ? e.message : 'The test order could not be placed',
+      e instanceof DeskError ? e.status : 502,
+      (e instanceof DeskError ? e.code : undefined) ?? undefined,
+    );
+  }
+  // A resting order is not a position, so there would be nothing to join — the
+  // same rule auto-send follows. A market order on a liquid major fills, so this
+  // is the guard rather than the expected path.
+  if (res.status !== 'filled') {
+    throw new FounderTradeError(
+      'The test order is still working rather than filled, so nothing was sent. Close it on the desk and try again when the market is open.',
+      409,
+      'TEST_NOT_FILLED',
+    );
+  }
+
+  const invite = await createInvite(user, {
+    recipientUserId: prefs.autoInviteUserId!,
+    sourceOrderId: res.orderRecordId,
+    isTest: true,
+  });
+  return { invite, plan };
 }
 
 // ---- auto-send ----
@@ -793,6 +965,7 @@ export async function joinPrimary(
   // reconstructing "why was this trade not taken?" needs to see — and it is
   // bounded by being a person pressing a button.
   const prefs = await getFounderPrefs(user.id);
+  let venue = '';
   try {
     if (!(await canSendOrders(user))) {
       throw new FounderTradeError(
@@ -815,7 +988,7 @@ export async function joinPrimary(
         'NO_ACCOUNT',
       );
     }
-    await assertOwnConnection(user.id, prefs.defaultConnectionId);
+    venue = await assertOwnConnection(user.id, prefs.defaultConnectionId);
   } catch (e) {
     logEvent(id, 'primary.join_refused', user.id, e instanceof Error ? e.message : 'Refused before sending');
     throw e;
@@ -872,12 +1045,41 @@ export async function joinPrimary(
     throw new FounderTradeError(warning, 409, 'CLAIM_RECOVERED');
   }
 
+  // WHICH LEVELS TRAVEL is the group's rule, not this trader's — read from the
+  // one install-wide setting so an invitation means the same thing whoever sent
+  // it. Both are absolute levels on the same instrument, so they carry across
+  // unchanged; only the size is ever the joiner's own.
+  const share = await getShareConfig();
+  let stopLoss = share.copyStopLoss ? row.stopLoss ?? null : null;
+  let takeProfit = share.copyTakeProfit ? row.takeProfit ?? null : null;
+
+  // A spot venue attaches exactly ONE protective order to an entry, so a ticket
+  // carrying both is refused outright. Rather than dead-end a half-asleep join
+  // with a message about placing the other by hand, the STOP is kept — it is the
+  // one that bounds the loss — and the target is dropped with a note on the
+  // timeline saying so. Never the other way round.
+  let droppedTarget = false;
+  if (venue === 'kraken' && stopLoss != null && takeProfit != null) {
+    takeProfit = null;
+    droppedTarget = true;
+  }
+
   logEvent(
     id,
     'primary.join_submitted',
     user.id,
-    `${row.instrument} ${row.side} · ${prefs.defaultUnits} units · own account`,
+    `${row.instrument} ${row.side} · ${prefs.defaultUnits} units · own account` +
+      `${stopLoss == null ? ' · no stop' : ` · stop ${stopLoss}`}` +
+      `${takeProfit == null ? '' : ` · target ${takeProfit}`}`,
   );
+  if (droppedTarget) {
+    logEvent(
+      id,
+      'primary.target_dropped',
+      null,
+      'This account attaches one protective order to an entry, so the stop was sent and the target was not',
+    );
+  }
 
   try {
     const res = await placeDeskOrder(
@@ -891,11 +1093,9 @@ export async function joinPrimary(
         units: prefs.defaultUnits,
         type: 'market',
         price: null,
-        // The inviter's initial stop, as an absolute level on the same
-        // instrument. The take profit is deliberately not copied — what was
-        // asked for is the instrument, the direction and the stop.
-        stopLoss: row.stopLoss ?? null,
-        takeProfit: null,
+        // The inviter's own levels, as resolved above.
+        stopLoss,
+        takeProfit,
       },
       actor,
     );
@@ -1041,6 +1241,8 @@ export interface DueReminder {
   status: FounderTradeStatus;
   level: NotifLevel;
   notifyCount: number;
+  /** A drill — the notification says so, in the title, before anything else. */
+  isTest: boolean;
 }
 
 // How long reminders keep going on one unresolved workflow. The modal stays
@@ -1085,6 +1287,7 @@ export async function dueReminders(now = new Date()): Promise<DueReminder[]> {
       status: row.status,
       level: p.reminderLevel,
       notifyCount: row.notifyCount,
+      isTest: row.isTest,
     });
   }
   return due;

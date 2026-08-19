@@ -35,24 +35,29 @@ import { dueReminders, markNotified, type DueReminder } from './founderTrades.js
 function messageFor(r: DueReminder): { title: string; body: string; url: string; tag: string } {
   const dir = r.side === 'long' ? 'BUY' : 'SELL';
   const repeat = r.notifyCount > 0 ? ' (still waiting)' : '';
+  // A TEST SAYS SO IN THE TITLE, BEFORE ANYTHING ELSE. Somebody woken at 3am
+  // reads the first line on a lock screen and little more, so a drill that
+  // reads like a real fill gets acted on — the rule every other test
+  // notification in the terminal follows.
+  const t = (title: string) => (r.isTest ? `TEST · ${title}` : title);
   switch (r.status) {
     case 'primary_pending':
       return {
-        title: `${r.inviterName} invited you to a trade`,
+        title: t(`${r.inviterName} invited you to a trade`),
         body: `${r.instrument} ${dir} — open the terminal to JOIN or decline.${repeat}`,
         url: '/?screen=live',
         tag: `founder-primary-${r.id}`,
       };
     case 'funded_pending':
       return {
-        title: 'Funded account decision needed',
+        title: t('Funded account decision needed'),
         body: `${r.instrument} ${dir} — are you placing this on your funded account?${repeat}`,
         url: '/?screen=prop',
         tag: `founder-funded-${r.id}`,
       };
     default:
       return {
-        title: 'Funded trade verification required',
+        title: t('Funded trade verification required'),
         body: `${r.instrument} ${dir} — upload a screenshot of your funded trade.${repeat}`,
         url: '/?screen=prop',
         tag: `founder-proof-${r.id}`,

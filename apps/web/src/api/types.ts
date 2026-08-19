@@ -3140,6 +3140,8 @@ export interface FounderPerson {
 export interface FounderInvite {
   id: string;
   status: FounderTradeStatus;
+  /** A drill. Real in every respect, and every surface here says so. */
+  isTest: boolean;
   inviter: FounderPerson;
   recipient: FounderPerson;
   isRecipient: boolean;
@@ -3192,6 +3194,28 @@ export interface FounderTradePrefs {
 // One of the recipient's own live broker accounts, for the "which account" picker.
 // Read from the connection rows rather than the desk's accounts endpoint, so the
 // blocking modal works on any screen without depending on the desk's guards.
+// What travels with an invitation. Founder-set and install-wide — the group's
+// rule rather than one trader's. The size is deliberately absent and must stay
+// absent: it is always the joiner's own.
+export interface FounderShareConfig {
+  copyStopLoss: boolean;
+  copyTakeProfit: boolean;
+}
+
+// Exactly what a test would place, worked out before anything is sent.
+export interface FounderTestPlan {
+  instrument: string;
+  displayName: string;
+  units: number;
+  side: TradeSide;
+  bid: number | null;
+  ask: number | null;
+  stopLoss: number | null;
+  takeProfit: number | null;
+  accountLabel: string;
+  recipientName: string;
+}
+
 export interface FounderAccountView {
   connectionId: string;
   label: string;

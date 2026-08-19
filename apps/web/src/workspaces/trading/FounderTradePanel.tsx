@@ -4,6 +4,8 @@ import type {
   FounderAccountView,
   FounderInvite,
   FounderPerson,
+  FounderShareConfig,
+  FounderTestPlan,
   FounderTradeEvent,
   FounderTradePrefs,
 } from '../../api/types';
@@ -36,6 +38,7 @@ export function FounderTradePanel() {
   const [prefs, setPrefs] = useState<FounderTradePrefs | null>(null);
   const [accounts, setAccounts] = useState<FounderAccountView[]>([]);
   const [recipients, setRecipients] = useState<FounderPerson[]>([]);
+  const [config, setConfig] = useState<FounderShareConfig | null>(null);
   const [canTrade, setCanTrade] = useState(true);
   const [open, setOpen] = useState<string | null>(null);
 
@@ -47,6 +50,7 @@ export function FounderTradePanel() {
       setPrefs(res.prefs);
       setAccounts(res.accounts);
       setRecipients(res.recipients);
+      setConfig(res.config);
       setCanTrade(res.canTrade);
     } catch {
       /* leave whatever is on screen */
@@ -77,12 +81,16 @@ export function FounderTradePanel() {
 
       <AutoSend prefs={prefs} recipients={recipients} onSaved={(p) => setPrefs(p)} />
 
+      {config && <ShareSettings config={config} onSaved={setConfig} />}
+
       <SizeSettings
         prefs={prefs}
         accounts={accounts}
         canTrade={canTrade}
         onSaved={(p) => setPrefs(p)}
       />
+
+      <TestDrill canTrade={canTrade} onSent={() => void load()} />
 
       {invites.length === 0 ? (
         <div style={{ fontSize: 13, color: C.faint, marginTop: 16 }}>No invitations yet.</div>
@@ -203,6 +211,181 @@ function AutoSend({
         </div>
       )}
       {problem && <div style={{ fontSize: 12, color: C.red, marginTop: 8, fontWeight: 600 }}>{problem}</div>}
+    </div>
+  );
+}
+
+// WHAT TRAVELS WITH AN INVITATION — set once, for everybody.
+//
+// This is the group's rule rather than one trader's: two Founders disagreeing
+// about whether a target is copied would make one invitation mean two different
+// things depending on who sent it. Any Founder can change it and it applies to
+// every invitation from then on.
+//
+// The SIZE is deliberately absent and must stay absent — it is always the
+// joiner's own, and a switch that made it follow the inviter's is the one thing
+// this feature must never have.
+function ShareSettings({
+  config,
+  onSaved,
+}: {
+  config: FounderShareConfig;
+  onSaved: (c: FounderShareConfig) => void;
+}) {
+  const [saving, setSaving] = useState(false);
+  const [problem, setProblem] = useState<string | null>(null);
+
+  const save = async (patch: Partial<FounderShareConfig>) => {
+    setSaving(true);
+    setProblem(null);
+    try {
+      onSaved((await api.saveFounderConfig(patch)).config);
+    } catch (e) {
+      setProblem(e instanceof ApiError ? e.message : 'That could not be saved');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div style={{ ...cardStyle, marginBottom: 12 }}>
+      <div style={{ fontSize: 13, fontWeight: 700, color: C.text }}>What is sent with an invitation</div>
+      <div style={{ fontSize: 12, color: C.muted, margin: '6px 0 12px', lineHeight: 1.5 }}>
+        Applies to everyone, whoever sends the trade. The instrument and direction always travel; the
+        size is always the joiner's own.
+      </div>
+      <div style={{ display: 'grid', gap: 8 }}>
+        <Tick
+          label="Stop loss"
+          hint="The sender's initial stop, as the same price level."
+          checked={config.copyStopLoss}
+          disabled={saving}
+          onChange={(v) => void save({ copyStopLoss: v })}
+        />
+        <Tick
+          label="Take profit"
+          hint="The sender's target, as the same price level."
+          checked={config.copyTakeProfit}
+          disabled={saving}
+          onChange={(v) => void save({ copyTakeProfit: v })}
+        />
+      </div>
+      {problem && <div style={{ fontSize: 12, color: C.red, marginTop: 8, fontWeight: 600 }}>{problem}</div>}
+    </div>
+  );
+}
+
+function Tick({
+  label,
+  hint,
+  checked,
+  disabled,
+  onChange,
+}: {
+  label: string;
+  hint: string;
+  checked: boolean;
+  disabled?: boolean;
+  onChange: (v: boolean) => void;
+}) {
+  return (
+    <label style={{ display: 'flex', alignItems: 'flex-start', gap: 10, cursor: 'pointer' }}>
+      <input
+        type="checkbox"
+        checked={checked}
+        disabled={disabled}
+        onChange={(e) => onChange(e.target.checked)}
+        style={{ width: 17, height: 17, marginTop: 1, accentColor: C.gold, flex: 'none' }}
+      />
+      <span>
+        <span style={{ fontSize: 12.5, fontWeight: 600, color: C.text }}>{label}</span>
+        <span style={{ display: 'block', fontSize: 11.5, color: C.faint, marginTop: 2 }}>{hint}</span>
+      </span>
+    </label>
+  );
+}
+
+// THE TEST DRILL — a real order, at the venue's minimum size, on a liquid pair
+// that is never EUR/USD.
+//
+// It says exactly what it is about to place before it places it. A button that
+// puts a real order on somebody's account without stating the pair, the size and
+// the levels first is not one anybody should press.
+function TestDrill({ canTrade, onSent }: { canTrade: boolean; onSent: () => void }) {
+  const [plan, setPlan] = useState<FounderTestPlan | null>(null);
+  const [state, setState] = useState<'idle' | 'loading' | 'confirm' | 'sending' | 'sent'>('idle');
+  const [problem, setProblem] = useState<string | null>(null);
+
+  const preview = async () => {
+    setState('loading');
+    setProblem(null);
+    try {
+      const { plan: p } = await api.founderTestPlan();
+      setPlan(p);
+      setState('confirm');
+    } catch (e) {
+      setProblem(e instanceof ApiError ? e.message : 'The test could not be prepared');
+      setState('idle');
+    }
+  };
+
+  const run = async () => {
+    setState('sending');
+    setProblem(null);
+    try {
+      await api.runFounderTest();
+      setState('sent');
+      onSent();
+    } catch (e) {
+      setProblem(e instanceof ApiError ? e.message : 'The test could not be sent');
+      setState('confirm');
+    }
+  };
+
+  return (
+    <div style={{ ...cardStyle, marginTop: 12 }}>
+      <div style={{ fontSize: 13, fontWeight: 700, color: C.text }}>Test the whole thing</div>
+      <div style={{ fontSize: 12, color: C.muted, margin: '6px 0 12px', lineHeight: 1.5 }}>
+        Places a <b>real</b> trade at the smallest size the broker allows, on a major pair other than
+        EUR/USD, and sends it as a test invitation. Everything they see says it is a test. You will
+        need to close the position yourself afterwards.
+      </div>
+
+      {problem && <div style={{ fontSize: 12, color: C.red, marginBottom: 10, fontWeight: 600 }}>{problem}</div>}
+
+      {state === 'sent' ? (
+        <div style={{ fontSize: 12.5, color: C.green, fontWeight: 700 }}>
+          Test sent. The position is open on your account — close it when you are done.
+        </div>
+      ) : state === 'confirm' && plan ? (
+        <div style={{ border: `1px solid ${C.line2}`, borderRadius: 9, padding: 12, background: C.bg }}>
+          <div style={{ fontSize: 12.5, color: C.text, lineHeight: 1.7, fontFamily: C.mono }}>
+            Buy <b>{plan.units}</b> units of <b>{plan.instrument}</b> at market
+            {plan.ask == null ? '' : ` (~${plan.ask})`}
+            <br />
+            Stop {plan.stopLoss ?? '—'} · target {plan.takeProfit ?? '—'}
+            <br />
+            On {plan.accountLabel}, sent to {plan.recipientName}
+          </div>
+          <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
+            <button type="button" onClick={() => void run()} disabled={state !== 'confirm'} style={goldBtn}>
+              Place it and send the test
+            </button>
+            <button type="button" onClick={() => setState('idle')} style={ghostBtn}>
+              Cancel
+            </button>
+          </div>
+        </div>
+      ) : (
+        <button
+          type="button"
+          onClick={() => void preview()}
+          disabled={state === 'loading' || !canTrade}
+          style={{ ...ghostBtn, opacity: canTrade ? 1 : 0.5 }}
+        >
+          {state === 'loading' ? 'Checking…' : 'Send a test'}
+        </button>
+      )}
     </div>
   );
 }
@@ -431,6 +614,30 @@ function InviteRow({
 function fmt(v: number | null): string {
   return v == null ? '—' : v.toLocaleString(undefined, { maximumFractionDigits: 6 });
 }
+
+const goldBtn: React.CSSProperties = {
+  padding: '9px 16px',
+  borderRadius: 8,
+  border: 'none',
+  background: C.gold,
+  color: C.goldText,
+  fontSize: 13,
+  fontWeight: 800,
+  cursor: 'pointer',
+  fontFamily: C.sans,
+};
+
+const ghostBtn: React.CSSProperties = {
+  padding: '9px 16px',
+  borderRadius: 8,
+  border: `1px solid ${C.line2}`,
+  background: 'transparent',
+  color: C.text,
+  fontSize: 13,
+  fontWeight: 700,
+  cursor: 'pointer',
+  fontFamily: C.sans,
+};
 
 const cardStyle: React.CSSProperties = {
   border: `1px solid ${C.line2}`,

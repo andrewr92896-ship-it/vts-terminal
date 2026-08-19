@@ -1228,6 +1228,10 @@ export const founderTradeInvites = sqliteTable('founder_trade_invites', {
   takeProfit: real('take_profit'),
   // The inviter's size, for display only. Never what the recipient trades.
   inviterUnits: real('inviter_units'),
+  // A TEST invitation — a full drill of the workflow, off a real minimum-size
+  // order. Identical in every respect except that everything the recipient sees
+  // says so: a test indistinguishable from a real fill gets acted on.
+  isTest: integer('is_test', { mode: 'boolean' }).notNull().default(false),
   status: text('status', { enum: FOUNDER_TRADE_STATUSES }).notNull().default('primary_pending'),
   primaryDecision: text('primary_decision', { enum: FOUNDER_PRIMARY_DECISIONS }),
   primaryDecidedAt: integer('primary_decided_at', { mode: 'timestamp_ms' }),
