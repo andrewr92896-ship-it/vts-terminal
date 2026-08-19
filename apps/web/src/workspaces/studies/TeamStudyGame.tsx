@@ -31,7 +31,9 @@ import {
   loadDraw,
   passRemaining,
   passSize,
+  reconcileDraw,
   saveDraw,
+  serializeDraw,
   type DrawState,
 } from './deckDraw';
 
@@ -94,6 +96,10 @@ export function TeamStudyGame({ theme, deckId, onBack }: { theme: Theme; deckId:
   // unasked.
   const drawRef = useRef<DrawState | null>(null);
   const [current, setCurrent] = useState<DeckQuestion | null>(null);
+  // What is on screen, readable from an async callback that was created before
+  // it was drawn (the account reconcile below).
+  const currentRef = useRef<DeckQuestion | null>(null);
+  currentRef.current = current;
   const [selected, setSelected] = useState<Letter | null>(null);
   const [revealed, setRevealed] = useState(false);
   const [outcome, setOutcome] = useState<boolean | null>(null);
@@ -168,6 +174,26 @@ export function TeamStudyGame({ theme, deckId, onBack }: { theme: Theme; deckId:
     return loadDraw(user?.id, deckId, d.questions, d.categories, d.categoryWeights, drawMode(blueprint));
   }
 
+  // Keep the pass. The device copy is written at once — the tab can be closed
+  // or the app killed from the switcher, and where the learner is up to has to
+  // survive that — while the account copy is debounced, since it is what
+  // carries between devices rather than what makes the next question right.
+  // The demo writes to neither: its run is canned and every write is refused.
+  const drawSaveRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  function keepDraw(state: DrawState) {
+    saveDraw(user?.id, deckId, state);
+    setPass({ left: passRemaining(state), of: passSize(state) });
+    if (readOnly) return;
+    const pass = serializeDraw(state);
+    if (drawSaveRef.current) clearTimeout(drawSaveRef.current);
+    drawSaveRef.current = setTimeout(() => {
+      void api.saveStudyDeckDraw(deckId, pass).catch(() => {});
+    }, 800);
+  }
+  useEffect(() => () => {
+    if (drawSaveRef.current) clearTimeout(drawSaveRef.current);
+  }, []);
+
   const hydratedRef = useRef(false);
   const lastSavedRef = useRef<string | null>(null);
   // The game state + category as they were BEFORE the current question's answer
@@ -233,6 +259,35 @@ export function TeamStudyGame({ theme, deckId, onBack }: { theme: Theme; deckId:
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [deck]);
 
+  // Fold in the account's copy of the pass once it arrives, so a deck studied on
+  // a phone and a laptop is worked through between them rather than twice.
+  //
+  // It merges rather than replaces: two remainders intersect to the union of
+  // what the two devices have asked (see reconcileDraw). It also runs AFTER the
+  // local pass has already produced a question, deliberately — the first
+  // question must not wait on the network — so whatever is on screen is dropped
+  // from the merged pass rather than being left to come round again.
+  useEffect(() => {
+    if (!deck) return;
+    let alive = true;
+    api
+      .studyDeckDraw(deckId)
+      .then(({ pass }) => {
+        if (!alive || !pass || !drawRef.current) return;
+        drawRef.current = reconcileDraw(drawRef.current, pass);
+        const onScreen = currentRef.current;
+        if (onScreen) dropSeq(drawRef.current, onScreen.seq);
+        keepDraw(drawRef.current);
+      })
+      .catch(() => {
+        /* offline or refused — the device copy carries on alone */
+      });
+    return () => {
+      alive = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [deck]);
+
   // Persist locally on every change.
   useEffect(() => {
     if (game) localStorage.setItem(deckGameKey(user?.id, deckId), JSON.stringify(game));
@@ -278,8 +333,7 @@ export function TeamStudyGame({ theme, deckId, onBack }: { theme: Theme; deckId:
       // Don't let the restored question resurface immediately in this run.
       if (drawRef.current) {
         dropSeq(drawRef.current, q.seq);
-        saveDraw(user?.id, deckId, drawRef.current);
-        setPass({ left: passRemaining(drawRef.current), of: passSize(drawRef.current) });
+        keepDraw(drawRef.current);
       }
     } else {
       advance();
@@ -368,11 +422,7 @@ export function TeamStudyGame({ theme, deckId, onBack }: { theme: Theme; deckId:
       setCurrent(null);
       return;
     }
-    // Written on every draw, not on unmount: the tab can be closed, the app can
-    // be killed from the app switcher, and the whole point is that where the
-    // learner is up to survives that.
-    saveDraw(user?.id, deckId, drawRef.current);
-    setPass({ left: passRemaining(drawRef.current), of: passSize(drawRef.current) });
+    keepDraw(drawRef.current);
     setCurrent(next);
     setSelected(null);
     setRevealed(false);
@@ -541,11 +591,14 @@ export function TeamStudyGame({ theme, deckId, onBack }: { theme: Theme; deckId:
     }
     const carriedBest = Math.max(game.allTimeBestStep, game.bestStep);
     setGame({ ...emptyDeckGame(cats), allTimeBestStep: carriedBest });
-    // Resetting progress starts the deck again, so the pass starts again too.
+    // Resetting progress starts the deck again, so the pass starts again too —
+    // on every device, which is why the fresh one is written to the account
+    // rather than only cleared here.
     clearDraw(user?.id, deckId);
     drawRef.current = deck
       ? buildDraw(deck.questions, deck.categories, deck.categoryWeights, drawMode(blueprintDraw))
       : null;
+    if (drawRef.current) keepDraw(drawRef.current);
     setResetConfirm(false);
     advance();
   }
@@ -667,7 +720,7 @@ export function TeamStudyGame({ theme, deckId, onBack }: { theme: Theme; deckId:
               // already been asked, and swapping it out would throw away an
               // answer in progress.
               drawRef.current = continueDraw(deck, on);
-              setPass({ left: passRemaining(drawRef.current), of: passSize(drawRef.current) });
+              keepDraw(drawRef.current);
             }}
             style={{ width: 16, height: 16, accentColor: theme.accent, cursor: 'pointer' }}
           />

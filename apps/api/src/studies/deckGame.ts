@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { and, eq, inArray } from 'drizzle-orm';
 import { db } from '../db/index.js';
-import { studyDeckGame, studyDeckRuns, studyDecks, users } from '../db/schema.js';
+import { studyDeckDraw, studyDeckGame, studyDeckRuns, studyDecks, users } from '../db/schema.js';
 import { accuracyOf, statsFromState } from './gameStats.js';
 import { BAKED_IN_SOURCE, isBakedInSource } from './bakedGames.js';
 import type { LeaderboardEntry } from './game.js';
@@ -33,6 +33,30 @@ export async function saveDeckGame(userId: string, deckId: string, state: string
     .onConflictDoUpdate({
       target: [studyDeckGame.userId, studyDeckGame.deckId],
       set: { state, updatedAt: new Date() },
+    });
+}
+
+// Where the learner is up to in this deck's shuffled pass. An opaque string:
+// the web app writes it and validates it against the deck on the way back in,
+// because only the client knows what a pass means. Storing it here rather than
+// on the device is what stops a phone and a laptop each working through their
+// own copy of the deck and repeating what the other has already asked.
+export async function getDeckDraw(userId: string, deckId: string): Promise<string | null> {
+  const rows = await db
+    .select({ pass: studyDeckDraw.pass })
+    .from(studyDeckDraw)
+    .where(and(eq(studyDeckDraw.userId, userId), eq(studyDeckDraw.deckId, deckId)))
+    .limit(1);
+  return rows[0]?.pass ?? null;
+}
+
+export async function saveDeckDraw(userId: string, deckId: string, pass: string): Promise<void> {
+  await db
+    .insert(studyDeckDraw)
+    .values({ userId, deckId, pass, updatedAt: new Date() })
+    .onConflictDoUpdate({
+      target: [studyDeckDraw.userId, studyDeckDraw.deckId],
+      set: { pass, updatedAt: new Date() },
     });
 }
 

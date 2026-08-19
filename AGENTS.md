@@ -2184,6 +2184,35 @@ workspaces list** (see `theme/nav.ts` order).
         rather than 237, which is exactly what "a lot of repeats, and questions
         I never see" is. Nothing about the shuffle was wrong — it was being
         thrown away. Reported by the owner, 2026-08.
+      - **AND IT IS KEPT ON THE ACCOUNT, NOT THE DEVICE** (`study_deck_draw`,
+        migration `0133`; `GET|PUT /api/studies/decks/:id/draw`). localStorage
+        alone fixed half of it: somebody who studies on a phone and a laptop had
+        **two independent passes**, each working through its own copy of the
+        deck and repeating what the other had already asked — the same symptom
+        from a different cause, reported by the owner the same day.
+        - **The device copy is the instant start; the account copy is what
+          carries between devices.** The first question must never wait on the
+          network, so the local pass draws immediately and the account copy is
+          folded in when it arrives — with whatever is already on screen dropped
+          from it, or the other device's copy would offer that question again.
+        - **`reconcileDraw` MERGES, it does not replace, and what it merges is
+          the REMAINING questions** — two remainders intersect to the union of
+          what the two devices have asked, so neither side's progress is lost
+          and nothing already served is resurrected.
+        - **A pass that has just (re)started is not evidence that nothing has
+          been asked**, so a full pool yields to a side that is mid-round rather
+          than cutting it down to a stale remainder. Without that rule, finishing
+          a round on one device would truncate the other's fresh one.
+        - **The payload is opaque to the server** — it stores a string and never
+          interprets it, because only the client knows what a pass means and it
+          re-checks whatever it is given against the deck as it stands. A route
+          that validated it would be a second definition to drift.
+        - Its own table rather than a column on `study_deck_game`: that row's
+          `state` is the scored blob the leaderboard reads and is normalized on
+          every write, and folding a differently-shaped payload into a validated
+          one is how a save comes to drop half of what it was given. In the
+          `admin/service.ts` per-user delete list, and in the package-delete
+          sweep beside `studyDeckGame`.
       - **It is keyed by question `seq`, NEVER by array index.** A stored index
         means a different question the moment one is added or deleted, so a
         saved pass would quietly start pointing at the wrong questions. `seq` is
@@ -2211,8 +2240,9 @@ workspaces list** (see `theme/nav.ts` order).
       proportions over a thousand questions, that an area is never re-asked
       before its pass completes, that a 0% area is never served, that a whole
       deck is worked through across many visits with **nothing asked twice**,
-      that a deleted question leaves a saved pass without resetting it, and that
-      the report's points reconcile (`sum(pointsEarned) === score`, covered
+      that a deleted question leaves a saved pass without resetting it, that two
+      devices merge to the union of what they asked rather than either losing
+      its progress, and that the report's points reconcile (`sum(pointsEarned) === score`, covered
       `sum(pointsAvailable) === 100`) with an unpractised area named rather than
       scored. None of it can be checked by looking at the running app: the draw
       is a proportion that only appears over hundreds of questions, and the pass

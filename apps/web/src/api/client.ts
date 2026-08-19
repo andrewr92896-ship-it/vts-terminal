@@ -1592,6 +1592,18 @@ export const api = {
       body: JSON.stringify({ state }),
     });
   },
+  // Where the learner is up to in this deck's shuffled pass. Kept on the
+  // account rather than the device so a phone and a laptop work through one
+  // deck between them instead of each repeating what the other has asked.
+  studyDeckDraw(id: string): Promise<{ pass: string | null }> {
+    return request(`/api/studies/decks/${encodeURIComponent(id)}/draw`);
+  },
+  saveStudyDeckDraw(id: string, pass: string): Promise<{ ok: true }> {
+    return request(`/api/studies/decks/${encodeURIComponent(id)}/draw`, {
+      method: 'PUT',
+      body: JSON.stringify({ pass }),
+    });
+  },
   archiveStudyDeckGame(id: string, state: string): Promise<{ ok: true }> {
     return request(`/api/studies/decks/${encodeURIComponent(id)}/game/archive`, {
       method: 'POST',

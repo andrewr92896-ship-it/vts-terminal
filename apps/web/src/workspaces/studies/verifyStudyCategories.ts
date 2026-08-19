@@ -19,7 +19,9 @@ import {
   drawNext,
   loadDraw,
   passRemaining,
+  reconcileDraw,
   saveDraw,
+  serializeDraw,
 } from './deckDraw';
 import { buildCategoryReport } from './CategoryBreakdown';
 import { emptyDeckGame, recordDeckAnswer } from './studyEngine';
@@ -205,6 +207,81 @@ for (const [name, weight] of [
   const got = (100 * (areaTally.get(name) ?? 0)) / 500;
   check(`${name} holds its ${weight}% share across 25 visits`, Math.abs(got - weight) <= 1, got);
 }
+
+// ---- Two devices, one deck ----
+//
+// The device copy alone solved half the problem: a phone and a laptop each kept
+// their own pass, worked through their own copy of the deck, and repeated what
+// the other had already asked. The account copy is merged in on load, and what
+// merges is the REMAINING questions — two remainders intersect to the union of
+// what the two devices have served.
+console.log('\nTwo devices, one deck');
+
+// Two devices are two localStorage keys; the account copy is the string that
+// passes between them.
+const phone = 'u-phone';
+const laptop = 'u-laptop';
+clearDraw(phone, DECK);
+clearDraw(laptop, DECK);
+
+let onPhone = loadDraw(phone, DECK, questions, CATS, WEIGHTS, 'even');
+const phoneAsked = new Set<number>();
+for (let i = 0; i < 40; i++) phoneAsked.add(drawNext(onPhone)!);
+saveDraw(phone, DECK, onPhone);
+const account = serializeDraw(onPhone);
+
+// The laptop has never opened this deck: a fresh pass, merged with the account.
+let onLaptop = loadDraw(laptop, DECK, questions, CATS, WEIGHTS, 'even');
+onLaptop = reconcileDraw(onLaptop, account);
+check('a second device picks up the account pass', passRemaining(onLaptop) === questions.length - 40, passRemaining(onLaptop));
+const laptopAsked: number[] = [];
+for (let i = 0; i < 40; i++) laptopAsked.push(drawNext(onLaptop)!);
+check('and asks nothing the first device already asked', laptopAsked.every((s) => !phoneAsked.has(s)));
+
+// Both devices mid-round, each having asked things the other has not: the merge
+// must lose neither side's progress.
+const merged = reconcileDraw(onPhone, serializeDraw(onLaptop));
+check(
+  'two devices in flight merge to the union of what they asked',
+  passRemaining(merged) === questions.length - 80,
+  passRemaining(merged),
+);
+for (const s of [...phoneAsked, ...laptopAsked]) {
+  if (merged.pool.includes(s)) {
+    check('a question either device asked is never left in the merged pass', false, s);
+    break;
+  }
+}
+check('a question either device asked is never left in the merged pass', laptopAsked.every((s) => !merged.pool.includes(s)));
+
+// A side that has just (re)started a round is not evidence that nothing has
+// been asked — it must yield to the side that is mid-round rather than cutting
+// it down to a stale remainder.
+const restarted = buildDraw(questions, CATS, WEIGHTS, 'even');
+const midRound = reconcileDraw(restarted, serializeDraw(merged));
+check('a fresh pass yields to one that is mid-round', passRemaining(midRound) === questions.length - 80, passRemaining(midRound));
+const freshAccount = reconcileDraw(
+  reconcileDraw(buildDraw(questions, CATS, WEIGHTS, 'even'), serializeDraw(merged)),
+  serializeDraw(buildDraw(questions, CATS, WEIGHTS, 'even')),
+);
+check(
+  'and a fresh account copy does not wipe a mid-round device',
+  passRemaining(freshAccount) === questions.length - 80,
+  passRemaining(freshAccount),
+);
+
+// Nothing from the account is trusted blindly: a pass naming questions this
+// deck no longer holds must not put them back into the draw.
+const stale = serializeDraw(buildDraw([{ seq: 999_001, topic: 'Laws' }], CATS, WEIGHTS, 'even'));
+const guarded = reconcileDraw(loadDraw(laptop, DECK, questions, CATS, WEIGHTS, 'even'), stale);
+check('a question the deck no longer holds is never drawn from the account copy', !guarded.pool.includes(999_001));
+
+// A pass stored in the other mode is ignored rather than converted.
+const crossMode = reconcileDraw(
+  buildDraw(questions, CATS, WEIGHTS, 'blueprint'),
+  serializeDraw(merged),
+);
+check('an even pass is not folded into a blueprint draw', passRemaining(crossMode) === questions.length);
 
 console.log('\nThe report');
 let game = emptyDeckGame(CATS);

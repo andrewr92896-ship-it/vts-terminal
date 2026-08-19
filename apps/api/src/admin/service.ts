@@ -72,6 +72,7 @@ import {
   pushoverUsers,
   studyGame,
   studyGameRuns,
+  studyDeckDraw,
   studyDeckGame,
   studyDeckRuns,
   studyTests,
@@ -646,6 +647,7 @@ export async function deleteUser(actingUserId: string, targetId: string): Promis
     await tx.delete(studyGame).where(eq(studyGame.userId, targetId));
     await tx.delete(studyGameRuns).where(eq(studyGameRuns.userId, targetId));
     await tx.delete(studyDeckGame).where(eq(studyDeckGame.userId, targetId));
+    await tx.delete(studyDeckDraw).where(eq(studyDeckDraw.userId, targetId));
     await tx.delete(studyDeckRuns).where(eq(studyDeckRuns.userId, targetId));
     await tx.delete(studyTests).where(eq(studyTests.userId, targetId));
     await tx.delete(studyTestProgress).where(eq(studyTestProgress.userId, targetId));
@@ -682,6 +684,7 @@ export async function deleteUser(actingUserId: string, targetId: string): Promis
       if (packageDeckIds.length) {
         await tx.delete(studyDeckQuestions).where(inArray(studyDeckQuestions.deckId, packageDeckIds));
         await tx.delete(studyDeckGame).where(inArray(studyDeckGame.deckId, packageDeckIds));
+        await tx.delete(studyDeckDraw).where(inArray(studyDeckDraw.deckId, packageDeckIds));
         await tx.delete(studyDeckRuns).where(inArray(studyDeckRuns.deckId, packageDeckIds));
         await tx.delete(studyDecks).where(inArray(studyDecks.id, packageDeckIds));
       }

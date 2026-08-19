@@ -50,9 +50,11 @@ import {
 } from '../studies/flashcardStore.js';
 import {
   archiveDeckRun,
+  getDeckDraw,
   getDeckGame,
   getDeckLeaderboard,
   getPackageLeaderboard,
+  saveDeckDraw,
   saveDeckGame,
 } from '../studies/deckGame.js';
 import { createGuide, deleteGuide, getGuide, listGuides, updateGuide } from '../studies/guideStore.js';
@@ -94,6 +96,11 @@ async function deleteModeFor(
 
 const termSchema = z.object({ term: z.string().trim().min(1).max(200) });
 const gameSchema = z.object({ state: z.string() });
+// The pass is opaque to the server (see the route), so the only thing worth
+// checking is that it cannot grow without bound. A 400-question deck's pass is
+// a few kilobytes; the cap is generous enough that no real deck reaches it and
+// tight enough that this cannot become a place to park arbitrary data.
+const drawSchema = z.object({ pass: z.string().max(200_000) });
 const vocabAddSchema = z.object({
   term: z.string().trim().min(1).max(200),
   // Optional: the learner's own definition. When present we store it as-is and
@@ -592,6 +599,38 @@ export async function studiesRoutes(app: FastifyInstance) {
     const state = normalizeState(parsed.data.state);
     if (state == null) return reply.code(400).send({ error: 'Invalid game state' });
     await saveDeckGame(request.currentUser!.id, id, state);
+    return { ok: true };
+  });
+
+  // Where the learner is up to in this deck's shuffled pass — the questions
+  // still to be asked before anything repeats.
+  //
+  // ON THE ACCOUNT, not the device, which is the whole point of it being a
+  // route at all: the pass was localStorage-only, so studying on a phone and a
+  // laptop meant two passes working through the deck independently and each
+  // repeating what the other had already asked.
+  //
+  // The payload is OPAQUE here. Only the client knows what a pass means, and it
+  // re-checks whatever it is given against the deck as it stands, dropping any
+  // question that no longer exists — so there is nothing for the server to
+  // validate beyond the size cap, and nothing a bad value can do but cost that
+  // learner a reshuffle.
+  app.get('/api/studies/decks/:id/draw', guard, async (request, reply) => {
+    const me = request.currentUser!;
+    const id = (request.params as { id: string }).id;
+    const scope = await resolveContentScope(me, 'deck', id, 'read');
+    if (!scope || !(await getDeck(id, scope))) return reply.code(404).send({ error: 'Not found' });
+    return { pass: await getDeckDraw(me.id, id) };
+  });
+
+  app.put('/api/studies/decks/:id/draw', guard, async (request, reply) => {
+    const me = request.currentUser!;
+    const id = (request.params as { id: string }).id;
+    const scope = await resolveContentScope(me, 'deck', id, 'read');
+    if (!scope || !(await getDeck(id, scope))) return reply.code(404).send({ error: 'Not found' });
+    const parsed = drawSchema.safeParse(request.body);
+    if (!parsed.success) return reply.code(400).send({ error: 'A pass string is required' });
+    await saveDeckDraw(me.id, id, parsed.data.pass);
     return { ok: true };
   });
 

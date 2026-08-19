@@ -11,9 +11,17 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 7.30';
+export const APP_VERSION = 'Beta V 7.31';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 7.31',
+    date: 'August 19, 2026',
+    notes: [
+      'Study Game: where you are up to in a deck now follows your account instead of the device. Studying on a phone and a laptop used to mean two separate runs through the deck, each repeating what the other had already asked.',
+      'The two are merged rather than one overwriting the other — a question either device has already served drops out, and neither device loses its place.',
+    ],
+  },
   {
     version: 'Beta V 7.30',
     date: 'August 18, 2026',

@@ -1937,6 +1937,29 @@ export const studyDeckGame = sqliteTable(
 );
 export type StudyDeckGameRow = typeof studyDeckGame.$inferSelect;
 
+// Where a learner is up to in a deck's shuffled pass, on the ACCOUNT rather
+// than on one device — so a phone and a laptop work through the same deck
+// instead of each keeping a pass of its own and repeating what the other has
+// already asked. Kept apart from study_deck_game because that row's `state` is
+// the scored blob the leaderboard reads; this is neither scored nor ranked, and
+// the server never interprets it.
+export const studyDeckDraw = sqliteTable(
+  'study_deck_draw',
+  {
+    userId: text('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    deckId: text('deck_id')
+      .notNull()
+      .references(() => studyDecks.id, { onDelete: 'cascade' }),
+    pass: text('pass').notNull(),
+    updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
+  },
+  (t) => ({ pk: primaryKey({ columns: [t.userId, t.deckId] }) }),
+);
+
+export type StudyDeckDrawRow = typeof studyDeckDraw.$inferSelect;
+
 // Banked runs for a deck (mirror of study_game_runs), for the deck leaderboard.
 export const studyDeckRuns = sqliteTable('study_deck_runs', {
   id: text('id').primaryKey(),

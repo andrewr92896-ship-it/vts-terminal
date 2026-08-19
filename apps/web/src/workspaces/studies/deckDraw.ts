@@ -30,6 +30,15 @@ import { weightedCategories, type CategoryWeights } from './examWeights';
 // shuffle was wrong; it was being thrown away. So what is left of the pass is
 // written to localStorage after every draw and picked up on the next visit.
 //
+// IT IS KEPT ON THE ACCOUNT, NOT THE DEVICE. localStorage alone solved half of
+// it: somebody who studies on a phone and a laptop had two independent passes,
+// each working through its own copy of the deck, so the same questions came
+// round on both while others went unasked on either — the same repeats, from a
+// different cause. So the device copy is now the instant-start cache and the
+// account copy is the one that carries between devices; `reconcileDraw` merges
+// them, and what it merges is the REMAINING questions, since the intersection of
+// two remainders is the union of what the two devices have asked.
+//
 // IT IS KEYED BY QUESTION `seq`, NEVER BY ARRAY INDEX. A stored index means
 // something different the moment a question is added or deleted, so a saved
 // pass would silently start pointing at the wrong questions. `seq` is the
@@ -178,7 +187,7 @@ export function passSize(state: DrawState): number {
   return state.all.length;
 }
 
-// ---- Keeping the pass across visits ----
+// ---- Keeping the pass across visits and devices ----
 
 interface StoredDraw {
   v: 1;
@@ -191,15 +200,21 @@ export function deckDrawKey(userId: string | undefined, deckId: string): string 
   return `vts_deck_draw_${userId ?? 'anon'}_${deckId}`;
 }
 
+// The pass as a string — what goes to localStorage and, unchanged, to the
+// account. One shape, so the two copies are always mergeable with each other.
+export function serializeDraw(state: DrawState): string {
+  const stored: StoredDraw = {
+    v: 1,
+    mode: state.mode,
+    pool: state.pool,
+    cats: state.cats.map((c) => ({ name: c.name, pool: c.pool, served: c.served })),
+  };
+  return JSON.stringify(stored);
+}
+
 export function saveDraw(userId: string | undefined, deckId: string, state: DrawState): void {
   try {
-    const stored: StoredDraw = {
-      v: 1,
-      mode: state.mode,
-      pool: state.pool,
-      cats: state.cats.map((c) => ({ name: c.name, pool: c.pool, served: c.served })),
-    };
-    localStorage.setItem(deckDrawKey(userId, deckId), JSON.stringify(stored));
+    localStorage.setItem(deckDrawKey(userId, deckId), serializeDraw(state));
   } catch {
     /* ignore quota / disabled storage — the pass simply restarts, as it used to */
   }
@@ -213,22 +228,22 @@ export function clearDraw(userId: string | undefined, deckId: string): void {
   }
 }
 
-function readStored(userId: string | undefined, deckId: string): StoredDraw | null {
+function parseStored(raw: string | null): StoredDraw | null {
+  if (!raw) return null;
   try {
-    const raw = localStorage.getItem(deckDrawKey(userId, deckId));
-    if (!raw) return null;
     const p = JSON.parse(raw) as Partial<StoredDraw>;
     if (!p || p.v !== 1 || (p.mode !== 'even' && p.mode !== 'blueprint')) return null;
+    const nums = (x: unknown) => (Array.isArray(x) ? x.filter((n): n is number => typeof n === 'number') : []);
     return {
       v: 1,
       mode: p.mode,
-      pool: Array.isArray(p.pool) ? p.pool.filter((n): n is number => typeof n === 'number') : [],
+      pool: nums(p.pool),
       cats: Array.isArray(p.cats)
         ? p.cats
             .filter((c): c is { name: string; pool: number[]; served: number } => !!c && typeof c.name === 'string')
             .map((c) => ({
               name: c.name,
-              pool: Array.isArray(c.pool) ? c.pool.filter((n): n is number => typeof n === 'number') : [],
+              pool: nums(c.pool),
               served: Number.isFinite(c.served) ? Math.max(0, Math.floor(c.served)) : 0,
             }))
         : [],
@@ -238,15 +253,39 @@ function readStored(userId: string | undefined, deckId: string): StoredDraw | nu
   }
 }
 
+// Lay a stored pass over a freshly built one, filtered to the deck as it stands
+// NOW — so a question that has since been deleted drops out and one that has
+// been added is picked up by the next pass rather than smuggled into this one.
+// A pass stored in the other mode is ignored: switching mode is a deliberate
+// act, and a half-served even pass says nothing about where a blueprint draw
+// should be.
+function applyStored(fresh: DrawState, stored: StoredDraw | null): DrawState {
+  if (!stored || stored.mode !== fresh.mode) return fresh;
+
+  const live = new Set(fresh.all);
+  const pool = stored.pool.filter((s) => live.has(s));
+  // An empty stored pool is a pass that finished, so the fresh shuffle stands.
+  if (pool.length > 0) fresh.pool = pool;
+
+  for (const c of fresh.cats) {
+    const s = stored.cats.find((x) => x.name === c.name);
+    if (!s) continue;
+    const area = new Set(c.all);
+    const p = s.pool.filter((x) => area.has(x));
+    if (p.length > 0) c.pool = p;
+    // `served` is what keeps the areas in their blueprint proportions, so it
+    // carries over even when that area's pass has run out and been reshuffled —
+    // otherwise every visit would start by serving the heaviest area again.
+    c.served = s.served;
+  }
+  return fresh;
+}
+
 /**
- * The draw to carry on with: where the learner left off if there is a saved
- * pass in this mode, and a fresh one otherwise.
- *
- * A saved pass is filtered against the deck as it is NOW, so a question that
- * has since been deleted drops out and one that has been added is picked up on
- * the next pass rather than being smuggled into this one. A pass saved in the
- * other mode is not converted — switching mode is a deliberate act, and a
- * half-served even pass says nothing about where a blueprint draw should be.
+ * The draw to carry on with on THIS device: where it left off if there is a
+ * saved pass in this mode, and a fresh one otherwise. The account copy is
+ * folded in afterwards by `reconcileDraw`, once it has been fetched — this is
+ * the instant start, so the first question does not wait on the network.
  */
 export function loadDraw(
   userId: string | undefined,
@@ -257,24 +296,61 @@ export function loadDraw(
   mode: DrawMode,
 ): DrawState {
   const fresh = buildDraw(questions, categories, weights, mode);
-  const stored = readStored(userId, deckId);
-  if (!stored || stored.mode !== mode) return fresh;
+  return applyStored(fresh, parseStored(readLocal(userId, deckId)));
+}
 
-  const live = new Set(fresh.all);
-  const restoredPool = stored.pool.filter((s) => live.has(s));
-  // An empty stored pool is a pass that finished, so the fresh shuffle stands.
-  if (restoredPool.length > 0) fresh.pool = restoredPool;
+function readLocal(userId: string | undefined, deckId: string): string | null {
+  try {
+    return localStorage.getItem(deckDrawKey(userId, deckId));
+  } catch {
+    return null;
+  }
+}
 
-  for (const c of fresh.cats) {
+/**
+ * Merge what one device has left with what another device left on the account.
+ *
+ * TWO REMAINDERS INTERSECT TO THE UNION OF WHAT WAS ASKED, which is exactly the
+ * merge wanted: a question either device has already served drops out, and
+ * nothing is resurrected. The one case that must not be intersected is a pass
+ * that has just (re)started — a full pool is not evidence that nothing has been
+ * asked, it is evidence that a round finished — so a full side yields to the
+ * side that is mid-round rather than cutting it down to a stale remainder.
+ */
+function mergeRemaining(remote: number[], local: number[], size: number): number[] {
+  if (remote.length >= size) return local;
+  if (local.length >= size) return remote;
+  const seen = new Set(local);
+  const both = remote.filter((s) => seen.has(s));
+  // Disjoint remainders mean everything has been asked on one device or the
+  // other; the shorter one is closest to a finished round, and finishing it
+  // reshuffles.
+  if (both.length > 0) return both;
+  return remote.length <= local.length ? remote : local;
+}
+
+/**
+ * Fold the account's pass into this device's, so studying on a phone and a
+ * laptop works through one deck between them. Returns the state to carry on
+ * with; the caller writes it back to both copies.
+ */
+export function reconcileDraw(local: DrawState, remoteRaw: string | null): DrawState {
+  const stored = parseStored(remoteRaw);
+  if (!stored || stored.mode !== local.mode) return local;
+
+  const live = new Set(local.all);
+  const remotePool = stored.pool.filter((s) => live.has(s));
+  if (remotePool.length > 0) local.pool = mergeRemaining(remotePool, local.pool, local.all.length);
+
+  for (const c of local.cats) {
     const s = stored.cats.find((x) => x.name === c.name);
     if (!s) continue;
     const area = new Set(c.all);
-    const pool = s.pool.filter((x) => area.has(x));
-    if (pool.length > 0) c.pool = pool;
-    // `served` is what keeps the areas in their blueprint proportions, so it
-    // carries over even when that area's pass has run out and been reshuffled —
-    // otherwise every visit would start by serving the heaviest area twice.
-    c.served = s.served;
+    const remoteArea = s.pool.filter((x) => area.has(x));
+    if (remoteArea.length > 0) c.pool = mergeRemaining(remoteArea, c.pool, c.all.length);
+    // The further-along count wins: it is the one that has served more, and
+    // under-counting would start the next visit by serving that area again.
+    c.served = Math.max(c.served, s.served);
   }
-  return fresh;
+  return local;
 }
