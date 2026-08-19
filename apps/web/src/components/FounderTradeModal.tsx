@@ -261,6 +261,27 @@ function TradeFacts({ invite, size }: { invite: FounderInvite; size?: string | n
         margin: '16px 0',
       }}
     >
+      {/* A DRILL SAYS SO, FIRST AND LARGEST. Somebody woken by a phone reads the
+          top of the screen and little more, so a test that looked like a real
+          fill would get acted on exactly like one. */}
+      {invite.isTest && (
+        <div
+          style={{
+            display: 'inline-block',
+            marginBottom: 12,
+            padding: '5px 10px',
+            borderRadius: 6,
+            background: 'rgba(235,203,116,.16)',
+            border: `1px solid ${C.gold}`,
+            color: C.gold,
+            fontSize: 12,
+            fontWeight: 900,
+            letterSpacing: '.1em',
+          }}
+        >
+          TEST — A DRILL, NOT A REAL CALL
+        </div>
+      )}
       <div style={{ display: 'flex', alignItems: 'baseline', gap: 12, flexWrap: 'wrap' }}>
         <span style={{ fontSize: 28, fontWeight: 800, letterSpacing: '-.01em' }}>{invite.instrument}</span>
         <span
@@ -283,6 +304,9 @@ function TradeFacts({ invite, size }: { invite: FounderInvite; size?: string | n
           // say, so it is called out rather than left reading as a blank field.
           tone={invite.stopLoss == null ? 'warn' : undefined}
         />
+        {/* Only stated when there is one — an absent target is an ordinary way
+            to run a trade, unlike an absent stop. */}
+        {invite.takeProfit != null && <Fact label="Take profit" value={fmtPrice(invite.takeProfit)} />}
         {size !== undefined && <Fact label="Your size" value={size ?? 'Not set'} tone={size ? 'good' : 'warn'} />}
       </dl>
     </div>
@@ -408,7 +432,9 @@ function PrimaryStep({
 
   return (
     <>
-      <Heading>{invite.inviter.displayName} invited you to a trade</Heading>
+      <Heading>
+        {invite.inviter.displayName} invited you to a {invite.isTest ? 'test trade' : 'trade'}
+      </Heading>
       <TradeFacts invite={invite} size={size} />
 
       {/* The previous attempt's failure, kept on the server row so it is still

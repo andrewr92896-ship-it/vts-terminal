@@ -11,9 +11,19 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 7.30';
+export const APP_VERSION = 'Beta V 7.31';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 7.31',
+    date: 'August 19, 2026',
+    notes: [
+      'Founder trades now carry the take profit as well as the stop, so joining puts you in the same trade with the same targets.',
+      'What gets sent is set once for everyone, on Live Trades: tick or untick the stop loss and the take profit. The instrument and direction always travel, and the size is always your own.',
+      'There is a “Send a test” button. It places a real trade at the smallest size your broker allows, on a major pair that is never EUR/USD, and sends it through the whole workflow — the alert, the join, the funded question, the screenshot.',
+      'It tells you the pair, the size and the levels before it places anything, and everything the other person sees is marked as a test. The position stays open until you close it.',
+    ],
+  },
   {
     version: 'Beta V 7.30',
     date: 'August 18, 2026',

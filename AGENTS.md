@@ -781,10 +781,31 @@ workspaces list** (see `theme/nav.ts` order).
       THAN DEFAULTED** (`founder_trade_prefs.default_units`). The invitation
       snapshots the inviter's size for **display** and the join never reads it.
       Null is "not stated" and is never read as a number — sending an order at a
-      size nobody chose is the one failure this feature must not have. What IS
-      copied is the instrument, the direction and the inviter's **initial stop**
-      (an absolute level on the same instrument); the take profit deliberately
-      is not.
+      size nobody chose is the one failure this feature must not have.
+    - **WHAT TRAVELS IS THE GROUP'S RULE, SET ONCE FOR EVERYBODY**
+      (`trading/founderTradeConfig.ts` over the `app_settings` key
+      `founderTrades.share`; `GET|PUT /api/founder-trades/config`, founder-level,
+      no migration). The instrument and the direction always travel — without
+      them there is nothing to join — and the inviter's **stop** and **take
+      profit** each travel or not, as absolute levels on the same instrument.
+      Both default ON (owner instruction, 2026-08; the target was excluded in the
+      first cut and was added the same week).
+      - **It is install-wide rather than per person on purpose.** Two Founders
+        disagreeing about whether a target is copied would make one invitation
+        mean two different things depending on who sent it.
+      - **THE SIZE IS DELIBERATELY NOT IN THIS OBJECT AND MUST NEVER BE.** A
+        switch that made the joined size follow the inviter's is the one thing
+        this feature must not have; adding it here would be a mistake, not a
+        feature.
+      - A malformed stored row **falls back to the defaults rather than
+        throwing** — this is read on the path that places an order, and a bad
+        settings row must never be what stops somebody joining a trade.
+      - **A spot venue takes ONE protective order**, so when both levels would
+        travel there the **stop is kept and the target is dropped**, with
+        `primary.target_dropped` on the timeline. Never the other way round, and
+        never a dead-end refusal telling a half-asleep trader to place the other
+        by hand. The venue is read from the connection row, so this costs no
+        broker round trip.
     - **A JOIN IS CLAIMED BEFORE IT IS SENT.** One conditional `UPDATE` decides
       which caller reaches the broker, so two tabs, a double-click and a retried
       request cannot become two positions — and the desk's own five-second
@@ -867,6 +888,35 @@ workspaces list** (see `theme/nav.ts` order).
       Nothing else on the wall needed a tile: the blocking modal is already
       global, so a board tile could only restate what is already covering the
       screen.
+    - **THE TEST DRILL PLACES A REAL TRADE, AND THAT IS THE POINT**
+      (`planFounderTest` / `runFounderTest`, `GET|POST /api/founder-trades/test`;
+      `founder_trade_invites.is_test`, migration `0133`. `TestDrill` on the Live
+      Trades panel). A simulation that stops short of the broker proves nothing
+      about the half most likely to be wrong — the order path, the levels, and
+      the journal row the invitation is built from.
+      - **It is bounded rather than faked**: the venue's own
+        `minimumTradeSize`, a liquid major, and **never EUR/USD** (owner
+        instruction — a test should not land on the pair a real position is most
+        likely already open on, where a stray extra position is hardest to
+        spot). `TEST_PAIR_PREFERENCE` picks the pair from what the account can
+        actually trade, so an entity carrying an unusual set still finds one.
+      - **The plan is a separate READ from the run.** `GET` says exactly what
+        would be placed — pair, size, levels, account, recipient — so the button
+        states it before anything is sent. A button that puts a real order on
+        somebody's account without saying so first is not one anybody should
+        press.
+      - **It carries the shared levels**, derived from the live quote at a fixed
+        pip distance, so the drill exercises the copying rather than only the
+        notification.
+      - **EVERY SURFACE THE RECIPIENT MEETS SAYS IT IS A TEST** — the modal's
+        banner and heading, and `TEST · ` at the front of the Pushover and web
+        push titles. That is the rule every other test in the terminal follows,
+        and it matters most here: a drill indistinguishable from a real fill gets
+        acted on at 3am. **Nothing else about the workflow changes** — same state
+        machine, same claim, same funded question, same screenshot, same
+        reminders — which is what makes it a test of the real thing.
+      - A test that comes back **working rather than filled** raises nothing and
+        says so, the same rule auto-send follows: there is no position to join.
     - **The invitation is raised from the FILL, not from the ticket.**
       `sourceRef` is the desk's own `trading_orders` row, so the server reads the
       instrument, direction and stop off the trade it actually placed instead of

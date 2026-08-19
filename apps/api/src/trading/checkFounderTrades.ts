@@ -57,6 +57,7 @@ import {
   uploadProof,
 } from './founderTrades.js';
 import { SYSTEM } from './credentialAudit.js';
+import { DEFAULT_SHARE_CONFIG, getShareConfig, setShareConfig } from './founderTradeConfig.js';
 
 let pass = 0;
 let fail = 0;
@@ -343,6 +344,23 @@ async function main() {
   const no = await setFundedDecision(beta, second.id, 'no');
   ok('NO completes the workflow there and then', no.status === 'complete' && no.completedAt !== null);
 
+  section("what travels with an invitation is the GROUP's rule");
+  const shipped = await getShareConfig();
+  ok('both levels travel by default', shipped.copyStopLoss && shipped.copyTakeProfit);
+  ok('which is what the code default says', DEFAULT_SHARE_CONFIG.copyTakeProfit);
+  const narrowed = await setShareConfig({ copyTakeProfit: false });
+  ok('a level can be switched off for everybody', narrowed.copyTakeProfit === false);
+  ok('and switching one leaves the other alone', narrowed.copyStopLoss === true);
+  ok('it is install-wide, not per person', (await getShareConfig()).copyTakeProfit === false);
+  await setShareConfig({ copyTakeProfit: true });
+  ok('and it can be switched back', (await getShareConfig()).copyTakeProfit === true);
+
+  section("an invitation carries the sender's target as well as their stop");
+  const withTp = await makeOrder(alpha.id, 1.09);
+  const tpInvite = await createInvite(alpha, { recipientUserId: beta.id, sourceOrderId: withTp });
+  ok('the target is snapshotted onto the row', tpInvite.takeProfit === 1.12);
+  ok('beside the stop', tpInvite.stopLoss === 1.09);
+
   section('auto-send: a standing setting, off until somebody asks for it');
   ok('nothing is sent by default', (await getFounderPrefs(alpha.id)).autoInvite === false);
   const quiet = await makeOrder(alpha.id, 1.07);
@@ -380,6 +398,24 @@ async function main() {
   ok("switching yours on says nothing about theirs", (await getFounderPrefs(beta.id)).autoInvite === false);
   const betaOrder = await makeOrder(beta.id, 1.04);
   ok('so their fill sends nothing back', (await autoInviteAfterFill(beta, betaOrder, 'filled')) === null);
+
+  section('a TEST invitation is a real one that says it is a test');
+  const testOrder = await makeOrder(alpha.id, 1.02);
+  const testInvite = await createInvite(alpha, {
+    recipientUserId: beta.id,
+    sourceOrderId: testOrder,
+    isTest: true,
+  });
+  ok('it is marked', testInvite.isTest === true);
+  ok('and it owes exactly what a real one owes', testInvite.status === 'primary_pending');
+  ok('so it reaches the recipient the same way', (await pendingForRecipient(beta)).some((i) => i.isTest));
+  const ordinary = await createInvite(alpha, {
+    recipientUserId: beta.id,
+    sourceOrderId: await makeOrder(alpha.id, 1.01),
+  });
+  ok('an ordinary invitation is not marked', ordinary.isTest === false);
+  await settle();
+  ok('the timeline records that it was a test', (await kinds(testInvite.id)).includes('invite.test'));
 
   section('a recipient who loses Founder access stops receiving trades');
   await db.update(users).set({ roles: JSON.stringify(['member']) }).where(eq(users.id, beta.id));

@@ -39,6 +39,8 @@ import type {
   SupportRequest,
   BrokerConnection,
   FounderAccountView,
+  FounderShareConfig,
+  FounderTestPlan,
   FounderInvite,
   FounderPerson,
   FounderTradeEvent,
@@ -684,8 +686,24 @@ export const api = {
     prefs: FounderTradePrefs;
     accounts: FounderAccountView[];
     canTrade: boolean;
+    config: FounderShareConfig;
   }> {
     return request('/api/founder-trades');
+  },
+  // What travels with an invitation — Founder-set and applying to everybody.
+  founderConfig(): Promise<{ config: FounderShareConfig }> {
+    return request('/api/founder-trades/config');
+  },
+  saveFounderConfig(patch: Partial<FounderShareConfig>): Promise<{ config: FounderShareConfig }> {
+    return request('/api/founder-trades/config', { method: 'PUT', body: JSON.stringify(patch) });
+  },
+  // What a test WOULD place — the pair, the size, the levels — so the button can
+  // say so before a real order is sent.
+  founderTestPlan(): Promise<{ plan: FounderTestPlan }> {
+    return request('/api/founder-trades/test');
+  },
+  runFounderTest(): Promise<{ invite: FounderInvite; plan: FounderTestPlan }> {
+    return request('/api/founder-trades/test', { method: 'POST' });
   },
   founderRecipients(): Promise<{ recipients: FounderPerson[] }> {
     return request('/api/founder-trades/recipients');

@@ -1,6 +1,7 @@
 import type { FastifyInstance, FastifyReply } from 'fastify';
 import { z } from 'zod';
 import { requireFounder } from '../auth/middleware.js';
+import { getShareConfig, setShareConfig } from '../trading/founderTradeConfig.js';
 import { NOTIF_LEVELS } from '../notifications/prefs.js';
 import { auditActorFor } from '../trading/credentialAudit.js';
 import {
@@ -14,6 +15,8 @@ import {
   getProofImage,
   invitableFounders,
   joinPrimary,
+  planFounderTest,
+  runFounderTest,
   listInvites,
   pendingForRecipient,
   setFounderPrefs,
@@ -53,6 +56,14 @@ const prefsSchema = z.object({
 });
 
 const proofSchema = z.object({ image: z.string().min(1) });
+
+// What travels with an invitation. Founder-set and install-wide — the group's
+// rule rather than one trader's, so an invitation means the same thing whoever
+// sent it. A PATCH, like the personal prefs.
+const configSchema = z.object({
+  copyStopLoss: z.boolean().optional(),
+  copyTakeProfit: z.boolean().optional(),
+});
 
 function fail(reply: FastifyReply, e: unknown) {
   if (e instanceof FounderTradeError) {
@@ -98,6 +109,7 @@ export async function founderTradeRoutes(app: FastifyInstance) {
         prefs: await getFounderPrefs(request.currentUser!.id),
         accounts: await founderAccounts(request.currentUser!.id),
         canTrade: await canSendOrders(request.currentUser!),
+        config: await getShareConfig(),
       };
     } catch (e) {
       return fail(reply, e);
@@ -130,6 +142,46 @@ export async function founderTradeRoutes(app: FastifyInstance) {
     }
     try {
       return { prefs: await setFounderPrefs(request.currentUser!, parsed.data) };
+    } catch (e) {
+      return fail(reply, e);
+    }
+  });
+
+  // ---- what is sent, for everybody ----
+  //
+  // Founder-set and install-wide. Any founder-level account may read and change
+  // it, which is what "for the whole group" means here — there is deliberately
+  // no per-person override, because two Founders disagreeing about whether a
+  // target travels would make one invitation mean two things.
+  app.get('/api/founder-trades/config', guard, async () => ({ config: await getShareConfig() }));
+
+  app.put('/api/founder-trades/config', guard, async (request, reply) => {
+    const parsed = configSchema.safeParse(request.body);
+    if (!parsed.success) return reply.code(400).send({ error: 'Invalid settings' });
+    try {
+      return { config: await setShareConfig(parsed.data) };
+    } catch (e) {
+      return fail(reply, e);
+    }
+  });
+
+  // ---- the test drill ----
+  //
+  // Split in two on purpose: the plan says exactly what would be placed — the
+  // pair, the size, the levels, the account — so the button can state it before
+  // anything is sent. A test that puts a real order on somebody's account
+  // without saying so first is not a test anybody should press.
+  app.get('/api/founder-trades/test', guard, async (request, reply) => {
+    try {
+      return { plan: await planFounderTest(request.currentUser!, auditActorFor(request)) };
+    } catch (e) {
+      return fail(reply, e);
+    }
+  });
+
+  app.post('/api/founder-trades/test', guard, async (request, reply) => {
+    try {
+      return await runFounderTest(request.currentUser!, auditActorFor(request));
     } catch (e) {
       return fail(reply, e);
     }
