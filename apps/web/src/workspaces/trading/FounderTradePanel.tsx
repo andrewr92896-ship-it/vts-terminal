@@ -3,6 +3,7 @@ import { ApiError, api } from '../../api/client';
 import type {
   FounderAccountView,
   FounderInvite,
+  FounderLinks,
   FounderPerson,
   FounderShareConfig,
   FounderTestPlan,
@@ -39,6 +40,7 @@ export function FounderTradePanel() {
   const [accounts, setAccounts] = useState<FounderAccountView[]>([]);
   const [recipients, setRecipients] = useState<FounderPerson[]>([]);
   const [config, setConfig] = useState<FounderShareConfig | null>(null);
+  const [links, setLinks] = useState<FounderLinks>({ sending: [], receiving: [] });
   const [canTrade, setCanTrade] = useState(true);
   const [open, setOpen] = useState<string | null>(null);
 
@@ -51,6 +53,7 @@ export function FounderTradePanel() {
       setAccounts(res.accounts);
       setRecipients(res.recipients);
       setConfig(res.config);
+      setLinks(res.links);
       setCanTrade(res.canTrade);
     } catch {
       /* leave whatever is on screen */
@@ -79,7 +82,7 @@ export function FounderTradePanel() {
         own size, and place any funded trade at the firm by hand.
       </p>
 
-      <AutoSend prefs={prefs} recipients={recipients} onSaved={(p) => setPrefs(p)} />
+      <Links me={user!.id} links={links} recipients={recipients} onSaved={setLinks} />
 
       {config && <ShareSettings config={config} onSaved={setConfig} />}
 
@@ -89,6 +92,8 @@ export function FounderTradePanel() {
         canTrade={canTrade}
         onSaved={(p) => setPrefs(p)}
       />
+
+      <Notifications prefs={prefs} onSaved={(p) => setPrefs(p)} />
 
       <TestDrill canTrade={canTrade} onSent={() => void load()} />
 
@@ -110,31 +115,124 @@ export function FounderTradePanel() {
   );
 }
 
-// AUTO-SEND — the standing choice to put every trade you place in front of one
-// other Founder, instead of being asked about each one.
+// WHOSE TRADES REACH WHOM — both directions, on one card.
 //
-// It is a setting rather than a per-trade question because that is what it
-// actually is: a trader either works this way with somebody or they do not, and
-// asking on every fill is a prompt to click past. Off by default and per person,
-// so it is never symmetric by accident — switching yours on says nothing about
-// whether theirs is on.
-function AutoSend({
-  prefs,
+// A link is a row between two Founders, and **EITHER END CAN SWITCH IT ON**.
+// Wanting somebody's trades sent to you should not mean walking them through
+// their own settings on their own device — and because a link shows on both
+// parties' screens, nobody can be sending or receiving through something they
+// cannot see.
+//
+// The two directions are independent: ticking "my trades go to Dale" says
+// nothing about whether Dale's come to you.
+function Links({
+  me,
+  links,
   recipients,
   onSaved,
 }: {
-  prefs: FounderTradePrefs;
+  me: string;
+  links: FounderLinks;
   recipients: FounderPerson[];
-  onSaved: (p: FounderTradePrefs) => void;
+  onSaved: (l: FounderLinks) => void;
 }) {
   const [saving, setSaving] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
-  // Who a tick would send to: whoever is chosen, or the only other Founder there
-  // is. With one other person there is nothing to pick, so the row is one tick.
-  const target = prefs.autoInviteUserId ?? (recipients.length === 1 ? recipients[0].userId : null);
-  const targetName = recipients.find((r) => r.userId === target)?.displayName ?? null;
 
-  const save = async (patch: { autoInvite?: boolean; autoInviteUserId?: string | null }) => {
+  const toggle = async (senderUserId: string, recipientUserId: string, on: boolean) => {
+    setSaving(true);
+    setProblem(null);
+    try {
+      onSaved((await api.setFounderLink(senderUserId, recipientUserId, on)).links);
+    } catch (e) {
+      setProblem(e instanceof ApiError ? e.message : 'That could not be saved');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  if (recipients.length === 0) {
+    return (
+      <div style={{ ...cardStyle, marginBottom: 12 }}>
+        <div style={{ fontSize: 13, fontWeight: 700, color: C.text }}>Whose trades go where</div>
+        <div style={{ fontSize: 12, color: C.muted, marginTop: 6 }}>
+          There is nobody else with Founder access yet.
+        </div>
+      </div>
+    );
+  }
+
+  const sending = new Set(links.sending.map((f) => f.userId));
+  const receiving = new Set(links.receiving.map((f) => f.userId));
+
+  return (
+    <div style={{ ...cardStyle, marginBottom: 12 }}>
+      <div style={{ fontSize: 13, fontWeight: 700, color: C.text }}>Whose trades go where</div>
+      <div style={{ fontSize: 12, color: C.muted, margin: '6px 0 14px', lineHeight: 1.5 }}>
+        Each direction is its own switch, and either person can set it. Only trades that fill are
+        sent — a limit or stop order that has not triggered is not.
+      </div>
+
+      <div style={{ display: 'grid', gap: 14 }}>
+        <div>
+          <div style={groupLabel}>My trades go to</div>
+          <div style={{ display: 'grid', gap: 8 }}>
+            {recipients.map((r) => (
+              <Tick
+                key={`out-${r.userId}`}
+                label={r.displayName}
+                hint={`Every trade you place is put in front of ${r.displayName} to join or decline.`}
+                checked={sending.has(r.userId)}
+                disabled={saving}
+                onChange={(v) => void toggle(me, r.userId, v)}
+              />
+            ))}
+          </div>
+        </div>
+
+        <div>
+          <div style={groupLabel}>I receive trades from</div>
+          <div style={{ display: 'grid', gap: 8 }}>
+            {recipients.map((r) => (
+              <Tick
+                key={`in-${r.userId}`}
+                label={r.displayName}
+                hint={`Their trades come to you to join or decline. You can switch this on yourself.`}
+                checked={receiving.has(r.userId)}
+                disabled={saving}
+                onChange={(v) => void toggle(r.userId, me, v)}
+              />
+            ))}
+          </div>
+        </div>
+      </div>
+      {problem && <div style={{ fontSize: 12, color: C.red, marginTop: 10, fontWeight: 600 }}>{problem}</div>}
+    </div>
+  );
+}
+
+// NOTIFICATIONS, BOTH DIRECTIONS.
+//
+// Two genuinely different questions, so they are two blocks rather than one
+// setting: what reaches me when somebody sends ME a trade, and what I hear back
+// about a trade I sent THEM.
+//
+// The defaults differ for a reason. Receiving defaults to repeating, because it
+// is asking somebody to act and the workflow is not resolved until they do.
+// Hearing back defaults to normal — it is a note about a decision that has
+// already been made, so there is nothing outstanding to nag about.
+function Notifications({
+  prefs,
+  onSaved,
+}: {
+  prefs: FounderTradePrefs;
+  onSaved: (p: FounderTradePrefs) => void;
+}) {
+  const [every, setEvery] = useState(String(prefs.reminderEverySeconds));
+  const [saving, setSaving] = useState(false);
+  const [problem, setProblem] = useState<string | null>(null);
+
+  const save = async (patch: Parameters<typeof api.saveFounderPrefs>[0]) => {
     setSaving(true);
     setProblem(null);
     try {
@@ -146,71 +244,68 @@ function AutoSend({
     }
   };
 
-  if (recipients.length === 0) {
-    return (
-      <div style={{ ...cardStyle, marginBottom: 12 }}>
-        <div style={{ fontSize: 13, fontWeight: 700, color: C.text }}>Send my trades to another Founder</div>
-        <div style={{ fontSize: 12, color: C.muted, marginTop: 6 }}>
-          There is nobody else with Founder access to send to yet.
-        </div>
-      </div>
-    );
-  }
-
   return (
-    <div style={{ ...cardStyle, marginBottom: 12 }}>
-      <label style={{ display: 'flex', alignItems: 'flex-start', gap: 10, cursor: 'pointer' }}>
-        <input
-          type="checkbox"
-          checked={prefs.autoInvite}
-          disabled={saving || !target}
-          onChange={(e) =>
-            void save(
-              e.target.checked
-                ? { autoInvite: true, autoInviteUserId: target }
-                : { autoInvite: false },
-            )
-          }
-          style={{ width: 18, height: 18, marginTop: 1, accentColor: C.gold, flex: 'none' }}
-        />
-        <span>
-          <span style={{ fontSize: 13, fontWeight: 700, color: C.text }}>
-            Send my trades to {targetName ?? 'another Founder'}
-          </span>
-          <span style={{ display: 'block', fontSize: 12, color: C.muted, marginTop: 4, lineHeight: 1.5 }}>
-            Every trade you place is put in front of them to join or decline, without asking you each
-            time. Only trades that fill are sent — a limit or stop order that has not triggered is not.
-          </span>
-        </span>
-      </label>
+    <div style={{ ...cardStyle, marginTop: 12 }}>
+      <div style={{ fontSize: 13, fontWeight: 700, color: C.text }}>Notifications</div>
+      <div style={{ fontSize: 12, color: C.muted, margin: '6px 0 14px', lineHeight: 1.5 }}>
+        Opening the terminal is what answers a trade — acknowledging the alert on your phone never
+        resolves it.
+      </div>
 
-      {/* Only worth a picker once there is a choice to make. */}
-      {recipients.length > 1 && (
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 10 }}>
-          {recipients.map((r) => (
-            <button
-              key={r.userId}
-              type="button"
+      <div style={groupLabel}>WHEN A TRADE IS SENT TO ME</div>
+      <div style={{ display: 'grid', gap: 10, marginBottom: 16 }}>
+        <label style={label}>
+          How loud
+          <select
+            value={prefs.reminderLevel}
+            disabled={saving}
+            onChange={(e) => void save({ reminderLevel: e.target.value as FounderTradePrefs['reminderLevel'] })}
+            style={field}
+          >
+            <option value="silent">Silent — waiting for me when I look</option>
+            <option value="normal">Normal</option>
+            <option value="alert">Alert — through quiet hours</option>
+            <option value="repeating">Repeating — until I answer it</option>
+          </select>
+        </label>
+        <label style={label}>
+          Remind me every (seconds)
+          <input
+            value={every}
+            onChange={(e) => setEvery(e.target.value)}
+            onBlur={() => void save({ reminderEverySeconds: Math.max(60, Math.min(3600, Number(every) || 300)) })}
+            inputMode="numeric"
+            style={field}
+          />
+        </label>
+      </div>
+
+      <div style={groupLabel}>WHEN I SEND A TRADE TO SOMEBODY</div>
+      <div style={{ display: 'grid', gap: 10 }}>
+        <Tick
+          label="Tell me what they decided"
+          hint="Whether they joined, what they chose for their funded account, and when their screenshot arrives."
+          checked={prefs.notifyOnResponse}
+          disabled={saving}
+          onChange={(v) => void save({ notifyOnResponse: v })}
+        />
+        {prefs.notifyOnResponse && (
+          <label style={label}>
+            How loud
+            <select
+              value={prefs.responseLevel}
               disabled={saving}
-              onClick={() => void save({ autoInviteUserId: r.userId })}
-              style={{
-                padding: '7px 12px',
-                borderRadius: 8,
-                border: `1px solid ${target === r.userId ? C.gold : C.line2}`,
-                background: target === r.userId ? 'rgba(235,203,116,.14)' : 'transparent',
-                color: C.text,
-                fontSize: 12.5,
-                fontWeight: 600,
-                cursor: 'pointer',
-                fontFamily: C.sans,
-              }}
+              onChange={(e) => void save({ responseLevel: e.target.value as FounderTradePrefs['responseLevel'] })}
+              style={field}
             >
-              {r.displayName}
-            </button>
-          ))}
-        </div>
-      )}
-      {problem && <div style={{ fontSize: 12, color: C.red, marginTop: 8, fontWeight: 600 }}>{problem}</div>}
+              <option value="silent">Silent — waiting for me when I look</option>
+              <option value="normal">Normal</option>
+              <option value="alert">Alert — through quiet hours</option>
+            </select>
+          </label>
+        )}
+      </div>
+      {problem && <div style={{ fontSize: 12, color: C.red, marginTop: 10, fontWeight: 600 }}>{problem}</div>}
     </div>
   );
 }
@@ -347,15 +442,17 @@ function TestDrill({ canTrade, onSent }: { canTrade: boolean; onSent: () => void
       <div style={{ fontSize: 13, fontWeight: 700, color: C.text }}>Test the whole thing</div>
       <div style={{ fontSize: 12, color: C.muted, margin: '6px 0 12px', lineHeight: 1.5 }}>
         Places a <b>real</b> trade at the smallest size the broker allows, on a major pair other than
-        EUR/USD, and sends it as a test invitation. Everything they see says it is a test. You will
-        need to close the position yourself afterwards.
+        EUR/USD, and sends the invitation <b>to you</b> — so you get the alert and can walk through
+        joining it, the funded question and the screenshot yourself. Everything is marked as a test.
+        Joining places a second trade of the same size. Close them both when you are done.
       </div>
 
       {problem && <div style={{ fontSize: 12, color: C.red, marginBottom: 10, fontWeight: 600 }}>{problem}</div>}
 
       {state === 'sent' ? (
         <div style={{ fontSize: 12.5, color: C.green, fontWeight: 700 }}>
-          Test sent. The position is open on your account — close it when you are done.
+          Test sent — the invitation should reach you in a moment. The position is open on your
+          account; close it when you are done.
         </div>
       ) : state === 'confirm' && plan ? (
         <div style={{ border: `1px solid ${C.line2}`, borderRadius: 9, padding: 12, background: C.bg }}>
@@ -365,7 +462,7 @@ function TestDrill({ canTrade, onSent }: { canTrade: boolean; onSent: () => void
             <br />
             Stop {plan.stopLoss ?? '—'} · target {plan.takeProfit ?? '—'}
             <br />
-            On {plan.accountLabel}, sent to {plan.recipientName}
+            On {plan.accountLabel}, sent to you
           </div>
           <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
             <button type="button" onClick={() => void run()} disabled={state !== 'confirm'} style={goldBtn}>
@@ -406,7 +503,6 @@ function SizeSettings({
 }) {
   const [units, setUnits] = useState(prefs.defaultUnits == null ? '' : String(prefs.defaultUnits));
   const [connectionId, setConnectionId] = useState(prefs.defaultConnectionId ?? '');
-  const [every, setEvery] = useState(String(prefs.reminderEverySeconds));
   const [saving, setSaving] = useState(false);
   const [note, setNote] = useState<string | null>(null);
 
@@ -418,7 +514,6 @@ function SizeSettings({
       const { prefs: next } = await api.saveFounderPrefs({
         defaultUnits: Number.isFinite(n) && n > 0 ? n : null,
         defaultConnectionId: connectionId || null,
-        reminderEverySeconds: Math.max(60, Math.min(3600, Number(every) || 300)),
       });
       onSaved(next);
       setNote('Saved');
@@ -458,10 +553,6 @@ function SizeSettings({
               </option>
             ))}
           </select>
-        </label>
-        <label style={label}>
-          Remind me every (seconds)
-          <input value={every} onChange={(e) => setEvery(e.target.value)} inputMode="numeric" style={field} />
         </label>
       </div>
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 12 }}>
@@ -637,6 +728,14 @@ const ghostBtn: React.CSSProperties = {
   fontWeight: 700,
   cursor: 'pointer',
   fontFamily: C.sans,
+};
+
+const groupLabel: React.CSSProperties = {
+  fontSize: 11,
+  fontWeight: 800,
+  letterSpacing: '.08em',
+  color: C.faint,
+  marginBottom: 8,
 };
 
 const cardStyle: React.CSSProperties = {

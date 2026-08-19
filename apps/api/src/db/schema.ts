@@ -1277,6 +1277,34 @@ export const founderTradeEvents = sqliteTable('founder_trade_events', {
 });
 export type FounderTradeEventRow = typeof founderTradeEvents.$inferSelect;
 
+// A link between two Founders: while the row exists, the sender's fills raise an
+// invitation to the recipient.
+//
+// **THE ROW IS THE SWITCH** — present means on, absent means off. There is no
+// enabled column, because a disabled link and no link are the same fact and two
+// ways of saying it would eventually disagree.
+//
+// **EITHER END MAY SET IT UP, AND BOTH MAY REMOVE IT.** Wanting somebody's
+// trades sent to you should not require walking them through their own settings
+// on their own device — and nobody can be sending, or receiving, through a link
+// they cannot see. `createdBy` records which of the two arranged it; that is
+// history, not permission.
+//
+// A→B and B→A are separate rows on purpose: the directions are independent, so
+// switching one on says nothing about the other.
+export const founderTradeLinks = sqliteTable('founder_trade_links', {
+  id: text('id').primaryKey(),
+  senderUserId: text('sender_user_id')
+    .notNull()
+    .references(() => users.id, { onDelete: 'cascade' }),
+  recipientUserId: text('recipient_user_id')
+    .notNull()
+    .references(() => users.id, { onDelete: 'cascade' }),
+  createdByUserId: text('created_by_user_id'),
+  createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+});
+export type FounderTradeLinkRow = typeof founderTradeLinks.$inferSelect;
+
 // The recipient's own size for this workflow. A null `defaultUnits` is "not
 // stated" and is NEVER read as a number: a JOIN with no configured size is
 // refused and the modal asks for one, rather than sending an order at a size
@@ -1287,14 +1315,20 @@ export const founderTradePrefs = sqliteTable('founder_trade_prefs', {
     .references(() => users.id, { onDelete: 'cascade' }),
   defaultConnectionId: text('default_connection_id'),
   defaultUnits: real('default_units'),
-  // AUTO-SEND: a standing choice to invite one other Founder onto every trade
-  // that fills, rather than being asked per trade. Two columns because "on" and
-  // "who" are different facts — turning it off must not lose the recipient.
-  // Default off: switching it on makes somebody else's phone sound, so it is
-  // never inherited. The recipient's eligibility is re-read from their roles on
-  // every fill, so a stale id sends nothing rather than needing a cascade.
+  // ---- SUPERSEDED auto-send columns (migration 0134) ----------------------
+  // These said "I send to ONE person", and only the sender could set them.
+  // `founder_trade_links` replaces them with a row per direction that either
+  // party can switch on. Kept rather than dropped as the record of what was set
+  // before links existed; migration 0134 carried every enabled one across, and
+  // nothing reads them any more.
   autoInvite: integer('auto_invite', { mode: 'boolean' }).notNull().default(false),
   autoInviteUserId: text('auto_invite_user_id'),
+  // Being told what the person you invited decided — the SEND side of the
+  // workflow's notifications. Default on at `normal`: a courtesy note about a
+  // decision you asked for, rather than something worth breaking through silent
+  // mode for, which is what the receive side defaults to.
+  notifyOnResponse: integer('notify_on_response', { mode: 'boolean' }).notNull().default(true),
+  responseLevel: text('response_level').notNull().default('normal'),
   reminderEverySeconds: integer('reminder_every_seconds').notNull().default(300),
   reminderLevel: text('reminder_level').notNull().default('repeating'),
   updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),

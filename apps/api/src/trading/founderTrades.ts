@@ -4,6 +4,7 @@ import { db } from '../db/index.js';
 import {
   brokerConnections,
   founderTradeEvents,
+  founderTradeLinks,
   founderTradePrefs,
   founderTradeInvites,
   tradingOrders,
@@ -16,9 +17,11 @@ import {
   type UserRow,
 } from '../db/schema.js';
 import { isFounder, parseRoles } from '../auth/rbac.js';
+import { sendToUsers } from '../notifications/push.js';
+import { sendPushoverToUsers } from '../notifications/pushover.js';
 import { featuresForUser } from '../features/service.js';
 import { isDemoUser } from '../demo/identity.js';
-import { NOTIF_LEVELS, type NotifLevel } from '../notifications/prefs.js';
+import { LEVEL_PRIORITY, NOTIF_LEVELS, type NotifLevel } from '../notifications/prefs.js';
 import { DeskError, deskInstruments, deskQuotes, placeDeskOrder } from './orderDesk.js';
 import { getShareConfig } from './founderTradeConfig.js';
 import type { AuditActor } from './credentialAudit.js';
@@ -151,13 +154,16 @@ export interface FounderTradePrefs {
   defaultUnits: number | null;
   /** Which of the recipient's own connections a joined trade goes to. */
   defaultConnectionId: string | null;
-  /** Send every trade that fills to `autoInviteUserId`, without being asked. */
-  autoInvite: boolean;
-  /** Who those trades go to. Kept when auto-send is switched off, so turning it
-   *  back on does not lose the choice. */
-  autoInviteUserId: string | null;
+  // ---- RECEIVING: how a trade sent to me reaches me ----
+  /** How often an unresolved workflow buzzes me until I answer it. */
   reminderEverySeconds: number;
+  /** How loudly. Defaults to `repeating` — it is asking somebody to act. */
   reminderLevel: NotifLevel;
+  // ---- SENDING: what I hear back about a trade I sent ----
+  /** Be told what the person I invited decided. */
+  notifyOnResponse: boolean;
+  /** How loudly. Defaults to `normal` — a note about a decision I asked for. */
+  responseLevel: NotifLevel;
 }
 
 // How often an unresolved workflow may buzz, and for how long a level is
@@ -170,16 +176,14 @@ const MAX_REMINDER_SECONDS = 3600;
 export const DEFAULT_FOUNDER_PREFS: FounderTradePrefs = {
   defaultUnits: null,
   defaultConnectionId: null,
-  // Off until somebody asks for it: switching this on makes another person's
-  // phone sound for trades they did not ask about.
-  autoInvite: false,
-  autoInviteUserId: null,
   reminderEverySeconds: 300,
   reminderLevel: 'repeating',
+  notifyOnResponse: true,
+  responseLevel: 'normal',
 };
 
-function toLevel(v: string): NotifLevel {
-  return (NOTIF_LEVELS as readonly string[]).includes(v) ? (v as NotifLevel) : 'repeating';
+function toLevel(v: string, fallback: NotifLevel = 'repeating'): NotifLevel {
+  return (NOTIF_LEVELS as readonly string[]).includes(v) ? (v as NotifLevel) : fallback;
 }
 
 function clampSeconds(v: number): number {
@@ -195,23 +199,22 @@ export async function getFounderPrefs(userId: string): Promise<FounderTradePrefs
   return {
     defaultUnits: row.defaultUnits != null && row.defaultUnits > 0 ? row.defaultUnits : null,
     defaultConnectionId: row.defaultConnectionId,
-    // Auto-send is only ever ON with somebody to send to. Reading it that way
-    // means a recipient who has since been removed cannot leave a switch that
-    // says it is sending while nothing goes anywhere.
-    autoInvite: row.autoInvite && !!row.autoInviteUserId,
-    autoInviteUserId: row.autoInviteUserId,
     reminderEverySeconds: clampSeconds(row.reminderEverySeconds),
     reminderLevel: toLevel(row.reminderLevel),
+    notifyOnResponse: row.notifyOnResponse,
+    // A level nothing recognises falls back rather than silencing a note
+    // somebody is relying on — the same rule the ladder follows everywhere.
+    responseLevel: toLevel(row.responseLevel, 'normal'),
   };
 }
 
 export interface FounderPrefsPatch {
   defaultUnits?: number | null;
   defaultConnectionId?: string | null;
-  autoInvite?: boolean;
-  autoInviteUserId?: string | null;
   reminderEverySeconds?: number;
   reminderLevel?: NotifLevel;
+  notifyOnResponse?: boolean;
+  responseLevel?: NotifLevel;
 }
 
 // A PATCH, merged onto what is stored: the terminal is a service-worker-cached
@@ -242,36 +245,18 @@ export async function setFounderPrefs(
   // join time so a stored id can never point at somebody else's account.
   if (connectionId) await assertOwnConnection(user.id, connectionId);
 
-  // Who auto-send goes to. Validated whenever it is set — it has to be somebody
-  // eligible and it can never be yourself, since inviting yourself onto your own
-  // trade is not a thing that means anything.
-  const autoInviteUserId =
-    patch.autoInviteUserId === undefined
-      ? current.autoInviteUserId
-      : patch.autoInviteUserId || null;
-  if (autoInviteUserId) {
-    if (autoInviteUserId === user.id) {
-      throw new FounderTradeError('You cannot send your own trades to yourself');
-    }
-    await assertEligible(autoInviteUserId);
-  }
-  const autoInvite = patch.autoInvite === undefined ? current.autoInvite : patch.autoInvite;
-  // Switching it on with nobody to send to is refused rather than stored: a
-  // switch that reads "on" and sends nothing is worse than being asked to pick.
-  if (autoInvite && !autoInviteUserId) {
-    throw new FounderTradeError('Choose which Founder your trades are sent to', 400, 'NO_RECIPIENT');
-  }
-
   const next: FounderTradePrefs = {
     defaultUnits: units,
     defaultConnectionId: connectionId,
-    autoInvite,
-    autoInviteUserId,
     reminderEverySeconds:
       patch.reminderEverySeconds === undefined
         ? current.reminderEverySeconds
         : clampSeconds(patch.reminderEverySeconds),
     reminderLevel: patch.reminderLevel === undefined ? current.reminderLevel : toLevel(patch.reminderLevel),
+    notifyOnResponse:
+      patch.notifyOnResponse === undefined ? current.notifyOnResponse : patch.notifyOnResponse,
+    responseLevel:
+      patch.responseLevel === undefined ? current.responseLevel : toLevel(patch.responseLevel, 'normal'),
   };
   const now = new Date();
   await db
@@ -280,10 +265,10 @@ export async function setFounderPrefs(
       userId: user.id,
       defaultUnits: next.defaultUnits,
       defaultConnectionId: next.defaultConnectionId,
-      autoInvite: next.autoInvite,
-      autoInviteUserId: next.autoInviteUserId,
       reminderEverySeconds: next.reminderEverySeconds,
       reminderLevel: next.reminderLevel,
+      notifyOnResponse: next.notifyOnResponse,
+      responseLevel: next.responseLevel,
       updatedAt: now,
     })
     .onConflictDoUpdate({
@@ -291,10 +276,10 @@ export async function setFounderPrefs(
       set: {
         defaultUnits: next.defaultUnits,
         defaultConnectionId: next.defaultConnectionId,
-        autoInvite: next.autoInvite,
-        autoInviteUserId: next.autoInviteUserId,
         reminderEverySeconds: next.reminderEverySeconds,
         reminderLevel: next.reminderLevel,
+        notifyOnResponse: next.notifyOnResponse,
+        responseLevel: next.responseLevel,
         updatedAt: now,
       },
     });
@@ -480,7 +465,10 @@ export async function createInvite(
   input: CreateInviteInput,
 ): Promise<FounderInviteView> {
   assertFounder(inviter);
-  if (input.recipientUserId === inviter.id) {
+  // Inviting yourself is meaningless for a real trade — you are already in it.
+  // For a TEST it is exactly the point: the drill exists to show you what
+  // receiving one feels like, so it is addressed to the person running it.
+  if (input.recipientUserId === inviter.id && !input.isTest) {
     throw new FounderTradeError('You cannot invite yourself to your own trade');
   }
   await assertEligible(inviter.id);
@@ -574,6 +562,149 @@ export async function createInvite(
   return shape(full, await peopleFor([full]), inviter.id, await unitsOf(input.recipientUserId));
 }
 
+// ---- telling the sender what was decided ----
+
+// The SEND side of the workflow's notifications: the person who sent a trade
+// hears what the person they sent it to decided.
+//
+// Fire and forget, and never a reminder — it is a note about a decision that has
+// already been made, so there is nothing outstanding to nag anybody about. It
+// defaults to `normal` for the same reason: the receive side breaks through
+// silent mode because it is asking somebody to act, and this is not.
+//
+// Deliberately the INVITER only. A test is addressed to the person who ran it,
+// so this would be them telling themselves what they just pressed — skipped, or
+// every drill would buzz its own operator twice.
+async function notifyInviterOfResponse(
+  invite: FounderTradeInviteRow,
+  what: string,
+): Promise<void> {
+  try {
+    if (invite.isTest && invite.inviterUserId === invite.recipientUserId) return;
+    const prefs = await getFounderPrefs(invite.inviterUserId);
+    if (!prefs.notifyOnResponse) return;
+    const [who] = await db
+      .select({ displayName: users.displayName })
+      .from(users)
+      .where(eq(users.id, invite.recipientUserId))
+      .limit(1);
+    const name = who?.displayName ?? 'A Founder';
+    const dir = invite.side === 'long' ? 'BUY' : 'SELL';
+    const title = `${invite.isTest ? 'TEST · ' : ''}${name} ${what}`;
+    const body = `${invite.instrument} ${dir}`;
+    await sendToUsers([invite.inviterUserId], { title, body, url: '/?screen=tradedesk' }).catch(() => {});
+    await sendPushoverToUsers(
+      [invite.inviterUserId],
+      { title, message: body, priority: LEVEL_PRIORITY[prefs.responseLevel] },
+      'founder_trade_response',
+    ).catch(() => {});
+  } catch (err) {
+    // A note about a decision must never be what stops the decision being
+    // recorded.
+    console.error('Founder response notification failed:', err);
+  }
+}
+
+// ---- links: whose trades reach whom ----
+
+export interface FounderLinks {
+  /** Founders my fills are sent to. */
+  sending: FounderPerson[];
+  /** Founders whose fills are sent to me. */
+  receiving: FounderPerson[];
+}
+
+// Every link this Founder is part of, in both directions.
+//
+// The two lists are what the panel draws: "your trades go to" and "you receive
+// trades from". A link appears on BOTH parties' screens, which is what stops
+// anybody sending — or receiving — through something they cannot see.
+export async function getFounderLinks(user: UserRow): Promise<FounderLinks> {
+  assertFounder(user);
+  const rows = await db
+    .select()
+    .from(founderTradeLinks)
+    .where(or(eq(founderTradeLinks.senderUserId, user.id), eq(founderTradeLinks.recipientUserId, user.id)));
+  // Eligibility is re-read rather than trusted from the stored id, so somebody
+  // who has lost the role drops out of both lists instead of lingering as a link
+  // that silently does nothing.
+  const eligible = new Map((await eligibleFounders()).map((f) => [f.userId, f]));
+  const sending: FounderPerson[] = [];
+  const receiving: FounderPerson[] = [];
+  for (const r of rows) {
+    if (r.senderUserId === user.id) {
+      const p = eligible.get(r.recipientUserId);
+      if (p) sending.push(p);
+    } else {
+      const p = eligible.get(r.senderUserId);
+      if (p) receiving.push(p);
+    }
+  }
+  const byName = (a: FounderPerson, b: FounderPerson) => a.displayName.localeCompare(b.displayName);
+  return { sending: sending.sort(byName), receiving: receiving.sort(byName) };
+}
+
+// Switch one direction on or off.
+//
+// **EITHER PARTY MAY DO IT.** Wanting somebody's trades sent to you should not
+// depend on getting them to change a setting on their own device, and being
+// able to stop your own trades going out should never depend on the other
+// person either. So the caller must be one of the two, and which one they are
+// does not matter.
+export async function setFounderLink(
+  actor: UserRow,
+  senderUserId: string,
+  recipientUserId: string,
+  on: boolean,
+): Promise<FounderLinks> {
+  assertFounder(actor);
+  if (actor.id !== senderUserId && actor.id !== recipientUserId) {
+    // 403 rather than 404: both ids are people the caller can already see in
+    // the picker, so there is nothing to conceal — what is refused is arranging
+    // a link between two OTHER people.
+    throw new FounderTradeError('You can only change a link you are part of', 403);
+  }
+  if (senderUserId === recipientUserId) {
+    throw new FounderTradeError('A trade cannot be sent to the person who placed it');
+  }
+  await assertEligible(senderUserId);
+  await assertEligible(recipientUserId);
+
+  if (!on) {
+    await db
+      .delete(founderTradeLinks)
+      .where(
+        and(
+          eq(founderTradeLinks.senderUserId, senderUserId),
+          eq(founderTradeLinks.recipientUserId, recipientUserId),
+        ),
+      );
+    return getFounderLinks(actor);
+  }
+  // The unique index makes this idempotent: switching on a link that is already
+  // on is a no-op rather than a second row or an error.
+  await db
+    .insert(founderTradeLinks)
+    .values({
+      id: crypto.randomUUID(),
+      senderUserId,
+      recipientUserId,
+      createdByUserId: actor.id,
+      createdAt: new Date(),
+    })
+    .onConflictDoNothing();
+  return getFounderLinks(actor);
+}
+
+// Who this sender's fills go to. The one read `autoInviteAfterFill` uses.
+async function recipientsFor(senderUserId: string): Promise<string[]> {
+  const rows = await db
+    .select({ recipientUserId: founderTradeLinks.recipientUserId })
+    .from(founderTradeLinks)
+    .where(eq(founderTradeLinks.senderUserId, senderUserId));
+  return rows.map((r) => r.recipientUserId);
+}
+
 // ---- the test drill ----
 
 // Pairs to reach for first when placing a test. Deliberately liquid majors and
@@ -619,11 +750,10 @@ export async function planFounderTest(user: UserRow, actor: AuditActor): Promise
   if (!prefs.defaultConnectionId) {
     throw new FounderTradeError('Choose which of your broker accounts the test goes to', 400, 'NO_ACCOUNT');
   }
-  const recipientId = prefs.autoInviteUserId;
-  if (!recipientId) {
-    throw new FounderTradeError('Choose which Founder the test is sent to', 400, 'NO_RECIPIENT');
-  }
-  const recipient = await assertEligible(recipientId);
+  // THE TEST COMES TO YOU (owner instruction, 2026-08). The point of the drill
+  // is to feel the receiving end — the notification, the modal, the join — so it
+  // is addressed to whoever ran it. Nobody else is woken up to test the system,
+  // and no second person has to be set up before it can be tried.
   await assertOwnConnection(user.id, prefs.defaultConnectionId);
 
   // A genuine currency pair the account can actually trade, at the venue's own
@@ -666,7 +796,7 @@ export async function planFounderTest(user: UserRow, actor: AuditActor): Promise
     takeProfit: reference == null ? null : round(reference + TEST_TARGET_PIPS * pip),
     accountLabel: (await founderAccounts(user.id)).find((a) => a.connectionId === prefs.defaultConnectionId)
       ?.label ?? 'your account',
-    recipientName: recipient.displayName,
+    recipientName: user.displayName,
   };
 }
 
@@ -727,7 +857,9 @@ export async function runFounderTest(
   }
 
   const invite = await createInvite(user, {
-    recipientUserId: prefs.autoInviteUserId!,
+    // Addressed to the person running it, so the invitation, the notification
+    // and the modal all arrive on their own screen.
+    recipientUserId: user.id,
     sourceOrderId: res.orderRecordId,
     isTest: true,
   });
@@ -754,30 +886,37 @@ export async function autoInviteAfterFill(
   inviter: UserRow,
   sourceOrderId: string,
   status: 'filled' | 'accepted',
-): Promise<FounderInviteView | null> {
+): Promise<FounderInviteView[]> {
   try {
-    if (status !== 'filled') return null;
-    if (isDemoUser(inviter) || !isFounder(parseRoles(inviter))) return null;
-    const prefs = await getFounderPrefs(inviter.id);
-    if (!prefs.autoInvite || !prefs.autoInviteUserId) return null;
-    // Eligibility is re-read here rather than trusted from the stored id, so a
+    if (status !== 'filled') return [];
+    if (isDemoUser(inviter) || !isFounder(parseRoles(inviter))) return [];
+    const recipients = await recipientsFor(inviter.id);
+    if (recipients.length === 0) return [];
+    // Eligibility is re-read here rather than trusted from the stored link, so a
     // recipient who has lost the role simply stops receiving trades.
-    const eligible = await eligibleFounders();
-    if (!eligible.some((f) => f.userId === prefs.autoInviteUserId)) return null;
-    // createInvite carries the duplicate guard, so a retried request or a second
-    // fill reported twice still raises one invitation.
-    const invite = await createInvite(inviter, {
-      recipientUserId: prefs.autoInviteUserId,
-      sourceOrderId,
-    });
-    // Recorded so the timeline says an invitation was sent by a standing
-    // setting rather than by somebody deciding in the moment — the two read very
-    // differently when reconstructing what happened.
-    logEvent(invite.id, 'invite.auto_sent', null, 'Sent by the inviter’s auto-send setting');
-    return invite;
+    const eligible = new Set((await eligibleFounders()).map((f) => f.userId));
+
+    const raised: FounderInviteView[] = [];
+    for (const recipientUserId of recipients) {
+      if (!eligible.has(recipientUserId)) continue;
+      try {
+        // createInvite carries the duplicate guard, so a retried request or a
+        // second fill reported twice still raises one invitation each.
+        const invite = await createInvite(inviter, { recipientUserId, sourceOrderId });
+        // Recorded so the timeline says an invitation was sent by a standing
+        // link rather than by somebody deciding in the moment — the two read
+        // very differently when reconstructing what happened.
+        logEvent(invite.id, 'invite.auto_sent', null, 'Sent by a standing Founder trade link');
+        raised.push(invite);
+      } catch (err) {
+        // One recipient failing must not stop the others being invited.
+        console.error('Founder auto-send to one recipient failed:', err);
+      }
+    }
+    return raised;
   } catch (err) {
     console.error('Founder auto-send failed:', err);
-    return null;
+    return [];
   }
 }
 
@@ -943,6 +1082,7 @@ export async function declinePrimary(user: UserRow, id: string): Promise<Founder
   }
   await advanceToFunded(id, 'declined', { primaryError: null });
   logEvent(id, 'primary.declined', user.id, 'The recipient did not join the primary trade');
+  void notifyInviterOfResponse(row, 'did not join your trade');
   return reload(user, id);
 }
 
@@ -1113,6 +1253,7 @@ export async function joinPrimary(
       user.id,
       `${res.status} · ${res.units ?? prefs.defaultUnits} units${res.fillPrice == null ? '' : ` at ${res.fillPrice}`}`,
     );
+    void notifyInviterOfResponse(row, 'joined your trade');
     return reload(user, id);
   } catch (e) {
     const message = e instanceof Error ? e.message : 'The order could not be placed';
@@ -1183,6 +1324,10 @@ export async function setFundedDecision(
   );
   if (decision === 'yes') logEvent(id, 'proof.requested', null, 'Screenshot verification required');
   else logEvent(id, 'workflow.completed', user.id, 'Completed without a funded trade');
+  void notifyInviterOfResponse(
+    row,
+    decision === 'yes' ? 'is placing it on their funded account' : 'is not placing it on their funded account',
+  );
   return reload(user, id);
 }
 
@@ -1227,6 +1372,7 @@ export async function uploadProof(user: UserRow, id: string, dataUrl: string): P
 
   logEvent(id, 'proof.uploaded', user.id, `Screenshot saved (${Math.round(image.length / 1024)} KB)`);
   logEvent(id, 'workflow.completed', user.id, 'Funded trade verified');
+  void notifyInviterOfResponse(row, 'sent their funded trade screenshot');
   return reload(user, id);
 }
 

@@ -860,31 +860,58 @@ workspaces list** (see `theme/nav.ts` order).
       `(source_ref, recipient_user_id)`), so a retried create returns the
       invitation that already exists rather than raising a second modal about
       one trade.
-    - **INVITING IS A STANDING SETTING, NOT A PER-TRADE QUESTION** (owner
+    - **INVITING IS A STANDING LINK, NOT A PER-TRADE QUESTION** (owner
       instruction, 2026-08 — it shipped as a prompt on every fill and was
-      replaced the same day). The "Send my trades to [Founder]" checkbox on the
-      Live Trades panel (`AutoSend` in `FounderTradePanel.tsx`;
-      `founder_trade_prefs.auto_invite` / `auto_invite_user_id`, migration
-      `0132`) is the whole inviter-side surface — a question on every fill is a
-      prompt people learn to click past. **Do not reintroduce a per-trade
-      prompt.** Four rules carry it:
+      replaced the same day). A question on every fill is a prompt people learn
+      to click past. **Do not reintroduce a per-trade prompt.**
+      - **`founder_trade_links` IS THE SWITCH, AND EITHER END MAY SET IT**
+        (migration `0134`; the `Links` card on the Live Trades panel). One row
+        per direction between two Founders: present means that sender's fills
+        raise an invitation to that recipient, absent means they do not. There
+        is no enabled column — a disabled link and no link are the same fact,
+        and two ways of saying it would eventually disagree.
+        - It replaced `founder_trade_prefs.auto_invite` / `auto_invite_user_id`
+          (migration `0132`), which could only say "I send to ONE person" and
+          could only be set by the sender. Those columns are **kept as the
+          archive** and nothing reads them; `0134` carried every enabled one
+          across, so nobody's setting changed on deploy.
+        - **Wanting somebody's trades sent to you must not require touching
+          their account** (owner instruction, 2026-08), which is the whole
+          reason this is a link rather than a sender-only switch. The caller
+          must be one of the two parties and which one does not matter; a link
+          between two OTHER people is refused. Both parties see it, so nobody
+          can be sending or receiving through something they cannot see.
+        - **A→B and B→A are separate rows.** Switching one on says nothing about
+          the other, which is what lets trades flow one way only.
       - **The invitation is raised SERVER-SIDE, from the fill**
         (`autoInviteAfterFill`, called fire-and-forget from the place route), so
         it happens whether or not the tab that placed the order is still open,
-        and can never delay or fail the order response.
+        and can never delay or fail the order response. It fans out over every
+        link, and one recipient failing never stops the others being invited.
       - **Only a FILL is sent, never a resting order.** The recipient joins at
         market, so inviting off an untriggered limit/stop would put them in at a
         price the inviter has not paid, against a stop set for a different
         entry. `status === 'filled'` is the gate.
-      - **"On" and "who" are two columns**, so switching it off keeps the
-        choice of recipient; switching it on with nobody chosen is refused
-        rather than stored, and aiming it at yourself or at a non-Founder is
-        refused too. The recipient's eligibility is re-read from their roles on
-        every fill — a revoked Founder simply stops receiving, with no cascade.
-      - **Default OFF and per person, never symmetric by accident**: switching
-        yours on says nothing about theirs. An auto-sent invitation records
-        `invite.auto_sent` on its timeline, so a standing setting and an
-        in-the-moment decision stay distinguishable afterwards.
+      - Eligibility is re-read from the roles on every fill and on every read of
+        the link lists, so a revoked Founder drops out of both rather than
+        lingering as a link that silently does nothing — and comes back if the
+        role does. An auto-sent invitation records `invite.auto_sent` on its
+        timeline, so a standing link and an in-the-moment decision stay
+        distinguishable afterwards.
+    - **NOTIFICATIONS ARE SET IN BOTH DIRECTIONS, and they are different
+      questions** (owner instruction, 2026-08).
+      - **Receiving** — `reminder_level` / `reminder_every_seconds`, defaulting
+        to `repeating`: a trade sent to you is asking you to act, and the
+        workflow is not resolved until you do.
+      - **Sending** — `notify_on_response` / `response_level` (migration
+        `0134`), defaulting to on at `normal`. `notifyInviterOfResponse` tells
+        the sender what was decided at each step: joined, declined, the funded
+        answer, the screenshot. **Never a reminder** — it is a note about a
+        decision already made, so there is nothing outstanding to nag about,
+        which is also why it does not break through silent mode the way the
+        receive side does.
+      - It is **skipped for a self-addressed test**, or every drill would buzz
+        its own operator about what they just pressed.
       Nothing else on the wall needed a tile: the blocking modal is already
       global, so a board tile could only restate what is already covering the
       screen.
@@ -894,6 +921,16 @@ workspaces list** (see `theme/nav.ts` order).
       Trades panel). A simulation that stops short of the broker proves nothing
       about the half most likely to be wrong — the order path, the levels, and
       the journal row the invitation is built from.
+      - **THE TEST COMES TO WHOEVER RAN IT** (owner instruction, 2026-08). The
+        point of the drill is to feel the RECEIVING end — the notification, the
+        modal, the join — so the invitation is addressed to the person who
+        pressed the button. Nobody else is woken up to test the system, and no
+        second person has to be set up before it can be tried. `createInvite`
+        therefore allows a self-addressed invitation **only** when `isTest`;
+        a real one still refuses, because you are already in your own trade.
+        Consequence worth stating on the button, and it is: joining the test
+        places a SECOND minimum-size order, so the drill leaves two positions to
+        close.
       - **It is bounded rather than faked**: the venue's own
         `minimumTradeSize`, a liquid major, and **never EUR/USD** (owner
         instruction — a test should not land on the pair a real position is most

@@ -3182,13 +3182,22 @@ export interface FounderTradePrefs {
   /** Null is "not stated" and is never read as a size — a JOIN is refused instead. */
   defaultUnits: number | null;
   defaultConnectionId: string | null;
-  /** Send every trade that fills to `autoInviteUserId`, without being asked. */
-  autoInvite: boolean;
-  /** Who those trades go to. Kept when auto-send is off, so turning it back on
-   *  does not lose the choice. */
-  autoInviteUserId: string | null;
+  // Receiving: how a trade sent to me reaches me.
   reminderEverySeconds: number;
   reminderLevel: NotifLevel;
+  // Sending: what I hear back about a trade I sent.
+  notifyOnResponse: boolean;
+  responseLevel: NotifLevel;
+}
+
+// Whose trades reach whom. A link appears on BOTH parties' screens, and either
+// of them can switch it on or off — wanting somebody's trades sent to you does
+// not depend on them changing a setting on their own device.
+export interface FounderLinks {
+  /** Founders my fills are sent to. */
+  sending: FounderPerson[];
+  /** Founders whose fills are sent to me. */
+  receiving: FounderPerson[];
 }
 
 // One of the recipient's own live broker accounts, for the "which account" picker.
@@ -3226,8 +3235,8 @@ export interface FounderAccountView {
 export interface FounderTradePrefsPatch {
   defaultUnits?: number | null;
   defaultConnectionId?: string | null;
-  autoInvite?: boolean;
-  autoInviteUserId?: string | null;
   reminderEverySeconds?: number;
   reminderLevel?: NotifLevel;
+  notifyOnResponse?: boolean;
+  responseLevel?: NotifLevel;
 }

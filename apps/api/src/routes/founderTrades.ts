@@ -10,6 +10,7 @@ import {
   declinePrimary,
   founderAccounts,
   FounderTradeError,
+  getFounderLinks,
   getFounderPrefs,
   getInvite,
   getProofImage,
@@ -19,6 +20,7 @@ import {
   runFounderTest,
   listInvites,
   pendingForRecipient,
+  setFounderLink,
   setFounderPrefs,
   setFundedDecision,
   uploadProof,
@@ -49,10 +51,20 @@ const inviteSchema = z.object({
 const prefsSchema = z.object({
   defaultUnits: z.number().finite().positive().max(100_000_000).nullish(),
   defaultConnectionId: z.string().max(64).nullish(),
-  autoInvite: z.boolean().optional(),
-  autoInviteUserId: z.string().max(64).nullish(),
+  // Receiving: how a trade sent to me reaches me.
   reminderEverySeconds: z.number().int().min(60).max(3600).optional(),
   reminderLevel: z.enum(NOTIF_LEVELS).optional(),
+  // Sending: what I hear back about a trade I sent.
+  notifyOnResponse: z.boolean().optional(),
+  responseLevel: z.enum(NOTIF_LEVELS).optional(),
+});
+
+// One direction of one link. Either party may set it, which is what makes
+// "receive their trades" possible without touching their account.
+const linkSchema = z.object({
+  senderUserId: z.string().min(1).max(64),
+  recipientUserId: z.string().min(1).max(64),
+  on: z.boolean(),
 });
 
 const proofSchema = z.object({ image: z.string().min(1) });
@@ -110,6 +122,7 @@ export async function founderTradeRoutes(app: FastifyInstance) {
         accounts: await founderAccounts(request.currentUser!.id),
         canTrade: await canSendOrders(request.currentUser!),
         config: await getShareConfig(),
+        links: await getFounderLinks(request.currentUser!),
       };
     } catch (e) {
       return fail(reply, e);
@@ -142,6 +155,31 @@ export async function founderTradeRoutes(app: FastifyInstance) {
     }
     try {
       return { prefs: await setFounderPrefs(request.currentUser!, parsed.data) };
+    } catch (e) {
+      return fail(reply, e);
+    }
+  });
+
+  // ---- links: whose trades reach whom ----
+  //
+  // Both directions in one read, so the panel can draw "your trades go to" and
+  // "you receive trades from" without a second round trip. A link appears on
+  // both parties' screens, which is what stops anybody sending or receiving
+  // through something they cannot see.
+  app.get('/api/founder-trades/links', guard, async (request, reply) => {
+    try {
+      return { links: await getFounderLinks(request.currentUser!) };
+    } catch (e) {
+      return fail(reply, e);
+    }
+  });
+
+  app.put('/api/founder-trades/links', guard, async (request, reply) => {
+    const parsed = linkSchema.safeParse(request.body);
+    if (!parsed.success) return reply.code(400).send({ error: 'Invalid link' });
+    try {
+      const { senderUserId, recipientUserId, on } = parsed.data;
+      return { links: await setFounderLink(request.currentUser!, senderUserId, recipientUserId, on) };
     } catch (e) {
       return fail(reply, e);
     }

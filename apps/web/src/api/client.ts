@@ -39,6 +39,7 @@ import type {
   SupportRequest,
   BrokerConnection,
   FounderAccountView,
+  FounderLinks,
   FounderShareConfig,
   FounderTestPlan,
   FounderInvite,
@@ -687,8 +688,20 @@ export const api = {
     accounts: FounderAccountView[];
     canTrade: boolean;
     config: FounderShareConfig;
+    links: FounderLinks;
   }> {
     return request('/api/founder-trades');
+  },
+  // Whose trades reach whom, both directions in one read. Either party can set
+  // a link, so "receive their trades" needs nothing from their account.
+  founderLinks(): Promise<{ links: FounderLinks }> {
+    return request('/api/founder-trades/links');
+  },
+  setFounderLink(senderUserId: string, recipientUserId: string, on: boolean): Promise<{ links: FounderLinks }> {
+    return request('/api/founder-trades/links', {
+      method: 'PUT',
+      body: JSON.stringify({ senderUserId, recipientUserId, on }),
+    });
   },
   // What travels with an invitation — Founder-set and applying to everybody.
   founderConfig(): Promise<{ config: FounderShareConfig }> {
