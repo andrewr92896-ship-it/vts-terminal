@@ -11,9 +11,20 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 7.31';
+export const APP_VERSION = 'Beta V 7.32';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 7.32',
+    date: 'August 19, 2026',
+    notes: [
+      'Founder trades: “Whose trades go where” now has both directions. You can switch on receiving somebody’s trades yourself, without them having to change anything on their device.',
+      'Each direction is its own switch, and both people can see and turn off any link they are part of. Turning one on says nothing about the other.',
+      'Notifications are set for both directions too: how loudly a trade sent to you arrives and how often it repeats, and separately whether you are told what the person you sent one to decided.',
+      'The test now comes to you. It places a real minimum-size trade and sends the invitation to your own phone, so you can walk through joining it, the funded question and the screenshot yourself.',
+      'Joining the test places a second trade of the same size — close both when you are done.',
+    ],
+  },
   {
     version: 'Beta V 7.31',
     date: 'August 19, 2026',

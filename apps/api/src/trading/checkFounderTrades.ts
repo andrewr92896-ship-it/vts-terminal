@@ -43,6 +43,8 @@ import {
 import {
   autoInviteAfterFill,
   createInvite,
+  getFounderLinks,
+  setFounderLink,
   declinePrimary,
   dueReminders,
   eligibleFounders,
@@ -191,12 +193,13 @@ async function main() {
 
   const alpha = await makeUser('alpha', ['founder']);
   const beta = await makeUser('beta', ['software_developer']);
+  const gamma = await makeUser('gamma', ['founder']);
   const member = await makeUser('member', ['member']);
   const adminOnly = await makeUser('adminonly', ['admin']);
 
   section('eligibility comes from the role, and from nothing else');
   const eligible = (await eligibleFounders()).map((f) => f.username).sort();
-  ok('both founder-level accounts are eligible', eligible.join(',') === 'alpha,beta', eligible.join(','));
+  ok('every founder-level account is eligible', eligible.join(',') === 'alpha,beta,gamma', eligible.join(','));
   ok('an ordinary member is not', !eligible.includes('member'));
   // software_developer is permission-equivalent to founder throughout the
   // terminal, so it counts here for the same reason it counts everywhere else.
@@ -361,54 +364,76 @@ async function main() {
   ok('the target is snapshotted onto the row', tpInvite.takeProfit === 1.12);
   ok('beside the stop', tpInvite.stopLoss === 1.09);
 
-  section('auto-send: a standing setting, off until somebody asks for it');
-  ok('nothing is sent by default', (await getFounderPrefs(alpha.id)).autoInvite === false);
+  section('links: nothing is sent until somebody switches one on');
+  ok('a Founder starts with no links either way', (await getFounderLinks(alpha)).sending.length === 0);
   const quiet = await makeOrder(alpha.id, 1.07);
-  ok('so a fill raises nothing', (await autoInviteAfterFill(alpha, quiet, 'filled')) === null);
+  ok('so a fill raises nothing', (await autoInviteAfterFill(alpha, quiet, 'filled')).length === 0);
   await expectRefusal(
-    'switching it on with nobody to send to is refused',
-    () => setFounderPrefs(alpha, { autoInvite: true }),
-    'Choose which Founder',
+    'a trade cannot be sent to whoever placed it',
+    () => setFounderLink(alpha, alpha.id, alpha.id, true),
+    'cannot be sent',
   );
   await expectRefusal(
-    'and it can never be aimed at yourself',
-    () => setFounderPrefs(alpha, { autoInvite: true, autoInviteUserId: alpha.id }),
-    'yourself',
-  );
-  await expectRefusal(
-    'nor at somebody without Founder access',
-    () => setFounderPrefs(alpha, { autoInvite: true, autoInviteUserId: member.id }),
+    'nor to somebody without Founder access',
+    () => setFounderLink(alpha, alpha.id, member.id, true),
     'cannot take part',
   );
 
+  section('EITHER end may switch a link on');
+  // The receiving side sets this one up: beta asks for alpha's trades without
+  // touching alpha's account, which is the whole point of a link over a
+  // sender-only switch.
+  const asRecipient = await setFounderLink(beta, alpha.id, beta.id, true);
+  ok('the recipient can arrange it themselves', asRecipient.receiving.some((f) => f.userId === alpha.id));
+  ok('and it shows on the sender\'s screen too', (await getFounderLinks(alpha)).sending.some((f) => f.userId === beta.id));
+  await expectRefusal(
+    'but nobody can arrange a link between two other people',
+    () => setFounderLink(beta, alpha.id, gamma.id, true),
+    'part of',
+  );
+
   section('switched on, a FILL is sent and a resting order is not');
-  await setFounderPrefs(alpha, { autoInvite: true, autoInviteUserId: beta.id });
   const resting = await makeOrder(alpha.id, 1.06);
   // A limit or stop entry that has not triggered is not a trade anybody is in,
   // and the recipient would join at market — so it is deliberately not sent.
-  ok('a working order raises nothing', (await autoInviteAfterFill(alpha, resting, 'accepted')) === null);
+  ok('a working order raises nothing', (await autoInviteAfterFill(alpha, resting, 'accepted')).length === 0);
   const autoOrder = await makeOrder(alpha.id, 1.05);
-  const auto = await autoInviteAfterFill(alpha, autoOrder, 'filled');
+  const [auto] = await autoInviteAfterFill(alpha, autoOrder, 'filled');
   ok('a fill raises the invitation by itself', auto?.recipient.userId === beta.id);
   ok('and it carries the trade, as a manual one does', auto?.stopLoss === 1.05);
-  const twice = await autoInviteAfterFill(alpha, autoOrder, 'filled');
+  const [twice] = await autoInviteAfterFill(alpha, autoOrder, 'filled');
   ok('the same fill reported twice still raises one', twice?.id === auto?.id);
 
-  section('auto-send is per person, never symmetric by accident');
-  ok("switching yours on says nothing about theirs", (await getFounderPrefs(beta.id)).autoInvite === false);
+  section('a link is one direction only, never symmetric by accident');
+  ok('the reverse direction does not exist', (await getFounderLinks(beta)).sending.length === 0);
   const betaOrder = await makeOrder(beta.id, 1.04);
-  ok('so their fill sends nothing back', (await autoInviteAfterFill(beta, betaOrder, 'filled')) === null);
+  ok('so their fill sends nothing back', (await autoInviteAfterFill(beta, betaOrder, 'filled')).length === 0);
 
-  section('a TEST invitation is a real one that says it is a test');
+  section('a sender can reach more than one Founder');
+  await setFounderLink(alpha, alpha.id, gamma.id, true);
+  const fanned = await autoInviteAfterFill(alpha, await makeOrder(alpha.id, 1.005), 'filled');
+  ok('both are invited from one fill', fanned.length === 2);
+  ok('each to their own person', new Set(fanned.map((i) => i.recipient.userId)).size === 2);
+  await setFounderLink(alpha, alpha.id, gamma.id, false);
+  ok('and switching one off leaves the other', (await getFounderLinks(alpha)).sending.length === 1);
+
+  section('a TEST invitation comes to whoever ran it');
   const testOrder = await makeOrder(alpha.id, 1.02);
   const testInvite = await createInvite(alpha, {
-    recipientUserId: beta.id,
+    recipientUserId: alpha.id,
     sourceOrderId: testOrder,
     isTest: true,
   });
   ok('it is marked', testInvite.isTest === true);
+  ok('addressed to the person testing', testInvite.recipient.userId === alpha.id);
   ok('and it owes exactly what a real one owes', testInvite.status === 'primary_pending');
-  ok('so it reaches the recipient the same way', (await pendingForRecipient(beta)).some((i) => i.isTest));
+  ok('so it lands in their own queue', (await pendingForRecipient(alpha)).some((i) => i.isTest));
+  const selfOrder = await makeOrder(alpha.id, 1.015);
+  await expectRefusal(
+    'a REAL invitation still cannot be sent to yourself',
+    () => createInvite(alpha, { recipientUserId: alpha.id, sourceOrderId: selfOrder }),
+    'yourself',
+  );
   const ordinary = await createInvite(alpha, {
     recipientUserId: beta.id,
     sourceOrderId: await makeOrder(alpha.id, 1.01),
@@ -417,13 +442,27 @@ async function main() {
   await settle();
   ok('the timeline records that it was a test', (await kinds(testInvite.id)).includes('invite.test'));
 
+  section('notifications are settable in BOTH directions');
+  const bothWays = await setFounderPrefs(alpha, {
+    reminderLevel: 'alert',
+    reminderEverySeconds: 120,
+    notifyOnResponse: false,
+    responseLevel: 'silent',
+  });
+  ok('the receive side is kept', bothWays.reminderLevel === 'alert' && bothWays.reminderEverySeconds === 120);
+  ok('and the send side beside it', bothWays.notifyOnResponse === false && bothWays.responseLevel === 'silent');
+  const partial = await setFounderPrefs(alpha, { reminderEverySeconds: 300 });
+  ok('a partial save leaves the other direction alone', partial.notifyOnResponse === false);
+  await setFounderPrefs(alpha, { reminderLevel: 'repeating', notifyOnResponse: true, responseLevel: 'normal' });
+
   section('a recipient who loses Founder access stops receiving trades');
   await db.update(users).set({ roles: JSON.stringify(['member']) }).where(eq(users.id, beta.id));
   const afterRevoke = await makeOrder(alpha.id, 1.03);
-  ok('nothing is sent to them', (await autoInviteAfterFill(alpha, afterRevoke, 'filled')) === null);
-  ok('and the switch reads as sending to nobody', (await getFounderPrefs(alpha.id)).autoInvite === true);
+  ok('nothing is sent to them', (await autoInviteAfterFill(alpha, afterRevoke, 'filled')).length === 0);
+  ok('and they drop out of the link list', (await getFounderLinks(alpha)).sending.length === 0);
   await db.update(users).set({ roles: JSON.stringify(['software_developer']) }).where(eq(users.id, beta.id));
-  await setFounderPrefs(alpha, { autoInvite: false });
+  ok('coming back restores it', (await getFounderLinks(alpha)).sending.length === 1);
+  await setFounderLink(alpha, alpha.id, beta.id, false);
 
   section('reminders are paced, and stop when the work is done');
   const order3 = await makeOrder(alpha.id, 1.08);
