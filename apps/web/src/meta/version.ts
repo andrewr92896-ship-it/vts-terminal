@@ -11,9 +11,18 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 7.32';
+export const APP_VERSION = 'Beta V 7.33';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 7.33',
+    date: 'August 20, 2026',
+    notes: [
+      'Trade notifications now say whose trades they are and who gets buzzed. With a teammate picked it reads “Which of Dale’s trades buzz your phone”, and says outright that these are your alerts only and change nothing on their end.',
+      'The rows are named after the notification that arrives rather than an action you take: Trade opened, Trade closed, Stop loss set, Stop loss moved, Take profit set, Take profit moved. SL and TP are written out.',
+      'The loudness note now says what is Pushover-only — the loudness, not the alert itself.',
+    ],
+  },
   {
     version: 'Beta V 7.32',
     date: 'August 19, 2026',

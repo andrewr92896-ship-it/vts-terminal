@@ -569,15 +569,24 @@ export function SendTestSection({
 // Which trade events buzz you
 // ---------------------------------------------------------------------------
 
-// The six trade events a trader can toggle per watched teammate, in display
+// The six trade events a trader can toggle per watched trader, in display
 // order. Order pairs each level's place/move so the panel reads top-to-bottom.
+//
+// **A LABEL IS THE NOTIFICATION THAT ARRIVES, NOT SOMETHING YOU DO.** Until
+// 2026-08 they read "Placing trades" / "Placing SL", which named an action the
+// trader takes on the desk rather than the thing this panel switches on and off
+// — and the rows sit under a picker that can name somebody else, so a row
+// labelled "Placing trades" was describing a teammate's fill as your own doing.
+// Each one now matches the notification it governs ("Trade opened · EURUSD"),
+// and SL/TP are written out, since nothing on screen said what the letters were.
+// Labels only — the keys are the stored columns and are unchanged.
 const NOTIF_EVENT_ROWS: { key: keyof NotifPrefFlags; label: string }[] = [
-  { key: 'open', label: 'Placing trades' },
-  { key: 'close', label: 'Closing trades' },
-  { key: 'placeSl', label: 'Placing SL' },
-  { key: 'moveSl', label: 'Moving SL' },
-  { key: 'placeTp', label: 'Placing TP' },
-  { key: 'moveTp', label: 'Moving TP' },
+  { key: 'open', label: 'Trade opened' },
+  { key: 'close', label: 'Trade closed' },
+  { key: 'placeSl', label: 'Stop loss set' },
+  { key: 'moveSl', label: 'Stop loss moved' },
+  { key: 'placeTp', label: 'Take profit set' },
+  { key: 'moveTp', label: 'Take profit moved' },
 ];
 
 // Choose which teammate you want trade notifications about, and — per teammate —
@@ -640,12 +649,29 @@ export function PerUserNotificationsSection({ accent, accentText }: { accent: st
     void save(flags, { ...lv, [key]: level });
   }
 
+  // The copy names WHOSE trades these are AND WHO IS NOTIFIED, because with a
+  // teammate picked the panel reads as though it were setting up THEIR alerts.
+  // It is not: prefs are per recipient, so this is the signed-in reader's own
+  // feed and nothing here reaches the person named. "Choose exactly which of
+  // your trade actions buzz your phone" said neither half — it claimed the
+  // trades were yours, and left who gets buzzed to be inferred from a dropdown
+  // with somebody else's name in it.
+  const target = targets?.find((t) => t.id === selected);
+  const watchingSelf = !target || target.isSelf;
+  const whose = watchingSelf ? 'your own trades' : `${target!.name}’s trades`;
+
   return (
     <section>
       <div style={sectionLabel}>Trade notifications</div>
       <p style={{ ...hintStyle, marginTop: 0, marginBottom: 12 }}>
-        Choose exactly which of your trade actions buzz your phone. All on by default — turn off
-        what you don’t want to hear about.
+        Which of {whose} buzz your phone. Everything is on by default — turn off what you don’t
+        want to hear about.
+        {!watchingSelf && (
+          <>
+            {' '}
+            These are your alerts only — nothing here changes what {target!.name} is told about.
+          </>
+        )}
       </p>
 
       {targets == null ? (
@@ -659,18 +685,24 @@ export function PerUserNotificationsSection({ accent, accentText }: { accent: st
               and a dropdown holding your own name and nothing else is a control
               that asks a question with a single answer. */}
           {targets.length > 1 && (
-            <select
-              value={selected}
-              onChange={(e) => setSelected(e.target.value)}
-              style={{ ...inputStyle, marginBottom: 14, cursor: 'pointer' }}
-            >
-              {targets.map((t) => (
-                <option key={t.id} value={t.id}>
-                  {t.name}
-                  {t.isSelf ? ' (you)' : ''}
-                </option>
-              ))}
-            </select>
+            <label style={{ display: 'block', marginBottom: 14 }}>
+              {/* "Notify me about", not "Whose trades" — the dropdown holds
+                  another person's name, and the one thing a name in a box
+                  cannot say is which end of the notification they are on. */}
+              <span style={{ ...hintStyle, display: 'block', marginBottom: 6 }}>Notify me about</span>
+              <select
+                value={selected}
+                onChange={(e) => setSelected(e.target.value)}
+                style={{ ...inputStyle, cursor: 'pointer' }}
+              >
+                {targets.map((t) => (
+                  <option key={t.id} value={t.id}>
+                    {t.name}
+                    {t.isSelf ? ' (you)' : ''}
+                  </option>
+                ))}
+              </select>
+            </label>
           )}
 
           {flags && lv && (
@@ -711,9 +743,9 @@ export function PerUserNotificationsSection({ accent, accentText }: { accent: st
 // rather than naming a priority — "Silent" is meaningful to somebody choosing;
 // "priority -1" is not.
 const LEVEL_ROWS: { key: NotifLevel; label: string; hint: string }[] = [
-  { key: 'silent', label: 'Silent', hint: 'Shows on your phone, no sound' },
-  { key: 'normal', label: 'Normal', hint: 'Sound, unless you are in Pushover’s quiet hours' },
-  { key: 'alert', label: 'Alert', hint: 'Sound, even during quiet hours' },
+  { key: 'silent', label: 'Silent', hint: 'Arrives with no sound or vibration' },
+  { key: 'normal', label: 'Normal', hint: 'Sounds, unless you are in Pushover’s quiet hours' },
+  { key: 'alert', label: 'Alert', hint: 'Sounds even during Pushover’s quiet hours' },
   { key: 'repeating', label: 'Repeating', hint: 'Repeats until you acknowledge it' },
 ];
 
@@ -749,7 +781,9 @@ export function LevelPicker({ value, onChange }: { value: NotifLevel; onChange: 
           );
         })}
       </div>
-      <div style={{ ...hintStyle, marginTop: 6 }}>{active.hint} · Pushover only</div>
+      <div style={{ ...hintStyle, marginTop: 6 }}>
+        {active.hint}. Loudness applies to Pushover only — phone alerts are unaffected.
+      </div>
     </div>
   );
 }
