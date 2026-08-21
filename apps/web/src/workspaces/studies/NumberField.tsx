@@ -25,6 +25,7 @@ export function NumberField({
   emptyValue,
   style,
   title,
+  disabled,
 }: {
   value: number;
   onChange: (n: number) => void;
@@ -36,6 +37,7 @@ export function NumberField({
   emptyValue: number;
   style?: CSSProperties;
   title?: string;
+  disabled?: boolean;
 }) {
   const [draft, setDraft] = useState<string | null>(null);
   const clamp = (n: number) => Math.max(min, Math.min(max, n));
@@ -46,6 +48,7 @@ export function NumberField({
       min={min}
       max={max}
       title={title}
+      disabled={disabled}
       value={draft ?? String(value)}
       onChange={(e) => {
         const raw = e.target.value;

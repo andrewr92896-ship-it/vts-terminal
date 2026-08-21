@@ -2116,13 +2116,55 @@ workspaces list** (see `theme/nav.ts` order).
   games, flashcard sets, study presentations — each opening one maker with a way
   back. Stacked down one page (as it was) every maker's list and form loaded at
   once, so the screen opened three feet long with the thing you came to build
-  somewhere in the middle. The makers themselves are unchanged: the study-game
-  maker+editor (`TeamStudyDecks` → `DeckEditor`, plus combine-games), the
+  somewhere in the middle. The makers are the study-game maker+editor
+  (`TeamStudyDecks` → `GameWizard` / `DeckEditor`, plus combine-games), the
   **flashcard-set maker** (`TeamFlashcards` — type cards in, AI-generate from a
   topic, or upload a `.txt`), and the study-guide builder (`StudyGuideCreator` —
   build with VTS AI or upload a `.pptx`, parsed client-side in `lib/pptx.ts`).
   **Study Presentations** (`StudyGuidesLibrary`) is the present/manage side — the
   finished guides only, ending with a **Build a presentation** tile.
+  - **BUILDING A STUDY GAME IS A WIZARD, IN THE SAME FORMAT AS CREATE A STUDY
+    PACKAGE** (owner instruction, 2026-08; `wizard/GameWizard.tsx`). One thing
+    per card — how to build it, the name, the topic, how many questions, any
+    instructions — ending at a review that restates the answers before anything
+    is made. It replaced a single stacked form with three mode tabs, where every
+    field for every mode was on screen whether or not it applied.
+    - **It is NOT a second package wizard, and must not become one.** That one
+      describes the SHAPE of a package, writes nothing, and calls no VTS AI —
+      the content comes from the creator's own model. This one builds one
+      standalone study game and calls VTS AI to do it. Same format, different
+      job, which is why its plan is its own small type rather than a
+      `StudyPackageBlueprint`. What they share is `wizardUi.tsx`, so the two
+      cannot drift into two different-looking workflows for what a creator reads
+      as one job.
+    - `TeamStudyDecks.tsx` is the **list and the management** around it; the
+      wizard is what creates. The old `DeckComposer` is gone. `errorText` moved
+      to `studies/studyErrors.ts` so the wizard and the combine-games form can
+      both read it without importing each other.
+    - **THERE IS NO CAP ON HOW MANY QUESTIONS AN AI GENERATION MAY ASK FOR
+      BELOW WHAT A GAME CAN HOLD** (owner instruction, 2026-08). The ceiling is
+      1,000 — the same figure the deck confirm route and the package blueprint's
+      `MAX_QUESTIONS` use — so a game can never be generated at a size that
+      could not be saved. It was **50**, which was the bound on ONE model call
+      and long outlived the single call: `generateDeckQuestions` batches
+      (`DECK_BATCH_SIZE` 8, `DECK_BATCH_CONCURRENCY` 8), so a large number is
+      many short calls rather than one long one. **Do not reintroduce a lower
+      cap** — an exam bank is as long as the exam behind it.
+      - What is real is the **request timeout**, not a policy limit: past
+        roughly 150 questions one generation can outrun the hosting gateway.
+        The count card says so, in amber, above that figure. That is a fact the
+        control cannot state itself, so it is not a tip — and it is a warning,
+        never a refusal.
+    - **A CUSTOM COUNT'S BOX IS SHOWN FROM LOCAL STATE, NEVER DERIVED FROM THE
+      NUMBER.** Derived, the field vanishes the moment what is typed happens to
+      equal a preset — typing 50 loses the box at "50", mid-keystroke. The same
+      fault was in the package wizard's own count step, which is why that case
+      is now `QuestionCountStep` with its own `custom` flag. Reported by the
+      owner, 2026-08.
+    - **The count and card-count boxes go through `NumberField`.** The obvious
+      controlled spelling (`Number(e.target.value) || 1`) cannot represent an
+      empty box, so clearing it paints a 1 back and the next digit lands after
+      it. See the rule under "A number input must be able to be EMPTY".
   - **Leaderboards changed shape (owner decision, 2026-08).** The terminal's
     **built-in** games have a **PUBLIC** board spanning every account on the
     install; **user-made games have none at all**.

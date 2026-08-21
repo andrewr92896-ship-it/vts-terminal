@@ -358,7 +358,7 @@ export async function parseTradeHistoryScreenshot(
 
 // Sonnet 4.6: the site-wide assistant (Ask Claude, product knowledge, parsing).
 // maxTokens defaults to 4000; question-generation passes a larger budget since a
-// deck of up to 50 four-option questions with explanations is a big response.
+// batch of four-option questions with explanations is a big response.
 export async function askClaude(prompt: string, system?: string, maxTokens = 4000): Promise<string> {
   const message = await getClient().messages.create({
     model: config.ANTHROPIC_MODEL_DEFAULT,
@@ -801,6 +801,18 @@ export function parseGeneratedQuestions(
   return out;
 }
 
+// The most questions one study game can hold — the same ceiling the deck routes
+// and the package blueprint use, so a game cannot be generated at a size that
+// could never be saved.
+export const MAX_DECK_QUESTIONS = 1000;
+
+// How the work is split. Small batches keep every model call short enough to
+// finish well inside the hosting gateway's request timeout; the concurrency is
+// what decides how long a LARGE deck takes overall, since a big game is simply
+// many of these. Eight at a time is ~64 questions per wave.
+const DECK_BATCH_SIZE = 8;
+const DECK_BATCH_CONCURRENCY = 8;
+
 // A generous token budget for a deck: ~200 tokens per question plus overhead.
 function deckMaxTokens(count: number): number {
   return Math.min(16000, 1200 + count * 220);
@@ -837,12 +849,15 @@ export async function generateDeckQuestions(input: {
   instructions?: string;
   count: number;
 }): Promise<GeneratedQuestion[]> {
-  const count = Math.max(1, Math.min(50, Math.floor(input.count) || 0));
+  // The ceiling is what a deck can hold, not what one model call can produce —
+  // the batching below is what makes a large number affordable. The old 50 was
+  // the single-call bound and outlived the single call by a long way.
+  const count = Math.max(1, Math.min(MAX_DECK_QUESTIONS, Math.floor(input.count) || 0));
   const fallbackTopic = input.topic.trim().slice(0, 40) || 'General';
   const system = `You are an expert exam-question author. Write clear, self-contained multiple-choice practice questions that test real understanding of the subject the user names. Vary difficulty. Do not repeat questions. ${DECK_FORMAT}`;
 
-  const batches = splitCount(count, 8);
-  const perBatch = await mapLimit(batches, 4, async (batchCount, i) => {
+  const batches = splitCount(count, DECK_BATCH_SIZE);
+  const perBatch = await mapLimit(batches, DECK_BATCH_CONCURRENCY, async (batchCount, i) => {
     const prompt = [
       `Write ${batchCount} multiple-choice questions about: ${input.topic}.`,
       input.instructions ? `Additional instructions from the author: ${input.instructions}` : '',
