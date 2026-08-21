@@ -11,9 +11,18 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 7.35';
+export const APP_VERSION = 'Beta V 7.36';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 7.36',
+    date: 'August 21, 2026',
+    notes: [
+      'Fixed: after bringing a file back from your own AI, the study game could not be created — the review screen still offered “Check the questions” instead of “Create study game”, so there was no way to finish.',
+      'The “picked up where you left off” bar no longer shows on the review screen, where Start over sat beside the questions you were about to create.',
+      'A file too large to read now says so instead of being reported as broken JSON.',
+    ],
+  },
   {
     version: 'Beta V 7.35',
     date: 'August 21, 2026',

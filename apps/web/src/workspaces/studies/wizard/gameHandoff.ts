@@ -219,6 +219,10 @@ export function readGameDocs(texts: string[], expectedGameId: string): GameReadR
 
   texts.forEach((text, i) => {
     const label = texts.length > 1 ? `File ${i + 1}: ` : '';
+    if (!text.trim()) {
+      errors.push(`${label}that file was too large to read. Ask your AI for it in numbered parts and add them one at a time.`);
+      return;
+    }
     let json: unknown;
     try {
       json = JSON.parse(unfence(text));
