@@ -8,6 +8,7 @@ import { useAuth } from '../../auth/AuthContext';
 import { DeckEditor } from './DeckEditor';
 import { downloadCsv, questionsToCsv } from './studyCsv';
 import { GameWizard } from './wizard/GameWizard';
+import { loadGameDraft } from './wizard/gameDraft';
 import { errorText } from './studyErrors';
 
 // The team study-game *maker*, shown in Study Creation. Any member builds a deck
@@ -31,6 +32,10 @@ export function TeamStudyDecks({ theme }: { theme: Theme }) {
   const [composerOpen, setComposerOpen] = useState(false);
   const [combineOpen, setCombineOpen] = useState(false);
   const [editing, setEditing] = useState<string | null>(null);
+  // A game waiting on the creator's own AI. The handoff is the one screen
+  // somebody is meant to walk away from, so the way back to it has to be
+  // visible from here rather than only from reopening the wizard and hoping.
+  const [waiting, setWaiting] = useState(() => loadGameDraft(user?.id ?? 'anon', {}));
 
   const isAdmin = user?.roles.includes('admin') === true;
   const canManage = (d: TeamDeck) => !readOnly && (d.createdBy === user?.id || isAdmin);
@@ -117,13 +122,39 @@ export function TeamStudyDecks({ theme }: { theme: Theme }) {
         />
       )}
 
+      {waiting?.stage === 'handoff' && !composerOpen && !readOnly && (
+        <div
+          style={{
+            ...card(theme),
+            marginBottom: 14,
+            display: 'flex',
+            alignItems: 'center',
+            gap: 10,
+            flexWrap: 'wrap',
+            padding: '13px 16px',
+          }}
+        >
+          <span style={{ flex: 1, minWidth: 200, fontSize: 12.5, color: muted, lineHeight: 1.5 }}>
+            {"A study game is waiting on your AI. Bring back the file it made and the questions land here."}
+          </span>
+          <button onClick={() => setComposerOpen(true)} style={ghostBtn(theme)}>
+            {"Open the handoff"}
+          </button>
+        </div>
+      )}
+
       {composerOpen && !readOnly && (
         <GameWizard
           theme={theme}
-          onClose={() => setComposerOpen(false)}
+          userId={user?.id ?? 'anon'}
+          onClose={() => {
+            setComposerOpen(false);
+            setWaiting(loadGameDraft(user?.id ?? 'anon', {}));
+          }}
           onCreated={(decks, newId) => {
             setDecks(decks);
             setComposerOpen(false);
+            setWaiting(null);
             // Creation and editing live here; playing lives in the Study Game
             // section. Open the new game in the editor so the author can refine it.
             setEditing(newId);
