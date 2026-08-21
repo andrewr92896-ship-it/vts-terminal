@@ -2141,6 +2141,58 @@ workspaces list** (see `theme/nav.ts` order).
       wizard is what creates. The old `DeckComposer` is gone. `errorText` moved
       to `studies/studyErrors.ts` so the wizard and the combine-games form can
       both read it without importing each other.
+    - **FOUR ROUTES, AND ONE OF THEM CALLS NO VTS AI** (`gameHandoff.ts`,
+      `gameDraft.ts`; owner report, 2026-08). The `handoff` route composes a
+      prompt for the creator's **OWN** AI and reads the file it produces — the
+      route somebody with a question bank of their own wants. They had to go to
+      the package wizard for it and came to the study-game maker instead, which
+      is where they were looking; "build them from a file of mine" gave them an
+      upload box and no handoff. All four routes land on the same **Check the
+      questions** screen and create an ordinary study game.
+      - **It is deliberately NOT the package handoff, and must not be folded
+        into it.** That one describes a whole package — categories, flashcards,
+        slides, lessons — and commits through the package importer, which would
+        answer a question the creator did not ask: they are in the study-game
+        maker making a study game. This one asks for a list of questions and
+        creates a plain deck through `confirmStudyDeck`. What the two share is
+        **`RIGHTS_BLOCK`**, because the terminal's position on what it is asking
+        an outside model to do is one position, stated once.
+      - **THE HANDOFF IS A SCREEN SOMEBODY IS MEANT TO WALK AWAY FROM**, so the
+        wizard has a draft (`gameDraft.ts`, per user, on the device, versioned,
+        debounced) that records the plan, the step and the **stage**. Leaving and
+        coming back reopens on the handoff **with the same Game ID**, so the file
+        their AI built overnight is still the one being checked. That fault has
+        already been paid for once in the package wizard — do not rebuild it by
+        keeping the paste box in React state. `TeamStudyDecks` draws a "waiting
+        on your AI" row from the same draft, because reopening the wizard and
+        hoping is not a route back.
+      - **Backing out of the handoff returns to the questions and changes
+        nothing else** — the answers stay and so does the Game ID. **Start over**
+        is the one control that mints a new one.
+      - **`gameId` is import identity only.** Nothing stores it, and a file
+        carrying a different one is a **warning, not a refusal** — the same rule
+        the package importer settled on, because everything that establishes the
+        CONTENT is checked on the content. Refusing on the id alone only ever
+        punished somebody whose saved plan had gone.
+      - **Every problem names the thing.** "Question 47 is missing option D",
+        not "invalid JSON" — a creator can act on the first and not the second.
+        `readGameDocs` strips **one** surrounding code fence and nothing else:
+        no brace hunting, no quote repair. A file needing guesswork is a file to
+        send back, which is what `buildGameRepairPrompt` is for (the problems
+        and the schema, deliberately **not** the whole game — it is enormous and
+        is already in the AI's own conversation).
+      - **A game too long for one reply arrives as numbered PARTS.** Parts must
+        share one `gameId` — a set mixing two is refused rather than combined —
+        and a set missing one says **which** parts are still needed instead of
+        importing what it has. Parts are ordered by `partIndex` so the questions
+        keep their run.
+      - **Nothing is created by checking.** Reading and checking are local and
+        repeatable; only **Create study game** writes. A duplicate question is a
+        **warning that keeps both**, matching the editor's own repeat marking —
+        which of two copies to lose is the author's call.
+      - The count step's "however many my material has" is a **stated answer**
+        on this route, not a missing one, which is why `stepError` accepts a null
+        count there and nowhere else.
     - **THERE IS NO CAP ON HOW MANY QUESTIONS AN AI GENERATION MAY ASK FOR
       BELOW WHAT A GAME CAN HOLD** (owner instruction, 2026-08). The ceiling is
       1,000 — the same figure the deck confirm route and the package blueprint's

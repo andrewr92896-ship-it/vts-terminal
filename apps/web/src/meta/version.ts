@@ -11,9 +11,20 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 7.34';
+export const APP_VERSION = 'Beta V 7.35';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 7.35',
+    date: 'August 21, 2026',
+    notes: [
+      'Building a study game can now hand off to your own AI. Pick “Use my own AI”, answer a few questions, and you get a prompt to paste into ChatGPT or Claude — it asks you what it needs, formats the questions you already have, and produces a file you bring back here.',
+      'The file is checked before anything is created, and every problem names the question: “Question 47 is missing option D”, not “invalid JSON”. If something is wrong there is a fix to copy back to your AI.',
+      'A game too long for one reply comes back in numbered parts, added one at a time. Missing parts are named.',
+      'The handoff survives leaving. Go away for a day, come back, and the wizard picks up on the same handoff with the same Game ID, so the file your AI built is still the right one.',
+      '“Build them from a file of mine” is now “Have VTS AI format a file of mine”, so it is clear which of the two routes uploads a file and which hands off to your own AI.',
+    ],
+  },
   {
     version: 'Beta V 7.34',
     date: 'August 21, 2026',
