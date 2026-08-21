@@ -7,6 +7,7 @@ import { useResponsive } from '../../hooks/useMediaQuery';
 import { useAuth } from '../../auth/AuthContext';
 import { card } from './TeamStudyDecks';
 import { FlashcardEditor } from './FlashcardEditor';
+import { NumberField } from './NumberField';
 import { cardsToCsv, cardTemplateCsv, downloadCsv, parseCardsCsv } from './studyCsv';
 
 // The Team Flashcards *maker*, shown in Study Creation. Any member builds a set
@@ -606,12 +607,15 @@ function SetComposer({
             <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
               <label style={{ fontSize: 12, color: muted, display: 'inline-flex', alignItems: 'center', gap: 8 }}>
                 Number of cards
-                <input
-                  type="number"
+                {/* NumberField, not a raw controlled input: spelled the obvious
+                    way this box cannot be empty, so clearing it paints a 1 back
+                    and the next digit lands after it. */}
+                <NumberField
+                  value={count}
+                  onChange={setCount}
                   min={1}
                   max={60}
-                  value={count}
-                  onChange={(e) => setCount(Math.max(1, Math.min(60, Number(e.target.value) || 1)))}
+                  emptyValue={1}
                   disabled={busy}
                   style={{ ...field(theme), width: 72, padding: '7px 10px' }}
                 />

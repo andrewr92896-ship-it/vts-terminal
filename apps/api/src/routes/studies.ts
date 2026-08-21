@@ -135,11 +135,18 @@ const sectionCreateSchema = z.object({
 });
 
 // Building a team study deck: AI from a topic, or from an uploaded text file.
+//
+// The count ceiling is the one a deck can actually HOLD (the confirm schema
+// below, and the package blueprint's MAX_QUESTIONS). It was 50 — a bound on one
+// model call, back when a generation was one call — and that is not a reason to
+// refuse somebody a 300-question exam bank (owner instruction, 2026-08).
+// `generateDeckQuestions` batches the work, so a large number is many short
+// calls rather than one long one.
 const deckGenerateSchema = z.object({
   name: z.string().trim().min(1).max(120),
   topic: z.string().trim().min(1).max(200),
   instructions: z.string().trim().max(2000).optional(),
-  count: z.number().int().min(1).max(50),
+  count: z.number().int().min(1).max(1000),
 });
 // Step one of an upload: AI reads the raw file text and returns formatted
 // questions for the author to review. No deck is created yet.

@@ -11,9 +11,19 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 7.33';
+export const APP_VERSION = 'Beta V 7.34';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 7.34',
+    date: 'August 21, 2026',
+    notes: [
+      'Building a study game is now a wizard, the same one-question-at-a-time flow as Create a study package: pick how you want to build it, name it, answer the rest, then review before anything is made. It replaced the stacked form that showed every field for every method at once.',
+      'The number-of-questions box can be typed in properly. Clearing it no longer snaps to 1, and the custom box no longer disappears mid-typing when what you have typed passes a preset number.',
+      'The 50-question cap on AI-generated study games is gone — a game can now be as long as one can hold, 1,000 questions. Over about 150 the wizard says the request can time out.',
+      'The number-of-cards box on the flashcard maker had the same typing fault and is fixed too.',
+    ],
+  },
   {
     version: 'Beta V 7.33',
     date: 'August 20, 2026',

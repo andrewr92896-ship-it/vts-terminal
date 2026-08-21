@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
 import { Icon } from '../../../components/Icon';
 import type { Theme } from '../../../theme/themes';
 import {
@@ -120,53 +120,7 @@ export function StepCard({
       );
 
     case 'questionCount':
-      return (
-        <>
-          <Prompt>How many practice questions do you want?</Prompt>
-          <ChoiceGroup
-            theme={theme}
-            value={
-              bp.questionCountMode === 'ai_recommend'
-                ? 'ai'
-                : bp.questionCount === 25
-                  ? '25'
-                  : bp.questionCount === 50
-                    ? '50'
-                    : bp.questionCount === 100
-                      ? '100'
-                      : bp.questionCountMode === 'fixed'
-                        ? 'custom'
-                        : null
-            }
-            onChange={(v) => {
-              if (v === 'ai') patch({ questionCountMode: 'ai_recommend', questionCount: null });
-              else if (v === 'custom') patch({ questionCountMode: 'fixed', questionCount: null });
-              else patch({ questionCountMode: 'fixed', questionCount: Number(v) });
-            }}
-            options={[
-              { value: 'ai' as const, label: 'Let my AI recommend' },
-              { value: '25' as const, label: '25' },
-              { value: '50' as const, label: '50' },
-              { value: '100' as const, label: '100' },
-              { value: 'custom' as const, label: 'Custom' },
-            ]}
-          />
-          {bp.questionCountMode === 'fixed' &&
-            bp.questionCount !== 25 &&
-            bp.questionCount !== 50 &&
-            bp.questionCount !== 100 && (
-              <div style={{ marginTop: 12 }}>
-                <NumberField
-                  value={bp.questionCount == null ? '' : String(bp.questionCount)}
-                  onChange={(v) => patch({ questionCount: v === '' ? null : Number(v) })}
-                  min={1}
-                  max={MAX_QUESTIONS}
-                  autoFocus
-                />
-              </div>
-            )}
-        </>
-      );
+      return <QuestionCountStep theme={theme} bp={bp} patch={patch} />;
 
     case 'questionMethod':
       return (
@@ -428,6 +382,67 @@ export function StepCard({
 // One component for both cards: naming the categories, and weighting them. The
 // rows are the same rows, and splitting them into two components is how the two
 // come to disagree about what a category is.
+/**
+ * How many practice questions.
+ *
+ * `custom` is LOCAL state rather than something derived from the number, and
+ * that is the whole point of it: read back off the value, the box vanishes the
+ * moment what is typed happens to equal a preset — start typing 50 and the
+ * field you are standing in disappears at "5"… "50". Reported by the owner,
+ * 2026-08, on the study-game maker's own count box.
+ */
+function QuestionCountStep({ theme, bp, patch }: { theme: Theme; bp: StudyPackageBlueprint; patch: Patch }) {
+  const presets = [25, 50, 100];
+  const [custom, setCustom] = useState(
+    () => bp.questionCountMode === 'fixed' && (bp.questionCount == null || !presets.includes(bp.questionCount)),
+  );
+  return (
+    <>
+      <Prompt>How many practice questions do you want?</Prompt>
+      <ChoiceGroup
+        theme={theme}
+        value={
+          bp.questionCountMode === 'ai_recommend'
+            ? 'ai'
+            : custom
+              ? 'custom'
+              : bp.questionCount != null && presets.includes(bp.questionCount)
+                ? String(bp.questionCount)
+                : null
+        }
+        onChange={(v) => {
+          if (v === 'ai') {
+            setCustom(false);
+            patch({ questionCountMode: 'ai_recommend', questionCount: null });
+          } else if (v === 'custom') {
+            setCustom(true);
+            patch({ questionCountMode: 'fixed', questionCount: null });
+          } else {
+            setCustom(false);
+            patch({ questionCountMode: 'fixed', questionCount: Number(v) });
+          }
+        }}
+        options={[
+          { value: 'ai', label: 'Let my AI recommend' },
+          ...presets.map((n) => ({ value: String(n), label: String(n) })),
+          { value: 'custom', label: 'Custom' },
+        ]}
+      />
+      {custom && (
+        <div style={{ marginTop: 12 }}>
+          <NumberField
+            value={bp.questionCount == null ? '' : String(bp.questionCount)}
+            onChange={(v) => patch({ questionCount: v === '' ? null : Number(v) })}
+            min={1}
+            max={MAX_QUESTIONS}
+            autoFocus
+          />
+        </div>
+      )}
+    </>
+  );
+}
+
 function CategoryEditor({
   bp,
   patch,
