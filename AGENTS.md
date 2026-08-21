@@ -2186,6 +2186,18 @@ workspaces list** (see `theme/nav.ts` order).
         and a set missing one says **which** parts are still needed instead of
         importing what it has. Parts are ordered by `partIndex` so the questions
         keep their run.
+      - **THE QUESTIONS IN HAND ALWAYS WIN, in the body AND in the footer.**
+        On this route both are true at once — the stage is still `handoff`, and
+        what was read out of the file is sitting in `preview` — so a branch that
+        tests the stage first leaves the review screen offering "Check the
+        questions" again with **no way to create the game at all**. That shipped
+        (Beta V 7.35, fixed in 7.36) because the body already tested `preview`
+        first and the footer did not, so the right screen was drawn under the
+        wrong button. Test `preview` first everywhere.
+        - Worth knowing about how it got through: the browser pass drove the
+          route, read the headings, and never looked at the footer on the last
+          screen. **Drive a new route to the act it exists for** — the create,
+          the save, the send — not to the screen before it.
       - **Nothing is created by checking.** Reading and checking are local and
         repeatable; only **Create study game** writes. A duplicate question is a
         **warning that keeps both**, matching the editor's own repeat marking —

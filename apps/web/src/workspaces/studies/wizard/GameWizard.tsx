@@ -451,7 +451,7 @@ export function GameWizard({
           />
         </div>
 
-        {restored && (stage === 'handoff' || safeIndex > 0) && (
+        {restored && !preview && (stage === 'handoff' || safeIndex > 0) && (
           <div
             style={{
               flex: 'none',
@@ -523,16 +523,12 @@ export function GameWizard({
           </button>
           <div style={{ flex: 1 }} />
           {busy && <span style={{ fontSize: 12.5, color: MUTED }}>{busy}</span>}
-          {stage === 'handoff' ? (
-            <button
-              type="button"
-              onClick={checkHandoff}
-              disabled={handoffTexts.length === 0}
-              style={primaryBtn(theme, handoffTexts.length === 0)}
-            >
-              {'Check the questions'}
-            </button>
-          ) : preview ? (
+          {/* The questions in hand always win. On the handoff route BOTH are
+              true — the stage is still the handoff, and the questions read out
+              of the file are sitting in `preview` — so testing the stage first
+              left the review screen offering "Check the questions" again and no
+              way to create the game at all. Reported by the owner, 2026-08. */}
+          {preview ? (
             <button
               type="button"
               onClick={createFromPreview}
@@ -540,6 +536,15 @@ export function GameWizard({
               style={primaryBtn(theme, !!busy || !plan.name.trim() || preview.length === 0)}
             >
               {'Create study game'}
+            </button>
+          ) : stage === 'handoff' ? (
+            <button
+              type="button"
+              onClick={checkHandoff}
+              disabled={handoffTexts.length === 0}
+              style={primaryBtn(theme, handoffTexts.length === 0)}
+            >
+              {'Check the questions'}
             </button>
           ) : onReview ? (
             <button type="button" onClick={finish} disabled={!!busy} style={primaryBtn(theme, !!busy)}>
@@ -1098,9 +1103,20 @@ function HandoffCard({
                 const files = e.target.files;
                 if (files) {
                   for (const f of Array.from(files)) {
-                    const text = (await f.text()).slice(0, MAX_HANDOFF_CHARS);
+                    const whole = await f.text();
                     clearProblems();
-                    setDocs((d) => [...d, { key: `${f.name}_${Date.now()}_${d.length}`, label: f.name, text }]);
+                    // Truncating silently would hand the reader a half-object
+                    // and report it as "not valid JSON", which blames the AI
+                    // for something this did.
+                    const text = whole.length > MAX_HANDOFF_CHARS ? '' : whole;
+                    setDocs((d) => [
+                      ...d,
+                      {
+                        key: `${f.name}_${Date.now()}_${d.length}`,
+                        label: text ? f.name : `${f.name} — too large to read`,
+                        text,
+                      },
+                    ]);
                   }
                 }
                 e.target.value = '';
