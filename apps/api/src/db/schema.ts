@@ -1315,6 +1315,16 @@ export const founderTradePrefs = sqliteTable('founder_trade_prefs', {
     .references(() => users.id, { onDelete: 'cascade' }),
   defaultConnectionId: text('default_connection_id'),
   defaultUnits: real('default_units'),
+  // How a joined size is arrived at: 'units' (the fixed `defaultUnits` above,
+  // which is what every existing setting is) or 'account_pct'. Null reads as
+  // 'units', so nobody's join changed when this column arrived.
+  sizeMode: text('size_mode'),
+  // The share of the RECIPIENT'S OWN account value a joined position's margin
+  // should consume. Null is "not stated" and is never read as a number — the
+  // same rule `defaultUnits` follows, and for the same reason.
+  sizePct: real('size_pct'),
+  pctRound: integer('pct_round', { mode: 'boolean' }).notNull().default(false),
+  pctRoundIncrement: real('pct_round_increment').notNull().default(0.5),
   // ---- SUPERSEDED auto-send columns (migration 0134) ----------------------
   // These said "I send to ONE person", and only the sender could set them.
   // `founder_trade_links` replaces them with a row per direction that either
@@ -1401,13 +1411,23 @@ export const ticketPresets = sqliteTable('ticket_presets', {
     .notNull()
     .unique()
     .references(() => users.id, { onDelete: 'cascade' }),
-  // 'units' | 'per_step' | 'cost'. Null = whatever suits the account (cost on a
-  // spot account, units everywhere else), which is what the chips did before.
+  // 'units' | 'per_step' | 'cost' | 'account_pct'. Null = whatever suits the
+  // account (cost on a spot account, units everywhere else), which is what the
+  // chips did before.
   mode: text('mode'),
   unitsPresets: text('units_presets'), // whole-unit instruments (FX, indices)
   fractionalPresets: text('fractional_presets'), // instruments sized in fractions
   stepPresets: text('step_presets'), // money per pip / per point
   costPresets: text('cost_presets'), // money spent, on a spot account
+  // Shares of ACCOUNT VALUE the position's estimated margin should consume. The
+  // percentage is the stored intent — never the units it happened to work out
+  // to, which are re-derived from the live account and quote every time.
+  pctPresets: text('pct_presets'),
+  // Optionally floor the money-per-pip an Account % preset works out to, so a
+  // size reads as $3.50/pip rather than $3.82/pip. Floor, always: rounding up
+  // would spend more of the account than was asked for.
+  pctRound: integer('pct_round', { mode: 'boolean' }).notNull().default(false),
+  pctRoundIncrement: real('pct_round_increment').notNull().default(0.5),
   showMargin: integer('show_margin', { mode: 'boolean' }).notNull().default(true),
   // Which reading carries the colour: 'free' (what is left to commit) or 'value'
   // (the whole account, regardless of what is open). Both are always shown; this

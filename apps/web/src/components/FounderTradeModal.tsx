@@ -1,6 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ApiError, api } from '../api/client';
-import type { FounderAccountView, FounderInvite, FounderTradePrefs } from '../api/types';
+import type {
+  FounderAccountView,
+  FounderInvite,
+  FounderSizeMode,
+  FounderTradePrefs,
+} from '../api/types';
 import { useAuth } from '../auth/AuthContext';
 import { isFounder } from '../auth/access';
 import { C } from '../theme/tokens';
@@ -426,7 +431,20 @@ function PrimaryStep({
   onJoin: () => void;
   onDecline: () => void;
 }) {
-  const size = fmtUnits(prefs?.defaultUnits ?? invite.recipientUnits);
+  // What is about to be sent, said in whichever terms the recipient sizes in.
+  // A PERCENTAGE HAS NO UNIT COUNT UNTIL THE ORDER GOES OUT — the server works
+  // it out from the account value and quote at that moment — so the modal states
+  // the share rather than a number that could already be wrong by the time JOIN
+  // is pressed.
+  const pctMode = prefs?.sizeMode === 'account_pct';
+  const fixedUnits = prefs?.defaultUnits ?? invite.recipientUnits;
+  const size = pctMode
+    ? prefs?.sizePct == null
+      ? ''
+      : `${prefs.sizePct}% of your account value`
+    : fixedUnits == null
+      ? ''
+      : fmtUnits(fixedUnits);
   const account = accounts.find((a) => a.connectionId === prefs?.defaultConnectionId) ?? null;
   const ready = !!size && !!account && canTrade;
 
@@ -483,7 +501,9 @@ function SizeSetup({
   prefs: FounderTradePrefs | null;
   onSaved: (p: FounderTradePrefs) => void;
 }) {
+  const [mode, setMode] = useState<FounderSizeMode>(prefs?.sizeMode ?? 'units');
   const [units, setUnits] = useState(prefs?.defaultUnits == null ? '' : String(prefs.defaultUnits));
+  const [pct, setPct] = useState(prefs?.sizePct == null ? '' : String(prefs.sizePct));
   const [connectionId, setConnectionId] = useState(
     prefs?.defaultConnectionId ?? accounts[0]?.connectionId ?? '',
   );
@@ -492,12 +512,23 @@ function SizeSetup({
 
   const save = async () => {
     const n = Number(units);
-    if (!Number.isFinite(n) || n <= 0) return setProblem('Enter a position size greater than zero');
+    const p = Number(pct);
+    if (mode === 'units' && (!Number.isFinite(n) || n <= 0)) {
+      return setProblem('Enter a position size greater than zero');
+    }
+    if (mode === 'account_pct' && (!Number.isFinite(p) || p <= 0 || p > 100)) {
+      return setProblem('Enter a share of your account between 0 and 100');
+    }
     if (!connectionId) return setProblem('Choose the account a joined trade goes to');
     setSaving(true);
     setProblem(null);
     try {
-      const { prefs: next } = await api.saveFounderPrefs({ defaultUnits: n, defaultConnectionId: connectionId });
+      const { prefs: next } = await api.saveFounderPrefs({
+        sizeMode: mode,
+        defaultUnits: Number.isFinite(n) && n > 0 ? n : null,
+        sizePct: Number.isFinite(p) && p > 0 && p <= 100 ? p : null,
+        defaultConnectionId: connectionId,
+      });
       onSaved(next);
     } catch (e) {
       setProblem(e instanceof ApiError ? e.message : 'That could not be saved');
@@ -518,15 +549,53 @@ function SizeSetup({
     >
       <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 10 }}>Your position size</div>
       {problem && <ErrorBox message={problem} />}
+      <div style={{ display: 'flex', gap: 8, marginBottom: 10 }}>
+        {([
+          ['units', 'Fixed units'],
+          ['account_pct', 'Account %'],
+        ] as const).map(([key, text]) => (
+          <button
+            key={key}
+            type="button"
+            onClick={() => setMode(key)}
+            aria-pressed={mode === key}
+            style={{
+              flex: 1,
+              padding: '10px 12px',
+              borderRadius: 10,
+              border: `1px solid ${mode === key ? C.gold : C.line2}`,
+              background: mode === key ? 'rgba(235,203,116,.14)' : 'transparent',
+              color: mode === key ? C.gold : C.muted,
+              fontSize: 14,
+              fontWeight: 700,
+              cursor: 'pointer',
+              fontFamily: 'inherit',
+            }}
+          >
+            {text}
+          </button>
+        ))}
+      </div>
       <div style={{ display: 'grid', gap: 10 }}>
-        <input
-          value={units}
-          onChange={(e) => setUnits(e.target.value)}
-          inputMode="decimal"
-          placeholder="e.g. 1000"
-          aria-label="Your position size in units"
-          style={inputStyle}
-        />
+        {mode === 'units' ? (
+          <input
+            value={units}
+            onChange={(e) => setUnits(e.target.value)}
+            inputMode="decimal"
+            placeholder="e.g. 1000"
+            aria-label="Your position size in units"
+            style={inputStyle}
+          />
+        ) : (
+          <input
+            value={pct}
+            onChange={(e) => setPct(e.target.value)}
+            inputMode="decimal"
+            placeholder="e.g. 25 (% of your account value)"
+            aria-label="Share of your account value, as a percentage"
+            style={inputStyle}
+          />
+        )}
         {accounts.length === 0 ? (
           <div style={{ fontSize: 13, color: C.amber }}>
             No live broker account is connected — add one under Live Brokers before joining.

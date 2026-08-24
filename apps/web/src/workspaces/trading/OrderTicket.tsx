@@ -5,6 +5,7 @@ import { forexPair } from './pips';
 import { TicketPresetMenu, fmtPct } from './TicketPresetMenu';
 import {
   DEFAULT_PRESETS,
+  accountPctSize,
   costOfSize,
   forgetTicketPresets,
   isCustom,
@@ -14,13 +15,16 @@ import {
   primaryPct,
   resolveBasis,
   resolveMode,
+  roundingFor,
   saveTicketPresets,
   secondaryPct,
   unitsForPreset,
   usageFor,
   warnPctFor,
+  type SizeInputs,
   type Usage,
 } from './ticketPresets';
+import { perStepValue, sizingProblemText, type AccountPctSize } from './sizing';
 import type {
   DeskAccount,
   DeskInstrument,
@@ -139,6 +143,19 @@ export function OrderTicket({ account, instruments, instrument, onInstrument, re
   // until this lands, so the chips are never missing while it loads.
   const [presets, setPresets] = useState<TicketPresets>(DEFAULT_PRESETS);
   const [presetError, setPresetError] = useState<string | null>(null);
+  // WHICH ACCOUNT % PRESET, IF ANY, IS DRIVING THE SIZE.
+  //
+  // The percentage is the intent and the units are not: they are re-derived on
+  // every render from the live account value, the live quote and the venue's own
+  // margin rate, so an account that grows or a market that moves moves the order
+  // with it. Typing in the size box clears this — that is the manual override,
+  // and from then on the number in the box is the number that goes out.
+  const [pctIntent, setPctIntent] = useState<number | null>(null);
+  // A fresh reading of THIS account, taken when a percentage-sized order goes to
+  // review. `account` arrives as a prop and its value can be a minute old, which
+  // is exactly long enough for a percentage of it to be the wrong size.
+  const [freshNav, setFreshNav] = useState<{ connectionId: string; nav: number | null } | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
 
   useEffect(() => {
     let live = true;
@@ -233,12 +250,17 @@ export function OrderTicket({ account, instruments, instrument, onInstrument, re
     if (!prefill) return;
     setSide(prefill.side);
     setType('market');
+    // A holding loaded in is a stated size, so it takes the ticket off any
+    // percentage that was driving it.
+    setPctIntent(null);
     setUnitsText(String(prefill.units));
     setResult(null);
     setConfirming(false);
   }, [prefill]);
 
-  const units = Number(unitsText.replace(/[, ]/g, ''));
+  // What is in the size box. It is the size that goes out UNLESS an Account %
+  // preset is driving the ticket, in which case the percentage is (see `units`).
+  const typedUnits = Number(unitsText.replace(/[, ]/g, ''));
   const limitPrice = priceText.trim() === '' ? null : Number(priceText);
   const typedNum = (t: string): number | null => (t.trim() === '' ? null : Number(t));
   const slInput = typedNum(slText);
@@ -317,31 +339,12 @@ export function OrderTicket({ account, instruments, instrument, onInstrument, re
     setProtectMode(next);
   };
 
-  // What one of those units is worth at this size, in the account's currency —
-  // the figure a trader sizes by. Needs the quote for the currency conversion,
-  // so it reads "—" for the second or two before the first quote lands.
-  const perStep =
-    factor != null && Number.isFinite(units) && units > 0 ? units * step * factor : null;
-
-  // Money at risk / on offer, priced through the quote → account-currency factor
-  // rather than assumed. Null whenever a piece is missing, so the ticket shows
-  // "—" instead of a confidently wrong number.
-  const money = (distance: number | null): number | null =>
-    distance == null || factor == null || !Number.isFinite(units) || units <= 0
-      ? null
-      : Math.abs(distance) * units * factor;
-  const riskDistance = reference != null && stopLoss != null ? reference - stopLoss : null;
-  const rewardDistance = reference != null && takeProfit != null ? takeProfit - reference : null;
-  const riskMoney = money(riskDistance);
-  const rewardMoney = money(rewardDistance);
-  const rr = riskMoney != null && rewardMoney != null && riskMoney > 0 ? rewardMoney / riskMoney : null;
-  const notional = reference != null && factor != null && Number.isFinite(units) ? units * reference * factor : null;
-  const marginEstimate = notional != null && spec?.marginRate != null ? notional * spec.marginRate : null;
-  // The share of what is available that THIS order would tie up, read the same
-  // two ways the chips are. Taken from the margin figure the summary is already
-  // showing rather than recomputed, so the percentage and the money beside it
-  // can never disagree.
-  const sizeUsage = usageFor(marginEstimate, account.marginAvailable, account.nav);
+  // ---- the account, the venue, and the size that follows from them ----------
+  //
+  // This sits above every money reading on the ticket because the SIZE can now
+  // come from a percentage rather than from the box: an Account % preset stores
+  // the share, and the units are worked out here from the live account value and
+  // the live quote on every render.
 
   // A spot account buys the asset outright: the whole cost leaves the balance,
   // there is no margin, and a sell disposes of coins already held. A margin
@@ -364,11 +367,67 @@ export function OrderTicket({ account, instruments, instrument, onInstrument, re
   const presetKind = ladderKind(presetMode, spec);
   const presetLadder = ladderFor(presets, presetKind);
   const presetCustom = isCustom(presets, presetKind);
-  const sizeInputs = { spec, price: chipPrice, factor, step };
+  const rounding = roundingFor(presets);
+  // THE ACCOUNT VALUE A PERCENTAGE IS MEASURED AGAINST is the same NAV the
+  // account strip prints as ACCOUNT VALUE and the chips' 'value' basis already
+  // reads — never a second interpretation of what the account is worth. The
+  // fresh reading only ever replaces it when there is one for THIS account.
+  const accountValue =
+    (freshNav && freshNav.connectionId === account.connectionId ? freshNav.nav : null) ?? account.nav;
+  const sizeInputs: SizeInputs = { spec, price: chipPrice, factor, step, accountValue, spot };
   const chips =
     presetKind === 'cost'
       ? usableCostChips(presetLadder, spec, chipPrice, presetCustom)
-      : usableChips(presetLadder, spec, presetCustom);
+      : // A PERCENTAGE IS NOT A SIZE, so the venue's size bounds must not be
+        // applied to it: filtering "5" against a 1,000-unit minimum drops the
+        // whole ladder and leaves a "1000%" chip in its place. Whether a share
+        // is usable is decided by what it works out to, which is what dims the
+        // chip and says why.
+        presetKind === 'pct'
+        ? presetLadder
+        : usableChips(presetLadder, spec, presetCustom);
+
+  // The live answer for whichever percentage is driving the ticket. Recomputed
+  // every render, so it follows the account, the quote, the instrument and the
+  // side without anything having to remember to invalidate it.
+  const pctSizing: AccountPctSize | null =
+    pctIntent == null ? null : accountPctSize(pctIntent, sizeInputs, rounding);
+
+  // THE SIZE THAT GOES OUT. A percentage keeps control until the trader takes it
+  // back by typing; a percentage that cannot currently be sized resolves to no
+  // size at all rather than falling back to whatever the box last held, which
+  // would be exactly the stale number this mode exists to avoid.
+  const units = pctIntent == null ? typedUnits : pctSizing?.units ?? Number.NaN;
+
+  // What one of those units is worth at this size, in the account's currency —
+  // the figure a trader sizes by. Needs the quote for the currency conversion,
+  // so it reads "—" for the second or two before the first quote lands.
+  const perStep = perStepValue(units, sizeInputs);
+
+  // Money at risk / on offer, priced through the quote → account-currency factor
+  // rather than assumed. Null whenever a piece is missing, so the ticket shows
+  // "—" instead of a confidently wrong number.
+  const money = (distance: number | null): number | null =>
+    distance == null || factor == null || !Number.isFinite(units) || units <= 0
+      ? null
+      : Math.abs(distance) * units * factor;
+  const riskDistance = reference != null && stopLoss != null ? reference - stopLoss : null;
+  const rewardDistance = reference != null && takeProfit != null ? takeProfit - reference : null;
+  const riskMoney = money(riskDistance);
+  const rewardMoney = money(rewardDistance);
+  const rr = riskMoney != null && rewardMoney != null && riskMoney > 0 ? rewardMoney / riskMoney : null;
+  const notional = reference != null && factor != null && Number.isFinite(units) ? units * reference * factor : null;
+  // The same canonical margin path the chips and the Account % presets use, and
+  // deliberately priced off `reference` — the price this order will actually
+  // transact at — where the chips price off the market. That difference is
+  // correct rather than drift: a resting order's margin is decided by its own
+  // trigger, a chip's by what the market is doing now.
+  const marginEstimate = costOfSize(units, { ...sizeInputs, price: reference });
+  // The share of what is available that THIS order would tie up, read the same
+  // two ways the chips are. Taken from the margin figure the summary is already
+  // showing rather than recomputed, so the percentage and the money beside it
+  // can never disagree.
+  const sizeUsage = usageFor(marginEstimate, account.marginAvailable, account.nav);
 
   // What a preset would tie up, read TWO ways, because they answer different
   // questions and a trader carrying positions needs both:
@@ -392,21 +451,32 @@ export function OrderTicket({ account, instruments, instrument, onInstrument, re
   const usageForUnits = (u: number | null): Usage =>
     u == null
       ? { free: null, value: null }
-      : usageFor(costOfSize(u, sizeInputs, spot), account.marginAvailable, account.nav);
+      : usageFor(costOfSize(u, sizeInputs), account.marginAvailable, account.nav);
   const usageForPreset = (value: number): Usage =>
-    usageForUnits(unitsForPreset(value, presetKind, sizeInputs));
+    usageForUnits(unitsForPreset(value, presetKind, sizeInputs, rounding));
   const overWarn = (pct: number | null): boolean => pct != null && pct >= warnPct;
 
   // Pressing a chip fills the size box. A money-per-pip or money-spent chip
   // needs the live quote to work a size out, so before one lands it dims rather
   // than filling in a size derived from nothing.
+  //
+  // AN ACCOUNT % CHIP IS THE ONE THAT DOES NOT SIMPLY FILL THE BOX. It records
+  // the percentage as the ticket's sizing intent; the box then follows the live
+  // answer (the effect below) until the trader types over it.
   const applyPreset = (value: number) => {
-    const u = unitsForPreset(value, presetKind, sizeInputs);
+    if (presetKind === 'pct') {
+      if (!Number.isFinite(value) || value <= 0) return;
+      setPctIntent(value);
+      return;
+    }
+    const u = unitsForPreset(value, presetKind, sizeInputs, rounding);
     if (u == null) return;
+    setPctIntent(null);
     setUnitsText(String(Number(u.toFixed(spec?.tradeUnitsPrecision ?? 0))));
   };
   const chipLabel = (value: number): string => {
     if (presetKind === 'step' || presetKind === 'cost') return `$${value.toLocaleString('en-US')}`;
+    if (presetKind === 'pct') return `${fmtPctChip(value)}%`;
     return value >= 1000 ? `${value / 1000}k` : String(value);
   };
 
@@ -421,13 +491,44 @@ export function OrderTicket({ account, instruments, instrument, onInstrument, re
     if (per <= 0) return;
     const step = Math.pow(10, spec.tradeUnitsPrecision);
     const sized = Math.max(spec.minimumTradeSize, Math.round((risk / per) * step) / step);
+    // Sizing from a stop is a size, so it takes the ticket back off a
+    // percentage — the two are different sizing intents and only one can hold.
+    setPctIntent(null);
     setUnitsText(String(Number(sized.toFixed(spec.tradeUnitsPrecision))));
   };
+
+  // THE BOX FOLLOWS THE PERCENTAGE while the percentage is in charge. Written
+  // here rather than at the press so it keeps up with the account and the quote
+  // — the whole point of a dynamic preset. It cannot fight the trader: typing
+  // fires the input's own onChange, which clears the intent, and this effect
+  // then stops running.
+  const pctUnits = pctSizing?.units ?? null;
+  const unitPrecision = spec?.tradeUnitsPrecision ?? 0;
+  useEffect(() => {
+    if (pctUnits == null) return;
+    setUnitsText(String(Number(pctUnits.toFixed(unitPrecision))));
+  }, [pctUnits, unitPrecision]);
+
+  // Whichever percentage is in force cannot describe an instrument the ticket
+  // has moved off, so a size that can no longer be worked out at all leaves the
+  // ticket on the last stated size rather than stuck refusing.
+  const pctProblemText =
+    pctSizing?.problem == null
+      ? null
+      : sizingProblemText(pctSizing.problem, {
+          spot,
+          minimumTradeSize: spec?.minimumTradeSize ?? null,
+          increment: rounding.enabled ? perUnitMoney(rounding.increment, account.currency) : undefined,
+        });
 
   // Local mirror of the server's protection check, so a wrong stop is caught in
   // the ticket rather than as a broker rejection.
   const problem = ((): string | null => {
     if (!spec) return 'Pick an instrument';
+    // A percentage that cannot currently be turned into a size says why, rather
+    // than reporting the generic "enter a size" for a box the trader did not
+    // fill in and is not driving.
+    if (pctProblemText) return pctProblemText;
     if (!Number.isFinite(units) || units <= 0) return 'Enter a size';
     if (units < spec.minimumTradeSize) {
       return `Minimum size is ${fmtUnits(spec.minimumTradeSize)}${spot ? ` ${baseAsset}` : ' units'}`;
@@ -475,13 +576,24 @@ export function OrderTicket({ account, instruments, instrument, onInstrument, re
 
   const place = async () => {
     if (!spec || problem) return;
+    // RE-DERIVED AT THE MOMENT OF SENDING, not read off the box. A percentage is
+    // the sizing intent right up to the order going out, so the size is worked
+    // out one last time from the account value and quote in force now — the
+    // figures on the review panel are computed the same way on every render, so
+    // this agrees with what was just read and confirmed.
+    const sendUnits = pctIntent == null ? units : accountPctSize(pctIntent, sizeInputs, rounding).units;
+    if (sendUnits == null || !Number.isFinite(sendUnits) || sendUnits <= 0) {
+      setResult({ kind: 'error', message: 'That size could not be worked out just now — nothing was sent' });
+      setConfirming(false);
+      return;
+    }
     setSending(true);
     try {
       const res = await api.placeDeskOrder({
         connectionId: account.connectionId,
         instrument: spec.instrument,
         side,
-        units,
+        units: sendUnits,
         type,
         price: type === 'market' ? null : limitPrice,
         stopLoss,
@@ -492,8 +604,8 @@ export function OrderTicket({ account, instruments, instrument, onInstrument, re
         kind: 'ok',
         message:
           res.status === 'filled'
-            ? `${verb} ${fmtUnits(res.units ?? units)} ${res.instrument}${res.fillPrice == null ? '' : ` at ${px(res.fillPrice)}`}`
-            : `${type === 'market' ? 'Market' : type === 'limit' ? 'Limit' : 'Stop'} order working: ${side === 'long' ? 'buy' : 'sell'} ${fmtUnits(units)} ${res.instrument}${type === 'market' ? '' : ` at ${px(limitPrice)}`}`,
+            ? `${verb} ${fmtUnits(res.units ?? sendUnits)} ${res.instrument}${res.fillPrice == null ? '' : ` at ${px(res.fillPrice)}`}`
+            : `${type === 'market' ? 'Market' : type === 'limit' ? 'Limit' : 'Stop'} order working: ${side === 'long' ? 'buy' : 'sell'} ${fmtUnits(sendUnits)} ${res.instrument}${type === 'market' ? '' : ` at ${px(limitPrice)}`}`,
       });
       setConfirming(false);
       onPlaced();
@@ -503,6 +615,29 @@ export function OrderTicket({ account, instruments, instrument, onInstrument, re
     } finally {
       setSending(false);
     }
+  };
+
+  // GOING TO REVIEW ON A PERCENTAGE-SIZED ORDER RE-READS THE ACCOUNT FIRST.
+  // The quote is polled every couple of seconds, but the account value arrives
+  // as a prop and can be a minute old — long enough for a share of it to be the
+  // wrong size. A failed read leaves the prop's value in place and the review
+  // still opens: refusing to review because a refresh did not answer would be
+  // worse than reviewing against the figure already on screen.
+  const review = async () => {
+    setResult(null);
+    if (pctIntent != null) {
+      setRefreshing(true);
+      try {
+        const { accounts } = await api.deskAccounts();
+        const fresh = accounts.find((a) => a.connectionId === account.connectionId);
+        if (fresh && fresh.nav != null) setFreshNav({ connectionId: fresh.connectionId, nav: fresh.nav });
+      } catch {
+        /* keep the value already on screen */
+      } finally {
+        setRefreshing(false);
+      }
+    }
+    setConfirming(true);
   };
 
   const live = account.env === 'live';
@@ -587,7 +722,14 @@ export function OrderTicket({ account, instruments, instrument, onInstrument, re
           <Field label={spot ? `Size (${baseAsset})` : 'Size (units)'}>
             <input
               value={unitsText}
-              onChange={(e) => setUnitsText(e.target.value)}
+              // TYPING IS THE MANUAL OVERRIDE. From here the number in the box
+              // is the number that goes out, and the percentage stops driving
+              // the ticket — which is why this clears the intent rather than
+              // merely editing alongside it.
+              onChange={(e) => {
+                setPctIntent(null);
+                setUnitsText(e.target.value);
+              }}
               inputMode="decimal"
               style={{ ...input, width: '100%', boxSizing: 'border-box' }}
             />
@@ -629,21 +771,43 @@ export function OrderTicket({ account, instruments, instrument, onInstrument, re
             The cog at the end is where all of that is set. */}
         <div style={{ display: 'flex', gap: 5, marginTop: 7, flexWrap: 'wrap', alignItems: 'flex-start' }}>
           {chips.map((value) => {
-            const u = unitsForPreset(value, presetKind, sizeInputs);
-            const usage = usageForPreset(value);
+            // An Account % chip carries its whole working: the share asked for,
+            // the size that comes to, and what a pip is worth at that size. A
+            // percentage on its own is not something a trader can size from.
+            const sized = presetKind === 'pct' ? accountPctSize(value, sizeInputs, rounding) : null;
+            const u = sized ? sized.units : unitsForPreset(value, presetKind, sizeInputs, rounding);
+            const usage = usageForUnits(u);
             const lead = primaryPct(usage, basis);
             const second = secondaryPct(usage, basis);
             const over = overWarn(lead);
+            const active = presetKind === 'pct' && pctIntent === value;
             return (
               <button
                 key={value}
                 onClick={() => applyPreset(value)}
                 disabled={u == null}
+                aria-pressed={presetKind === 'pct' ? active : undefined}
                 title={[
-                  presetKind === 'step' ? `${chipLabel(value)} per ${stepName}` : chipLabel(value),
-                  u == null ? null : `${fmtUnits(u)}${spot ? ` ${baseAsset}` : ' units'}`,
+                  presetKind === 'step'
+                    ? `${chipLabel(value)} per ${stepName}`
+                    : presetKind === 'pct'
+                      ? `${chipLabel(value)} of your account value in margin`
+                      : chipLabel(value),
+                  u == null
+                    ? sized?.problem
+                      ? sizingProblemText(sized.problem, {
+                          spot,
+                          minimumTradeSize: spec?.minimumTradeSize ?? null,
+                          increment: rounding.enabled
+                            ? perUnitMoney(rounding.increment, account.currency)
+                            : undefined,
+                        })
+                      : null
+                    : `${fmtUnits(u)}${spot ? ` ${baseAsset}` : ' units'}`,
+                  sized?.perStep == null ? null : `${perUnitMoney(sized.perStep, account.currency)} / ${stepName}`,
                   usage.free == null ? null : `${fmtPct(usage.free)} of your ${freeLabel}`,
                   usage.value == null ? null : `${fmtPct(usage.value)} of your account value`,
+                  sized?.rounded ? 'rounded down to your increment' : null,
                 ]
                   .filter(Boolean)
                   .join(' · ')}
@@ -651,11 +815,25 @@ export function OrderTicket({ account, instruments, instrument, onInstrument, re
                   ...chip,
                   ...chipStack,
                   ...(over ? overChip : null),
+                  // The ring is drawn OVER the warning rather than instead of
+                  // it: which preset is in charge matters, and a size past the
+                  // trader's own threshold matters more.
+                  ...(active ? activeChip : null),
                   opacity: u == null ? 0.4 : 1,
                   cursor: u == null ? 'default' : 'pointer',
                 }}
               >
                 <span>{chipLabel(value)}</span>
+                {/* The size the share works out to, and what a pip is worth at
+                    it. Both re-derived every render, so a chip pressed an hour
+                    ago is not what is being read here. */}
+                {sized && (
+                  <span style={chipCalc}>
+                    {u == null
+                      ? '—'
+                      : `${fmtUnits(u)}${sized.perStep == null ? '' : ` · ${perUnitMoney(sized.perStep, account.currency)}`}`}
+                  </span>
+                )}
                 {/* Both readings, the one that carries the colour first. The
                     second is deliberately quiet: two coloured percentages on one
                     small button is a chip nobody can read at a glance. */}
@@ -679,8 +857,12 @@ export function OrderTicket({ account, instruments, instrument, onInstrument, re
             baseAsset={baseAsset}
             basis={basis}
             warnPct={warnPct}
-            hasAccountValue={account.nav != null}
+            hasAccountValue={accountValue != null}
+            currency={account.currency}
             pctFor={(value) => primaryPct(usageForPreset(value), basis)}
+            // The whole working for one Account % row, so the editor previews
+            // exactly what the chip will read rather than a second estimate.
+            previewFor={(value) => accountPctSize(value, sizeInputs, rounding)}
             onChange={changePresets}
             saveError={presetError}
           />
@@ -808,6 +990,30 @@ export function OrderTicket({ account, instruments, instrument, onInstrument, re
             {stopLoss != null && <> · stop {px(stopLoss)}</>}
             {takeProfit != null && <> · target {px(takeProfit)}</>}
           </div>
+          {/* THE FINAL FIGURES, on the size that is about to be sent. On a
+              percentage-sized order the account percentage here is the ACTUAL
+              one after rounding and the venue's own precision, not the target
+              that was pressed — rounding down deliberately leaves the trade
+              under the allocation, and saying otherwise would hide that. */}
+          <div style={{ fontSize: 11, color: MUTED, marginTop: 6, fontFamily: MONO }}>
+            {[
+              perStep == null ? null : `${perUnitMoney(perStep, account.currency)} / ${stepName}`,
+              marginEstimate == null
+                ? null
+                : `${spot ? 'cost' : 'margin'} ${fmtMoney(marginEstimate, account.currency)}`,
+              sizeUsage.value == null ? null : `${fmtPct(sizeUsage.value)} of account value`,
+              sizeUsage.free == null ? null : `${fmtPct(sizeUsage.free)} of ${freeLabel}`,
+            ]
+              .filter(Boolean)
+              .join(' · ') || '—'}
+          </div>
+          {pctIntent != null && (
+            <div style={{ fontSize: 10.5, color: FAINT, marginTop: 4 }}>
+              {`Sized from ${fmtPctChip(pctIntent)}% of your account value${
+                pctSizing?.rounded ? `, rounded down to the nearest ${perUnitMoney(rounding.increment, account.currency)} / ${stepName}` : ''
+              }${pctSizing?.capped ? ', capped at the largest order this account takes' : ''}.`}
+            </div>
+          )}
           {/* Spot has no short: a sell disposes of coins the account already
               holds, and one that does not hold them is simply refused. Saying so
               here is the difference between an obvious no-op and a confusing
@@ -839,11 +1045,11 @@ export function OrderTicket({ account, instruments, instrument, onInstrument, re
       ) : (
         <div>
           <button
-            onClick={() => { setResult(null); setConfirming(true); }}
-            disabled={!!problem}
+            onClick={() => void review()}
+            disabled={!!problem || refreshing}
             style={{ ...placeBtn, width: '100%', background: problem ? 'rgba(255,255,255,.06)' : `linear-gradient(180deg,${sideColor},${side === 'long' ? '#22935a' : '#c23a4c'})`, color: problem ? FAINT : '#fff', cursor: problem ? 'not-allowed' : 'pointer' }}
           >
-            {problem ?? `Review ${side === 'long' ? 'buy' : 'sell'} ${Number.isFinite(units) ? fmtUnits(units) : ''} ${instrument}`}
+            {problem ?? (refreshing ? 'Checking your account…' : `Review ${side === 'long' ? 'buy' : 'sell'} ${Number.isFinite(units) ? fmtUnits(units) : ''} ${instrument}`)}
           </button>
           <div style={{ fontSize: 10.5, color: FAINT, marginTop: 8, lineHeight: 1.5 }}>
             {"Orders go straight to your own broker account. Nothing here is investment advice."}
@@ -967,6 +1173,12 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
       <div style={{ display: 'flex', flexDirection: 'column', minWidth: 0 }}>{children}</div>
     </div>
   );
+}
+
+// A percentage as a chip reads it: whole where it is whole, one decimal where
+// somebody typed one. "12.5%" and "40%", never "40.0%".
+function fmtPctChip(n: number): string {
+  return Number.isInteger(n) ? String(n) : String(Number(n.toFixed(2)));
 }
 
 // A count of pips or points. Thousands are separated (a 1,355-point stop on
@@ -1100,6 +1312,14 @@ const chip: CSSProperties = { background: 'rgba(255,255,255,.05)', border: `1px 
 // height whether or not the reading is being shown.
 const chipStack: CSSProperties = { display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 1, padding: '5px 10px 4px', minWidth: 44 };
 const chipPct: CSSProperties = { fontSize: 9, fontWeight: 700, fontFamily: MONO };
+// The size and money-per-pip an Account % chip works out to, under the share it
+// was asked for. Quieter than the share above it: the percentage is what was
+// chosen, this is what it currently comes to.
+const chipCalc: CSSProperties = { fontSize: 8.5, fontFamily: MONO, color: '#9fb0d6', whiteSpace: 'nowrap' };
+// The percentage currently driving the ticket. Marked rather than merely
+// pressed: unlike every other chip it keeps control of the size until the
+// trader types, so which one is in charge has to be visible.
+const activeChip: CSSProperties = { boxShadow: `inset 0 0 0 1.5px ${GOLD}` };
 // Past the trader's own threshold — by default, more free margin than they have.
 const overChip: CSSProperties = { borderColor: 'rgba(239,84,104,.55)', background: 'rgba(239,84,104,.08)', color: '#ffb4ab' };
 // Price ⇄ pips for the stop and target pair. Small and to the right of the two

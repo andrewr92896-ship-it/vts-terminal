@@ -392,6 +392,20 @@ workspaces list** (see `theme/nav.ts` order).
       result screenshot is read. A **Kraken margin** row is neither and stays
       watch-only, which is what the desk's own `close`/`amend` refusals already
       say.
+    - **`trading/sizing.ts` IS THE CANONICAL SIZING MATH, AND IT EXISTS TWICE ON
+      PURPOSE** (`apps/api/src/trading/sizing.ts` and
+      `apps/web/src/workspaces/trading/sizing.ts`, identical below their
+      headers). Money-from-a-size (`costOfUnits`), size-from-money
+      (`unitsForCost`), the per-pip value and the whole Account % computation
+      live here, pure and import-free. The ticket sizes in the browser on every
+      quote tick and a Founder join sizes on the server at the moment the order
+      goes out, so it genuinely has to be in both places; the repo's answer to
+      that is the one `pips.ts` and `forex.ts` already use — a documented mirror.
+      What makes it safe is **`npm run verify:sizing`**, which imports BOTH files
+      and runs every fixture through each, so a change made to one and not the
+      other fails there rather than in production as a size nobody meant. It is
+      in `scripts/verify.mjs`, so CI runs it. **Change one file and change the
+      other.**
     - **Server:** `trading/orderDesk.ts` (validation, journaling, the personal
       boundary) over `trading/deskBrokers.ts` (the adapters) over the two write
       connectors — `brokers/oandaOrders.ts` and `brokers/krakenOrders.ts`. Those
@@ -494,10 +508,11 @@ workspaces list** (see `theme/nav.ts` order).
         default improved in code still reach everyone who never overrode it, and
         what makes clearing the list hand the built-ins back rather than leaving
         a trader with no shortcuts.
-      - **Four ladders, kept apart because a number means a different thing in
+      - **Five ladders, kept apart because a number means a different thing in
         each**: whole-unit instruments (thousands — a micro lot is 1,000),
         fractional ones (0.01 … 1, for anything the broker allows a fractional
-        size on), **money per pip/point**, and **money spent** on a spot account.
+        size on), **money per pip/point**, **money spent** on a spot account, and
+        a **share of account value** (see Account % below).
         1,000 is an ordinary FX size and a ruinous bitcoin one, so one shared
         ladder would be wrong on whichever instrument it was not written for.
         `ladderKind` picks: the mode decides, except that units splits by
@@ -546,6 +561,74 @@ workspaces list** (see `theme/nav.ts` order).
         (the side the order would pay) while the summary prices off the
         **order** — a limit order's own trigger — which is the correct difference,
         not a drift.
+      - **ACCOUNT % — a preset that stores a SHARE, not a size** (owner request,
+        2026-08; `ticket_presets.pct_presets`, migration `0135`). A fifth mode
+        beside Units and $ per pip: each button is a percentage, and the size it
+        works out to is the one whose **estimated margin** takes about that share
+        of the account's current value.
+        - **IT IS NOT A RISK CALCULATION AND MUST NEVER READ THE STOP.** "Account
+          %" is the share of account value the position's required margin
+          consumes; it says nothing about what the trade could lose. The existing
+          **Risk (USD) / stop-first** workflow is untouched and independent — a
+          stop entered afterwards still prices the risk off the final size, it
+          just does not decide it. Do not merge the two.
+        - **THE PERCENTAGE IS THE STORED INTENT AND THE UNITS ARE NOT.** An
+          account that grows has to place a correspondingly larger trade from the
+          same button, which is only true if the share rather than a snapshot of
+          the size is what is saved. The units are re-derived on every render
+          from the live account value, the live quote and the venue's own margin
+          rate, once more when the order goes to Review, and once more at the
+          moment it is sent.
+        - **IT REUSES THE MARGIN PATH THE TICKET ALREADY SHOWS**, inverted:
+          `unitsForCost` is the exact inverse of `costOfUnits`, which is the one
+          function behind the chips' readings and the **Margin (est.)** cell
+          alike. Nothing here re-derives a broker's margin rule, and **an
+          instrument that states no margin rate is a refusal rather than a 2%
+          guess**.
+        - **PRESSING A % CHIP TAKES CONTROL OF THE SIZE; TYPING TAKES IT BACK.**
+          `pctIntent` in `OrderTicket.tsx` is the whole mechanism: while it is
+          set the box follows the live answer, and the size box's own `onChange`
+          clears it — which is what makes a manual edit an override rather than
+          something the next quote tick overwrites. Sizing from a stop, loading a
+          holding, and switching account (both surfaces key the ticket on the
+          connection) all clear it too.
+        - **THE ACCOUNT VALUE IS THE SAME NAV EVERY OTHER SURFACE READS**
+          (`DeskAccount.nav` — what the account strip prints as ACCOUNT VALUE and
+          what the chips' 'value' basis is measured against). There is
+          deliberately no second interpretation of what an account is worth.
+          Going to Review on a percentage-sized order **re-reads the accounts
+          endpoint first**, because the quote is polled every two seconds and the
+          account arrives as a prop that can be a minute old — long enough for a
+          share of it to be the wrong size. A failed refresh keeps the figure
+          already on screen rather than blocking the review.
+        - **OPTIONAL $/PIP ROUNDING, AND IT IS A FLOOR** (`pct_round` /
+          `pct_round_increment`, default off at **$0.50**). The money-per-pip is
+          floored to the increment and the size is derived from THAT, so a trade
+          reads "$3.50 / pip" rather than "$3.82 / pip". **Never nearest and
+          never up**: a cleaner number must not be bought by committing more of
+          the account than was asked for. Everything is then recomputed from the
+          size that will actually be sent, and **the percentage reported
+          afterwards is the ACTUAL one** — 46%, not the 50% that was pressed.
+          Repeating the target there would hide exactly the thing rounding does.
+          A share too small to make one increment is **refused with a reason**
+          (lower the increment, turn rounding off, or raise the share), never
+          sent as a zero.
+        - **A SIZE BELOW THE VENUE'S MINIMUM IS REFUSED, NOT RAISED TO IT** —
+          raising it spends more of the account than was asked for, silently,
+          which is the failure this mode exists to prevent. A size above the
+          venue's **maximum** is clamped DOWN and says so, and the actual
+          percentage then reports what the clamped size uses.
+        - **A PERCENTAGE IS NOT A SIZE, so the venue's size bounds must never
+          filter the ladder.** Running "5" through `usableChips` against a
+          1,000-unit minimum drops every chip and leaves a "1000%" button in
+          their place. Whether a share is usable is decided by what it works out
+          to, which is what dims the chip and supplies the reason.
+        - Everything the existing presets do still applies: the chips carry their
+          two margin readings, colour by the trader's chosen basis and turn red
+          at their own threshold — **on the ACTUAL margin after rounding**. The
+          chip also carries the size and the money-per-pip, because a percentage
+          on its own is not something anybody can size from, and the editor
+          previews the same computed answer rather than a second estimate of it.
       - **Nobody else's, deliberately** — unlike `trading_desk_settings`, which a
         desk lead may edit for a teammate. A desk lead may change how a
         teammate's results are scored; the shortcuts on a ticket belong to
@@ -782,6 +865,35 @@ workspaces list** (see `theme/nav.ts` order).
       snapshots the inviter's size for **display** and the join never reads it.
       Null is "not stated" and is never read as a number — sending an order at a
       size nobody chose is the one failure this feature must not have.
+      - **IT CAN BE A FIXED SIZE OR A SHARE OF THE JOINER'S OWN ACCOUNT**
+        (`size_mode` / `size_pct` / `pct_round` / `pct_round_increment`,
+        migration `0135`; `resolveJoinSize` in `founderTrades.ts`). `units` is
+        the fixed figure and is what **every setting made before this existed
+        is** — a null `size_mode` reads as it, so nobody's join changed on
+        deploy. `account_pct` is the same Account % definition the order ticket
+        uses, with the same optional floor-rounding, applied to the RECIPIENT'S
+        own account value, quote and margin requirement.
+      - **A PERCENTAGE IS RESOLVED AT JOIN TIME, BEFORE THE CLAIM.** The size is
+        worked out from the account moments before the order goes out, never
+        read off anything stored — which is the whole reason the share rather
+        than the units is what is saved. Resolving before the claim also keeps
+        the existing property that a refusal costs nothing and can be retried at
+        once. A share that cannot be priced right now **refuses**; it never falls
+        back to a stale unit count and certainly never to the inviter's.
+      - **Whether a size has been STATED is checked before the account is**
+        (`assertSizeStated`), because a percentage needs the account to resolve
+        and somebody who has set up neither should still be told about the size
+        first — the order this refused in before percentages existed.
+      - The settings preview (`previewJoinSize`,
+        `GET /api/founder-trades/size-preview`) is **informational and stores
+        nothing**: it says what the saved share currently comes to, priced on a
+        liquid pair it names, because a size genuinely differs per instrument.
+        It is read from the server so the preview and the join come out of the
+        same code.
+      - **Nothing else about the workflow moved** — invitation routing, the
+        stop and target that travel, join/decline, the funded question, the
+        screenshot, the reminders and the permission rules are all untouched.
+        Only how the joiner's own size may be arrived at changed.
     - **WHAT TRAVELS IS THE GROUP'S RULE, SET ONCE FOR EVERYBODY**
       (`trading/founderTradeConfig.ts` over the `app_settings` key
       `founderTrades.share`; `GET|PUT /api/founder-trades/config`, founder-level,
@@ -5710,6 +5822,13 @@ fails it fails at one of them and that one is the fastest thing to re-run:
   app cannot show you: the draw is a proportion that only appears over hundreds
   of questions, and the breakdown's arithmetic is right or wrong in ways a
   screenshot cannot tell you.
+- **Position sizing: `npm run verify:sizing`** after touching either
+  `sizing.ts`. It is the only check that imports the web copy AND the server
+  copy and runs both through the same fixtures, so it is what stops the two
+  mirrors drifting — and drift there is silent: the ticket would show one size
+  and a Founder join would place another. It also pins the Account % arithmetic
+  against figures read off a live ticket, and the floor-rounding rule across
+  every percentage from 1 to 100.
 - **Credential encryption: `npm run verify:secretbox`** after touching
   `security/secretbox.ts` or `security/credentialsKey.ts`. Everything it checks
   fails *silently* in production: a ciphertext not bound to its row still

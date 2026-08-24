@@ -2,6 +2,11 @@ import crypto from 'node:crypto';
 import { eq } from 'drizzle-orm';
 import { db } from '../db/index.js';
 import { ticketPresets, type TicketPresetRow } from '../db/schema.js';
+import {
+  DEFAULT_PIP_ROUNDING_INCREMENT,
+  MAX_PIP_ROUNDING_INCREMENT,
+  MIN_PIP_ROUNDING_INCREMENT,
+} from './sizing.js';
 
 // The order ticket's quick-size buttons, as the trader has set them up.
 //
@@ -22,7 +27,7 @@ import { ticketPresets, type TicketPresetRow } from '../db/schema.js';
 // settings a lead can edit for a teammate, a ticket belongs to the person
 // sending the order.
 
-export type TicketPresetMode = 'units' | 'per_step' | 'cost';
+export type TicketPresetMode = 'units' | 'per_step' | 'cost' | 'account_pct';
 
 // Which of the two readings on a preset carries its colour. They answer
 // different questions and the chips show both: 'free' is what is left to commit
@@ -38,6 +43,15 @@ export interface TicketPresets {
   fractional: number[] | null; // instruments the broker allows a fractional size on
   step: number[] | null; // money per pip / per point
   cost: number[] | null; // money spent, on a spot account
+  // Shares of ACCOUNT VALUE the position's estimated margin should consume.
+  // **The percentage is what is stored, never the units it worked out to** — an
+  // account that grows has to place a larger trade from the same button, which
+  // is only true if the intent rather than a snapshot of the size is saved.
+  pct: number[] | null;
+  /** Floor the money-per-pip an Account % preset works out to. */
+  pctRound: boolean;
+  /** The increment it is floored to, in account currency per pip/point. */
+  pctRoundIncrement: number;
   showMargin: boolean;
   /** Which reading colours a preset. Null = 'free', as it always was. */
   marginBasis: MarginBasis | null;
@@ -54,6 +68,9 @@ export const DEFAULT_TICKET_PRESETS: TicketPresets = {
   fractional: null,
   step: null,
   cost: null,
+  pct: null,
+  pctRound: false,
+  pctRoundIncrement: DEFAULT_PIP_ROUNDING_INCREMENT,
   showMargin: true,
   marginBasis: null,
   marginWarnPct: 100,
@@ -66,7 +83,7 @@ export const DEFAULT_TICKET_PRESETS: TicketPresets = {
 const MAX_PRESETS = 15;
 
 function isMode(v: unknown): v is TicketPresetMode {
-  return v === 'units' || v === 'per_step' || v === 'cost';
+  return v === 'units' || v === 'per_step' || v === 'cost' || v === 'account_pct';
 }
 
 function isBasis(v: unknown): v is MarginBasis {
@@ -77,11 +94,14 @@ function isBasis(v: unknown): v is MarginBasis {
 // a row that will not parse must not take the ticket's shortcuts away with it,
 // and an empty result falls back to the built-in ladder like a null does.
 function parseLadder(text: string | null): number[] | null {
+  return normalizeLadder(parseLadderRaw(text));
+}
+
+/** The stored JSON, before any ladder's own rules are applied to it. */
+function parseLadderRaw(text: string | null): unknown {
   if (!text) return null;
   try {
-    const raw = JSON.parse(text);
-    if (!Array.isArray(raw)) return null;
-    return normalizeLadder(raw);
+    return JSON.parse(text);
   } catch {
     return null;
   }
@@ -105,6 +125,33 @@ export function normalizeLadder(raw: unknown): number[] | null {
   return out.length > 0 ? out : null;
 }
 
+// A percentage ladder. Same rules as any other ladder plus the one that only
+// applies here: a share of an account cannot exceed the whole of it, so anything
+// over 100 is dropped rather than stored as a size the desk would refuse.
+export function normalizePctLadder(raw: unknown): number[] | null {
+  if (!Array.isArray(raw)) return null;
+  const out: number[] = [];
+  for (const v of raw) {
+    const n = typeof v === 'number' ? v : Number(v);
+    if (!Number.isFinite(n) || n <= 0 || n > 100) continue;
+    const clean = Number(n.toFixed(4));
+    if (!out.includes(clean)) out.push(clean);
+    if (out.length >= MAX_PRESETS) break;
+  }
+  return out.length > 0 ? out : null;
+}
+
+// Clamped rather than refused, exactly as the warning threshold is: a save that
+// bounced would leave the trader with the previous increment and nothing on
+// screen saying why.
+function clampIncrement(v: number): number {
+  const n = Number(v);
+  if (!Number.isFinite(n) || n <= 0) return DEFAULT_PIP_ROUNDING_INCREMENT;
+  return Number(
+    Math.max(MIN_PIP_ROUNDING_INCREMENT, Math.min(MAX_PIP_ROUNDING_INCREMENT, n)).toFixed(4),
+  );
+}
+
 function rowToPresets(row: TicketPresetRow): TicketPresets {
   return {
     mode: isMode(row.mode) ? row.mode : null,
@@ -112,6 +159,9 @@ function rowToPresets(row: TicketPresetRow): TicketPresets {
     fractional: parseLadder(row.fractionalPresets),
     step: parseLadder(row.stepPresets),
     cost: parseLadder(row.costPresets),
+    pct: normalizePctLadder(parseLadderRaw(row.pctPresets)),
+    pctRound: row.pctRound,
+    pctRoundIncrement: clampIncrement(row.pctRoundIncrement),
     showMargin: row.showMargin,
     marginBasis: isBasis(row.marginBasis) ? row.marginBasis : null,
     marginWarnPct: clampWarn(row.marginWarnPct),
@@ -148,6 +198,12 @@ export async function setTicketPresets(
       patch.fractional === undefined ? current.fractional : normalizeLadder(patch.fractional),
     step: patch.step === undefined ? current.step : normalizeLadder(patch.step),
     cost: patch.cost === undefined ? current.cost : normalizeLadder(patch.cost),
+    pct: patch.pct === undefined ? current.pct : normalizePctLadder(patch.pct),
+    pctRound: patch.pctRound === undefined ? current.pctRound : !!patch.pctRound,
+    pctRoundIncrement:
+      patch.pctRoundIncrement === undefined
+        ? current.pctRoundIncrement
+        : clampIncrement(patch.pctRoundIncrement),
     showMargin: patch.showMargin === undefined ? current.showMargin : !!patch.showMargin,
     marginBasis:
       patch.marginBasis === undefined
@@ -168,6 +224,9 @@ export async function setTicketPresets(
     fractionalPresets: json(next.fractional),
     stepPresets: json(next.step),
     costPresets: json(next.cost),
+    pctPresets: json(next.pct),
+    pctRound: next.pctRound,
+    pctRoundIncrement: next.pctRoundIncrement,
     showMargin: next.showMargin,
     marginBasis: next.marginBasis,
     marginWarnPct: next.marginWarnPct,

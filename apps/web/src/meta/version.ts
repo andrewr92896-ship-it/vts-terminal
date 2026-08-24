@@ -11,9 +11,19 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 7.36';
+export const APP_VERSION = 'Beta V 7.37';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 7.37',
+    date: 'August 24, 2026',
+    notes: [
+      'Order ticket presets can now be a share of your account. Pick “Account %” under the cog and each button becomes a percentage — the size it works out to, and what a pip is worth at it, are shown on the button and recalculated from your live account value, the live quote and your broker’s own margin requirement.',
+      'A percentage keeps controlling the size until you type over it, and the order is sized again from your account the moment you review and again when you send. Typing in the size box takes it back to a fixed size.',
+      'Optional: round the calculated $/pip to an increment you set (default $0.50). It always rounds DOWN, and the percentage shown afterwards is what the trade actually uses, not the one you asked for. A share too small to make one increment says so rather than sending anything.',
+      'Founder trades ▸ When you join a trade can be set the same way: fixed units as before, or a share of your own account value worked out at the moment you join. The preview shows what that currently comes to. Nothing about the sender’s size, the stop, the target or anything else in the workflow changed.',
+    ],
+  },
   {
     version: 'Beta V 7.36',
     date: 'August 21, 2026',

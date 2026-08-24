@@ -1,6 +1,13 @@
 import { useEffect, useRef, useState, type CSSProperties } from 'react';
 import { Icon } from '../../components/Icon';
 import { DEFAULT_LADDER, MAX_PRESETS, ladderPatch, warnPatch, type PresetKind } from './ticketPresets';
+import {
+  DEFAULT_PIP_ROUNDING_INCREMENT,
+  MAX_PIP_ROUNDING_INCREMENT,
+  MIN_PIP_ROUNDING_INCREMENT,
+  sizingProblemText,
+  type AccountPctSize,
+} from './sizing';
 import type { MarginBasis, TicketPresetMode, TicketPresets } from '../../api/types';
 
 // The cog at the end of the order ticket's quick-size row: what the buttons are,
@@ -48,8 +55,12 @@ interface Props {
   warnPct: number;
   /** Whether the account is reporting a value to measure the second basis against. */
   hasAccountValue: boolean;
+  /** The account's own currency, for the rounding increment. */
+  currency: string;
   /** What a preset would tie up on the basis in force. Null when unknown. */
   pctFor: (value: number) => number | null;
+  /** The whole working for an Account % row — the same one the chip renders. */
+  previewFor: (value: number) => AccountPctSize;
   onChange: (patch: Partial<TicketPresets>) => void;
   saveError: string | null;
 }
@@ -66,7 +77,9 @@ export function TicketPresetMenu({
   basis,
   warnPct,
   hasAccountValue,
+  currency,
   pctFor,
+  previewFor,
   onChange,
   saveError,
 }: Props) {
@@ -109,27 +122,45 @@ export function TicketPresetMenu({
     setDraft({ kind, rows });
     const parsed: number[] = [];
     for (const r of rows) {
-      const n = Number(r.replace(/[, $]/g, ''));
+      // A trader types "$5" in a money ladder and "25%" in a percentage one;
+      // both are the number they mean.
+      const n = Number(r.replace(/[, $%]/g, ''));
       if (Number.isFinite(n) && n > 0 && !parsed.includes(n)) parsed.push(n);
     }
     onChange(ladderPatch(kind, parsed.length > 0 ? parsed : null));
   };
 
   const money = kind === 'step' || kind === 'cost';
+  const isPctLadder = kind === 'pct';
   const rowUnit =
     kind === 'step'
       ? `per ${stepName}`
       : kind === 'cost'
         ? 'spent'
-        : spot
-          ? baseAsset || 'units'
-          : 'units';
+        : kind === 'pct'
+          ? '% of value'
+          : spot
+            ? baseAsset || 'units'
+            : 'units';
 
   const modes: { key: TicketPresetMode; label: string }[] = [
     { key: 'units', label: 'Units' },
     { key: 'per_step', label: `$ per ${stepName}` },
     ...(spot ? [{ key: 'cost' as TicketPresetMode, label: 'Money spent' }] : []),
+    { key: 'account_pct', label: 'Account %' },
   ];
+
+  const increment =
+    Number.isFinite(presets.pctRoundIncrement) && presets.pctRoundIncrement > 0
+      ? presets.pctRoundIncrement
+      : DEFAULT_PIP_ROUNDING_INCREMENT;
+  // Two decimals, always: "$0.5 / pip" reads as a typo where "$0.50" reads as
+  // money. Small values keep four, like every other per-pip figure on the desk.
+  const ccy = (v: number): string => {
+    const digits = Math.abs(v) < 0.01 ? 4 : 2;
+    const abs = v.toLocaleString('en-US', { minimumFractionDigits: digits, maximumFractionDigits: digits });
+    return currency === 'USD' ? `$${abs}` : `${abs} ${currency}`;
+  };
 
   return (
     <div ref={wrap} style={{ position: 'relative', marginLeft: 'auto' }}>
@@ -149,7 +180,7 @@ export function TicketPresetMenu({
 
           <div style={{ marginTop: 11 }}>
             <MiniLabel>{"Presets are"}</MiniLabel>
-            <div style={seg}>
+            <div style={{ ...seg, flexWrap: 'wrap' }}>
               {modes.map((m) => (
                 <button
                   key={m.key}
@@ -164,49 +195,63 @@ export function TicketPresetMenu({
           </div>
 
           <div style={{ marginTop: 13 }}>
-            <MiniLabel>{presets.showMargin ? 'Buttons — margin each would use' : 'Buttons'}</MiniLabel>
+            <MiniLabel>
+              {isPctLadder
+                ? 'Buttons — share of account value each would use'
+                : presets.showMargin
+                  ? 'Buttons — margin each would use'
+                  : 'Buttons'}
+            </MiniLabel>
             {/* A full ladder is fifteen rows, which is taller than a phone. The
                 list scrolls inside the menu rather than pushing Done off the
                 bottom of the screen. */}
             <div style={presetScroll}>
             {draft.rows.map((row, i) => {
-              const n = Number(row.replace(/[, $]/g, ''));
-              const pct = Number.isFinite(n) && n > 0 ? pctFor(n) : null;
+              const n = Number(row.replace(/[, $%]/g, ''));
+              const usable = Number.isFinite(n) && n > 0;
+              const pct = usable ? pctFor(n) : null;
               const over = pct != null && pct >= warnPct;
+              // The whole working for a percentage row, so the editor previews
+              // exactly what the chip will read — the same computation, not a
+              // second estimate of it.
+              const preview = isPctLadder && usable ? previewFor(n) : null;
               return (
-                <div key={i} style={presetRow}>
-                  {money && <span style={{ color: FAINT, fontFamily: MONO, fontSize: 12 }}>{"$"}</span>}
-                  <input
-                    value={row}
-                    inputMode="decimal"
-                    aria-label={`Preset ${i + 1}`}
-                    onChange={(e) => {
-                      const rows = draft.rows.slice();
-                      rows[i] = e.target.value;
-                      commit(rows);
-                    }}
-                    style={rowInput}
-                  />
-                  <span style={{ fontSize: 10, color: FAINT, width: 58 }}>{rowUnit}</span>
-                  <span
-                    style={{
-                      fontSize: 10,
-                      fontFamily: MONO,
-                      width: 40,
-                      textAlign: 'right',
-                      color: over ? RED : FAINT,
-                    }}
-                  >
-                    {presets.showMargin ? (pct == null ? '—' : fmtPct(pct)) : ''}
-                  </span>
-                  <button
-                    onClick={() => commit(draft.rows.filter((_, j) => j !== i))}
-                    aria-label={`Remove preset ${i + 1}`}
-                    title="Remove"
-                    style={xBtn}
-                  >
-                    {"×"}
-                  </button>
+                <div key={i}>
+                  <div style={presetRow}>
+                    {money && <span style={{ color: FAINT, fontFamily: MONO, fontSize: 12 }}>{"$"}</span>}
+                    <input
+                      value={row}
+                      inputMode="decimal"
+                      aria-label={`Preset ${i + 1}`}
+                      onChange={(e) => {
+                        const rows = draft.rows.slice();
+                        rows[i] = e.target.value;
+                        commit(rows);
+                      }}
+                      style={rowInput}
+                    />
+                    <span style={{ fontSize: 10, color: FAINT, width: 58 }}>{rowUnit}</span>
+                    <span
+                      style={{
+                        fontSize: 10,
+                        fontFamily: MONO,
+                        width: 40,
+                        textAlign: 'right',
+                        color: over ? RED : FAINT,
+                      }}
+                    >
+                      {presets.showMargin ? (pct == null ? '—' : fmtPct(pct)) : ''}
+                    </span>
+                    <button
+                      onClick={() => commit(draft.rows.filter((_, j) => j !== i))}
+                      aria-label={`Remove preset ${i + 1}`}
+                      title="Remove"
+                      style={xBtn}
+                    >
+                      {"×"}
+                    </button>
+                  </div>
+                  {preview && <PctPreview sized={preview} stepName={stepName} spot={spot} ccy={ccy} />}
                 </div>
               );
             })}
@@ -217,6 +262,49 @@ export function TicketPresetMenu({
               </button>
             )}
           </div>
+
+          {isPctLadder && (
+            <div style={{ marginTop: 13 }}>
+              <label style={switchRow}>
+                <input
+                  type="checkbox"
+                  checked={presets.pctRound}
+                  onChange={(e) => onChange({ pctRound: e.target.checked })}
+                  style={{ accentColor: GOLD, width: 15, height: 15 }}
+                />
+                <span>{`Round calculated $/${stepName}`}</span>
+              </label>
+              {presets.pctRound && (
+                <>
+                  <div style={{ ...switchRow, marginTop: 8 }}>
+                    <span>{"To the nearest"}</span>
+                    <input
+                      value={String(increment)}
+                      inputMode="decimal"
+                      aria-label={`Round to the nearest, in ${currency} per ${stepName}`}
+                      onChange={(e) => {
+                        const v = Number(e.target.value.replace(/[^0-9.]/g, ''));
+                        if (!Number.isFinite(v) || v <= 0) return;
+                        onChange({
+                          pctRoundIncrement: Math.max(
+                            MIN_PIP_ROUNDING_INCREMENT,
+                            Math.min(MAX_PIP_ROUNDING_INCREMENT, v),
+                          ),
+                        });
+                      }}
+                      style={{ ...rowInput, width: 62, flex: '0 0 auto', textAlign: 'right' }}
+                    />
+                    <span>{`${currency === 'USD' ? '$' : currency} per ${stepName}`}</span>
+                  </div>
+                  {/* Floor, never nearest: a cleaner number must not be bought
+                      by committing more of the account than was asked for. */}
+                  <div style={{ fontSize: 10, color: FAINT, marginTop: 6, lineHeight: 1.5 }}>
+                    {`Always rounded down, so a size lands at or under the share you asked for. The percentage on each button is what it actually comes to.`}
+                  </div>
+                </>
+              )}
+            </div>
+          )}
 
           <label style={{ ...switchRow, marginTop: 13 }}>
             <input
@@ -310,6 +398,43 @@ export function TicketPresetMenu({
   );
 }
 
+// What one Account % row currently comes to, under the row being typed. It is
+// handed the SAME computed answer the chip renders rather than working one out,
+// so the editor can never preview a size the button would not produce.
+function PctPreview({
+  sized,
+  stepName,
+  spot,
+  ccy,
+}: {
+  sized: AccountPctSize;
+  stepName: string;
+  spot: boolean;
+  ccy: (v: number) => string;
+}) {
+  if (sized.problem) {
+    return (
+      <div style={previewRow}>
+        <span style={{ color: RED }}>{sizingProblemText(sized.problem, { spot })}</span>
+      </div>
+    );
+  }
+  return (
+    <div style={previewRow}>
+      {[
+        sized.units == null ? null : `${sized.units.toLocaleString('en-US')} units`,
+        sized.perStep == null ? null : `${ccy(sized.perStep)}/${stepName}`,
+        sized.cost == null ? null : `${spot ? 'cost' : 'margin'} ${ccy(sized.cost)}`,
+        // The ACTUAL share after rounding, which is the point of showing it: a
+        // floored $/pip deliberately leaves the trade under the target.
+        sized.actualPct == null ? null : `= ${fmtPct(sized.actualPct)}`,
+      ]
+        .filter(Boolean)
+        .join(' · ')}
+    </div>
+  );
+}
+
 function MiniLabel({ children }: { children: string }) {
   return (
     <div style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: '.4px', textTransform: 'uppercase', color: MUTED, marginBottom: 5 }}>
@@ -352,6 +477,15 @@ const seg: CSSProperties = { display: 'flex', background: INPUT_BG, border: `1px
 const segBtn: CSSProperties = { flex: 1, background: 'none', border: 'none', color: MUTED, fontSize: 11, fontWeight: 600, padding: '7px 4px', cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap' };
 const segOn: CSSProperties = { background: 'rgba(235,203,116,.16)', color: GOLD };
 const presetRow: CSSProperties = { display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 };
+// The live working under a percentage row. Quiet and monospaced: it is a
+// reading, not something to edit.
+const previewRow: CSSProperties = {
+  fontSize: 9.5,
+  fontFamily: MONO,
+  color: FAINT,
+  margin: '-3px 0 7px 2px',
+  lineHeight: 1.4,
+};
 // Room for about seven rows before it scrolls, so a long ladder never pushes the
 // menu past the bottom of a phone. `2px` of side padding keeps a focused input's
 // ring from being clipped by the scroll container.

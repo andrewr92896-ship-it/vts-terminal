@@ -22,8 +22,18 @@ import { sendPushoverToUsers } from '../notifications/pushover.js';
 import { featuresForUser } from '../features/service.js';
 import { isDemoUser } from '../demo/identity.js';
 import { LEVEL_PRIORITY, NOTIF_LEVELS, type NotifLevel } from '../notifications/prefs.js';
-import { DeskError, deskInstruments, deskQuotes, placeDeskOrder } from './orderDesk.js';
+import { DeskError, deskInstruments, deskQuotes, listDeskAccounts, placeDeskOrder } from './orderDesk.js';
 import { getShareConfig } from './founderTradeConfig.js';
+import { forexPair } from './forex.js';
+import {
+  DEFAULT_PIP_ROUNDING_INCREMENT,
+  MAX_PIP_ROUNDING_INCREMENT,
+  MIN_PIP_ROUNDING_INCREMENT,
+  sizeForAccountPct,
+  sizingProblemText,
+  type AccountPctSize,
+  type SizingInputs,
+} from './sizing.js';
 import type { AuditActor } from './credentialAudit.js';
 
 // Founder trade coordination — one Founder invites another onto a trade, and
@@ -149,9 +159,26 @@ export interface FounderTradeEvent {
 
 // ---- the recipient's own preferences ----
 
+/** How a joined size is arrived at. Null in the database reads as 'units'. */
+export type FounderSizeMode = 'units' | 'account_pct';
+
 export interface FounderTradePrefs {
+  /**
+   * How the size is arrived at. `units` is the fixed figure below and is what
+   * every setting made before this existed is; `account_pct` re-derives the size
+   * at join time from the recipient's OWN account value, quote and margin rate.
+   * The sender's size is not an input to either.
+   */
+  sizeMode: FounderSizeMode;
   /** Null is "not stated" and is never read as a size. */
   defaultUnits: number | null;
+  /** The share of the recipient's own account value a joined position's margin
+   *  should consume. Null is "not stated" and, like the units, is never read as
+   *  a number — a join with nothing stated is refused rather than guessed. */
+  sizePct: number | null;
+  /** Floor the money-per-pip that percentage works out to. */
+  pctRound: boolean;
+  pctRoundIncrement: number;
   /** Which of the recipient's own connections a joined trade goes to. */
   defaultConnectionId: string | null;
   // ---- RECEIVING: how a trade sent to me reaches me ----
@@ -174,7 +201,11 @@ const MIN_REMINDER_SECONDS = 60;
 const MAX_REMINDER_SECONDS = 3600;
 
 export const DEFAULT_FOUNDER_PREFS: FounderTradePrefs = {
+  sizeMode: 'units',
   defaultUnits: null,
+  sizePct: null,
+  pctRound: false,
+  pctRoundIncrement: DEFAULT_PIP_ROUNDING_INCREMENT,
   defaultConnectionId: null,
   reminderEverySeconds: 300,
   reminderLevel: 'repeating',
@@ -191,13 +222,31 @@ function clampSeconds(v: number): number {
   return Math.min(MAX_REMINDER_SECONDS, Math.max(MIN_REMINDER_SECONDS, Math.round(v)));
 }
 
+// Clamped rather than refused, like every other bound in this file: a save that
+// bounced would leave somebody with the previous increment and nothing on screen
+// saying why.
+function clampIncrement(v: number): number {
+  const n = Number(v);
+  if (!Number.isFinite(n) || n <= 0) return DEFAULT_PIP_ROUNDING_INCREMENT;
+  return Number(
+    Math.max(MIN_PIP_ROUNDING_INCREMENT, Math.min(MAX_PIP_ROUNDING_INCREMENT, n)).toFixed(4),
+  );
+}
+
 export async function getFounderPrefs(userId: string): Promise<FounderTradePrefs> {
   const row = (
     await db.select().from(founderTradePrefs).where(eq(founderTradePrefs.userId, userId)).limit(1)
   )[0];
   if (!row) return { ...DEFAULT_FOUNDER_PREFS };
   return {
+    // Anything unrecognised — including the null every pre-existing row carries
+    // — reads as the fixed-units behaviour that was there before, so nobody's
+    // join changed the day this column arrived.
+    sizeMode: row.sizeMode === 'account_pct' ? 'account_pct' : 'units',
     defaultUnits: row.defaultUnits != null && row.defaultUnits > 0 ? row.defaultUnits : null,
+    sizePct: row.sizePct != null && row.sizePct > 0 && row.sizePct <= 100 ? row.sizePct : null,
+    pctRound: row.pctRound,
+    pctRoundIncrement: clampIncrement(row.pctRoundIncrement),
     defaultConnectionId: row.defaultConnectionId,
     reminderEverySeconds: clampSeconds(row.reminderEverySeconds),
     reminderLevel: toLevel(row.reminderLevel),
@@ -209,7 +258,11 @@ export async function getFounderPrefs(userId: string): Promise<FounderTradePrefs
 }
 
 export interface FounderPrefsPatch {
+  sizeMode?: FounderSizeMode;
   defaultUnits?: number | null;
+  sizePct?: number | null;
+  pctRound?: boolean;
+  pctRoundIncrement?: number;
   defaultConnectionId?: string | null;
   reminderEverySeconds?: number;
   reminderLevel?: NotifLevel;
@@ -245,8 +298,25 @@ export async function setFounderPrefs(
   // join time so a stored id can never point at somebody else's account.
   if (connectionId) await assertOwnConnection(user.id, connectionId);
 
+  // A share of zero, of nothing, or of more than the whole account is not a
+  // share. Stored as null so it reads as "not stated" and the join refuses,
+  // exactly as an unset size does.
+  const pct =
+    patch.sizePct === undefined
+      ? current.sizePct
+      : patch.sizePct == null || !(patch.sizePct > 0) || patch.sizePct > 100
+        ? null
+        : Number(patch.sizePct.toFixed(4));
+
   const next: FounderTradePrefs = {
+    sizeMode: patch.sizeMode === undefined ? current.sizeMode : patch.sizeMode === 'account_pct' ? 'account_pct' : 'units',
     defaultUnits: units,
+    sizePct: pct,
+    pctRound: patch.pctRound === undefined ? current.pctRound : !!patch.pctRound,
+    pctRoundIncrement:
+      patch.pctRoundIncrement === undefined
+        ? current.pctRoundIncrement
+        : clampIncrement(patch.pctRoundIncrement),
     defaultConnectionId: connectionId,
     reminderEverySeconds:
       patch.reminderEverySeconds === undefined
@@ -263,7 +333,11 @@ export async function setFounderPrefs(
     .insert(founderTradePrefs)
     .values({
       userId: user.id,
+      sizeMode: next.sizeMode,
       defaultUnits: next.defaultUnits,
+      sizePct: next.sizePct,
+      pctRound: next.pctRound,
+      pctRoundIncrement: next.pctRoundIncrement,
       defaultConnectionId: next.defaultConnectionId,
       reminderEverySeconds: next.reminderEverySeconds,
       reminderLevel: next.reminderLevel,
@@ -274,7 +348,11 @@ export async function setFounderPrefs(
     .onConflictDoUpdate({
       target: founderTradePrefs.userId,
       set: {
+        sizeMode: next.sizeMode,
         defaultUnits: next.defaultUnits,
+        sizePct: next.sizePct,
+        pctRound: next.pctRound,
+        pctRoundIncrement: next.pctRoundIncrement,
         defaultConnectionId: next.defaultConnectionId,
         reminderEverySeconds: next.reminderEverySeconds,
         reminderLevel: next.reminderLevel,
@@ -920,8 +998,249 @@ export async function autoInviteAfterFill(
   }
 }
 
+// The fixed size a recipient has stated, for display on an invitation. A
+// percentage-sized join has no fixed size to show — the modal reads the mode and
+// says what the share is instead, which is the honest thing to print: the units
+// are not known until the moment the order goes out.
 async function unitsOf(userId: string): Promise<number | null> {
-  return (await getFounderPrefs(userId)).defaultUnits;
+  const prefs = await getFounderPrefs(userId);
+  return prefs.sizeMode === 'account_pct' ? null : prefs.defaultUnits;
+}
+
+// ---- the size a join actually goes out at ----
+//
+// **NEVER THE SENDER'S.** The invitation carries the inviter's size for display
+// and nothing here reads it; the size comes from the recipient's own stored
+// intent, applied to the recipient's own account. That was already true of the
+// fixed size and stays true of the percentage — which, if anything, makes it
+// harder to get wrong, since the figure is derived from the joiner's own NAV.
+
+export interface JoinSize {
+  units: number;
+  /** For the timeline: how this size was arrived at. */
+  detail: string;
+  /** The whole working, when a percentage produced the size. */
+  sized: AccountPctSize | null;
+}
+
+// The pairs a size PREVIEW is priced against, in order of preference. A preview
+// is not an order, so unlike the test drill there is no reason to avoid EUR/USD
+// — it is the pair most desks read a size against, and the panel names whichever
+// one it used.
+const PREVIEW_PAIR_PREFERENCE = ['EUR_USD', 'GBP_USD', 'USD_JPY', 'AUD_USD', 'USD_CAD'];
+
+// Everything the sizing module needs, read from the recipient's OWN account,
+// instrument and quote at the moment it is asked for. Three existing desk reads
+// and no new broker code.
+async function sizingInputsFor(
+  user: UserRow,
+  connectionId: string,
+  instrument: string,
+  side: TradeSide,
+  actor: AuditActor,
+): Promise<{ inputs: SizingInputs; instrument: string; currency: string }> {
+  const accounts = await listDeskAccounts(user.id, actor);
+  const account = accounts.find((a) => a.connectionId === connectionId);
+  if (!account) {
+    throw new FounderTradeError('That broker connection is not available on your account', 404);
+  }
+  const specs = await deskInstruments(user.id, connectionId, actor);
+  const wanted = instrument.trim().toUpperCase();
+  const spec =
+    specs.find((sp) => sp.instrument.toUpperCase() === wanted || sp.symbol.toUpperCase() === wanted.replace('/', '_')) ??
+    null;
+  if (!spec) {
+    throw new FounderTradeError(`${instrument} is not tradeable on your account`, 400, 'NO_INSTRUMENT');
+  }
+  const [quote] = await deskQuotes(user.id, connectionId, [spec.instrument], actor).catch(() => []);
+  return {
+    instrument: spec.instrument,
+    currency: account.currency,
+    inputs: {
+      spec,
+      // The side of the book this order would actually pay, exactly as the
+      // ticket sizes from — a join is always a market order.
+      price: (side === 'long' ? quote?.ask ?? quote?.bid : quote?.bid ?? quote?.ask) ?? null,
+      factor: quote?.quoteHomeFactor ?? null,
+      // A pip on a genuine currency pair, one whole point on everything else.
+      // The same single test (`forexPair`) the rest of the desk scores by.
+      step: forexPair(spec.instrument) ? (spec.pipSize > 0 ? spec.pipSize : 0.0001) : 1,
+      accountValue: account.nav,
+      spot: account.spot,
+    },
+  };
+}
+
+/**
+ * The size THIS recipient's join goes out at, worked out now rather than read
+ * off anything stored.
+ *
+ * A fixed-units setting answers immediately. A percentage is re-derived from the
+ * account value, the quote and the venue's own margin requirement in force at
+ * this moment — which is the whole point of storing the share rather than the
+ * size — and refuses rather than guessing when any of those is missing.
+ */
+/**
+ * Whether a size has been STATED at all, in whichever mode is in force.
+ *
+ * Kept separate from resolving one because a percentage cannot be resolved
+ * without first knowing which account it is a share of — so this is what runs
+ * before the account check, keeping "set a size" ahead of "choose an account"
+ * for somebody who has set up neither.
+ */
+function assertSizeStated(prefs: FounderTradePrefs): void {
+  if (prefs.sizeMode === 'account_pct') {
+    if (prefs.sizePct == null || !(prefs.sizePct > 0)) {
+      throw new FounderTradeError(
+        'Set the share of your account a joined trade should use — nothing is copied from the trade you were invited to',
+        400,
+        'NO_SIZE',
+      );
+    }
+    return;
+  }
+  if (prefs.defaultUnits == null || !(prefs.defaultUnits > 0)) {
+    throw new FounderTradeError(
+      'Set your own position size before joining — nothing is copied from the trade you were invited to',
+      400,
+      'NO_SIZE',
+    );
+  }
+}
+
+export async function resolveJoinSize(
+  user: UserRow,
+  prefs: FounderTradePrefs,
+  connectionId: string,
+  instrument: string,
+  side: TradeSide,
+  actor: AuditActor,
+): Promise<JoinSize> {
+  assertSizeStated(prefs);
+  if (prefs.sizeMode !== 'account_pct') {
+    const units = prefs.defaultUnits!;
+    return { units, detail: `${units} units`, sized: null };
+  }
+  const { inputs } = await sizingInputsFor(user, connectionId, instrument, side, actor);
+  // Non-null by `assertSizeStated` above; TypeScript cannot see through the
+  // assertion, and re-testing here would make it look like the check is optional.
+  const pct = prefs.sizePct!;
+  const sized = sizeForAccountPct(pct, inputs, {
+    enabled: prefs.pctRound,
+    increment: prefs.pctRoundIncrement,
+  });
+  if (sized.problem != null || sized.units == null) {
+    throw new FounderTradeError(
+      sizingProblemText(sized.problem ?? 'no-quote', {
+        spot: inputs.spot,
+        minimumTradeSize: inputs.spec?.minimumTradeSize ?? null,
+        increment: prefs.pctRound ? prefs.pctRoundIncrement.toFixed(2) : undefined,
+      }),
+      409,
+      'SIZE_UNAVAILABLE',
+    );
+  }
+  return {
+    units: sized.units,
+    detail:
+      `${sized.units} units · ${pct}% of account value` +
+      `${sized.actualPct == null ? '' : ` (${sized.actualPct.toFixed(1)}% actual)`}` +
+      `${sized.rounded ? ` · rounded to ${prefs.pctRoundIncrement}/pip` : ''}`,
+    sized,
+  };
+}
+
+export interface FounderSizePreview {
+  mode: FounderSizeMode;
+  /** The pair the preview was priced against. */
+  instrument: string | null;
+  accountLabel: string | null;
+  currency: string;
+  accountValue: number | null;
+  targetPct: number | null;
+  units: number | null;
+  perStep: number | null;
+  cost: number | null;
+  actualPct: number | null;
+  rounded: boolean;
+  /** Plain-language reason there is nothing to preview. */
+  problem: string | null;
+}
+
+/**
+ * What a join would currently be sized at, WITHOUT joining anything.
+ *
+ * **Informational only.** Nothing here is stored: the percentage stays the
+ * saved intent, and the units below it are only what that share comes to right
+ * now, on the pair this was priced against.
+ */
+export async function previewJoinSize(user: UserRow, actor: AuditActor): Promise<FounderSizePreview> {
+  assertFounder(user);
+  const prefs = await getFounderPrefs(user.id);
+  const base: FounderSizePreview = {
+    mode: prefs.sizeMode,
+    instrument: null,
+    accountLabel: null,
+    currency: 'USD',
+    accountValue: null,
+    targetPct: prefs.sizePct,
+    units: null,
+    perStep: null,
+    cost: null,
+    actualPct: null,
+    rounded: false,
+    problem: null,
+  };
+  if (prefs.sizeMode !== 'account_pct') return base;
+  if (prefs.sizePct == null) return { ...base, problem: 'Set the share of your account to use' };
+  if (!prefs.defaultConnectionId) {
+    return { ...base, problem: 'Choose which of your broker accounts a joined trade goes to' };
+  }
+  try {
+    await assertOwnConnection(user.id, prefs.defaultConnectionId);
+    const specs = await deskInstruments(user.id, prefs.defaultConnectionId, actor);
+    const tradeable = specs.filter((sp) => sp.tradeable);
+    const spec =
+      PREVIEW_PAIR_PREFERENCE.map((sym) => tradeable.find((f) => f.symbol.toUpperCase() === sym)).find(Boolean) ??
+      tradeable[0];
+    if (!spec) return { ...base, problem: 'This account has nothing tradeable to price a size against' };
+    const { inputs, currency, instrument } = await sizingInputsFor(
+      user,
+      prefs.defaultConnectionId,
+      spec.instrument,
+      'long',
+      actor,
+    );
+    const sized = sizeForAccountPct(prefs.sizePct, inputs, {
+      enabled: prefs.pctRound,
+      increment: prefs.pctRoundIncrement,
+    });
+    const accountLabel =
+      (await founderAccounts(user.id)).find((a) => a.connectionId === prefs.defaultConnectionId)?.label ?? null;
+    return {
+      ...base,
+      instrument,
+      accountLabel,
+      currency,
+      accountValue: inputs.accountValue,
+      units: sized.units,
+      perStep: sized.perStep,
+      cost: sized.cost,
+      actualPct: sized.actualPct,
+      rounded: sized.rounded,
+      problem:
+        sized.problem == null
+          ? null
+          : sizingProblemText(sized.problem, {
+              spot: inputs.spot,
+              minimumTradeSize: inputs.spec?.minimumTradeSize ?? null,
+              increment: prefs.pctRound ? prefs.pctRoundIncrement.toFixed(2) : undefined,
+            }),
+    };
+  } catch (e) {
+    // A preview must never be what stops somebody using the screen it sits on.
+    return { ...base, problem: e instanceof Error ? e.message : 'That could not be priced right now' };
+  }
 }
 
 // ---- reading ----
@@ -1106,6 +1425,7 @@ export async function joinPrimary(
   // bounded by being a person pressing a button.
   const prefs = await getFounderPrefs(user.id);
   let venue = '';
+  let size: JoinSize;
   try {
     if (!(await canSendOrders(user))) {
       throw new FounderTradeError(
@@ -1114,13 +1434,10 @@ export async function joinPrimary(
         'NO_DESK',
       );
     }
-    if (prefs.defaultUnits == null || !(prefs.defaultUnits > 0)) {
-      throw new FounderTradeError(
-        'Set your own position size before joining — nothing is copied from the trade you were invited to',
-        400,
-        'NO_SIZE',
-      );
-    }
+    // Whether a size has been stated at all is asked BEFORE the account, so
+    // somebody who has set up neither is told about the size first — the order
+    // this refused in before a percentage could need the account to resolve.
+    assertSizeStated(prefs);
     if (!prefs.defaultConnectionId) {
       throw new FounderTradeError(
         'Choose which of your broker accounts a joined trade goes to',
@@ -1129,6 +1446,12 @@ export async function joinPrimary(
       );
     }
     venue = await assertOwnConnection(user.id, prefs.defaultConnectionId);
+    // THE SIZE IS RESOLVED HERE, BEFORE THE CLAIM. A percentage is re-derived
+    // from this account's value, this quote and this venue's own margin rate
+    // moments before the order goes out — a stored unit count would be whatever
+    // the account was worth when the setting was saved. Resolving before the
+    // claim also means a refusal costs nothing and can be retried at once.
+    size = await resolveJoinSize(user, prefs, prefs.defaultConnectionId, row.instrument, row.side, actor);
   } catch (e) {
     logEvent(id, 'primary.join_refused', user.id, e instanceof Error ? e.message : 'Refused before sending');
     throw e;
@@ -1208,7 +1531,7 @@ export async function joinPrimary(
     id,
     'primary.join_submitted',
     user.id,
-    `${row.instrument} ${row.side} · ${prefs.defaultUnits} units · own account` +
+    `${row.instrument} ${row.side} · ${size.detail} · own account` +
       `${stopLoss == null ? ' · no stop' : ` · stop ${stopLoss}`}` +
       `${takeProfit == null ? '' : ` · target ${takeProfit}`}`,
   );
@@ -1228,9 +1551,9 @@ export async function joinPrimary(
         connectionId: prefs.defaultConnectionId!,
         instrument: row.instrument,
         side: row.side,
-        // The recipient's OWN size. The inviter's is on the row for display and
-        // is deliberately not read here.
-        units: prefs.defaultUnits,
+        // The recipient's OWN size, resolved above. The inviter's is on the row
+        // for display and is deliberately not read here.
+        units: size.units,
         type: 'market',
         price: null,
         // The inviter's own levels, as resolved above.
@@ -1242,7 +1565,7 @@ export async function joinPrimary(
     await advanceToFunded(id, 'joined', {
       primaryOrderRef: res.orderRecordId,
       primaryFillPrice: res.fillPrice,
-      primaryUnits: res.units ?? prefs.defaultUnits,
+      primaryUnits: res.units ?? size.units,
       primaryConnectionId: prefs.defaultConnectionId,
 
       primaryError: null,
@@ -1251,7 +1574,7 @@ export async function joinPrimary(
       id,
       'primary.joined',
       user.id,
-      `${res.status} · ${res.units ?? prefs.defaultUnits} units${res.fillPrice == null ? '' : ` at ${res.fillPrice}`}`,
+      `${res.status} · ${res.units ?? size.units} units${res.fillPrice == null ? '' : ` at ${res.fillPrice}`}`,
     );
     void notifyInviterOfResponse(row, 'joined your trade');
     return reload(user, id);
