@@ -762,7 +762,7 @@ export interface DeskQuote {
 // of apps/api/src/trading/ticketPresets.ts). A null ladder means "the built-in
 // one" — the defaults live in the web (workspaces/trading/ticketPresets.ts),
 // because that is where they are rendered from before this ever loads.
-export type TicketPresetMode = 'units' | 'per_step' | 'cost';
+export type TicketPresetMode = 'units' | 'per_step' | 'cost' | 'account_pct';
 
 // Which of a preset's two readings carries its colour. Both are always shown —
 // 'free' is what is left to commit right now (the figure the broker refuses
@@ -777,6 +777,13 @@ export interface TicketPresets {
   fractional: number[] | null;
   step: number[] | null;
   cost: number[] | null;
+  /** Shares of ACCOUNT VALUE a position's estimated margin should consume. The
+   *  percentage is the stored intent — never the units it worked out to. */
+  pct: number[] | null;
+  /** Floor the money-per-pip an Account % preset works out to. */
+  pctRound: boolean;
+  /** The increment it is floored to, in account currency per pip/point. */
+  pctRoundIncrement: number;
   showMargin: boolean;
   /** Null = 'free', which is what every ticket read before the second basis. */
   marginBasis: MarginBasis | null;
@@ -3178,9 +3185,19 @@ export interface FounderTradeEvent {
   createdAt: number;
 }
 
+/** How a joined size is arrived at. Every setting made before this existed is 'units'. */
+export type FounderSizeMode = 'units' | 'account_pct';
+
 export interface FounderTradePrefs {
+  /** 'units' keeps the fixed size below; 'account_pct' re-derives it at join time. */
+  sizeMode: FounderSizeMode;
   /** Null is "not stated" and is never read as a size — a JOIN is refused instead. */
   defaultUnits: number | null;
+  /** The share of the recipient's OWN account value a joined position's margin
+   *  should use. Null is "not stated" and is never read as a number either. */
+  sizePct: number | null;
+  pctRound: boolean;
+  pctRoundIncrement: number;
   defaultConnectionId: string | null;
   // Receiving: how a trade sent to me reaches me.
   reminderEverySeconds: number;
@@ -3232,8 +3249,31 @@ export interface FounderAccountView {
   env: string | null;
 }
 
+// What a join would currently be sized at. Informational only — the percentage
+// stays the saved intent, and these are what it comes to right now on the pair
+// it was priced against.
+export interface FounderSizePreview {
+  mode: FounderSizeMode;
+  instrument: string | null;
+  accountLabel: string | null;
+  currency: string;
+  accountValue: number | null;
+  targetPct: number | null;
+  units: number | null;
+  perStep: number | null;
+  cost: number | null;
+  /** The ACTUAL share after rounding, which can sit under the target. */
+  actualPct: number | null;
+  rounded: boolean;
+  problem: string | null;
+}
+
 export interface FounderTradePrefsPatch {
+  sizeMode?: FounderSizeMode;
   defaultUnits?: number | null;
+  sizePct?: number | null;
+  pctRound?: boolean;
+  pctRoundIncrement?: number;
   defaultConnectionId?: string | null;
   reminderEverySeconds?: number;
   reminderLevel?: NotifLevel;

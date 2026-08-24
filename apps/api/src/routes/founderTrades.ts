@@ -15,6 +15,7 @@ import {
   getInvite,
   getProofImage,
   invitableFounders,
+  previewJoinSize,
   joinPrimary,
   planFounderTest,
   runFounderTest,
@@ -49,7 +50,15 @@ const inviteSchema = z.object({
 // service-worker-cached bundle posting a subset never blanks a setting it does
 // not know about.
 const prefsSchema = z.object({
+  // How the size is arrived at. Omitted leaves it alone, which for every
+  // setting made before this existed is the fixed-units behaviour.
+  sizeMode: z.enum(['units', 'account_pct']).optional(),
   defaultUnits: z.number().finite().positive().max(100_000_000).nullish(),
+  // A share of the caller's OWN account value. Bounded at 100 here as well as
+  // in the service — a position cannot use more of an account than it has.
+  sizePct: z.number().finite().positive().max(100).nullish(),
+  pctRound: z.boolean().optional(),
+  pctRoundIncrement: z.number().finite().positive().max(1000).optional(),
   defaultConnectionId: z.string().max(64).nullish(),
   // Receiving: how a trade sent to me reaches me.
   reminderEverySeconds: z.number().int().min(60).max(3600).optional(),
@@ -147,6 +156,18 @@ export async function founderTradeRoutes(app: FastifyInstance) {
     accounts: await founderAccounts(request.currentUser!.id),
     canTrade: await canSendOrders(request.currentUser!),
   }));
+
+  // WHAT A JOIN WOULD CURRENTLY BE SIZED AT, joining nothing. Informational
+  // only: the percentage stays the saved intent and the units below it are just
+  // what that share comes to right now, on the pair it was priced against. A
+  // fixed-units setting has nothing to preview and says so by its mode.
+  app.get('/api/founder-trades/size-preview', guard, async (request, reply) => {
+    try {
+      return { preview: await previewJoinSize(request.currentUser!, auditActorFor(request)) };
+    } catch (e) {
+      return fail(reply, e);
+    }
+  });
 
   app.put('/api/founder-trades/prefs', guard, async (request, reply) => {
     const parsed = prefsSchema.safeParse(request.body);

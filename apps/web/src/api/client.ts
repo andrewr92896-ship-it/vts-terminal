@@ -46,6 +46,7 @@ import type {
   FounderPerson,
   FounderTradeEvent,
   FounderTradePrefs,
+  FounderSizePreview,
   FounderTradePrefsPatch,
   BrokerStatus,
   ChallengeData,
@@ -723,6 +724,10 @@ export const api = {
   },
   founderPrefs(): Promise<{ prefs: FounderTradePrefs; accounts: FounderAccountView[]; canTrade: boolean }> {
     return request('/api/founder-trades/prefs');
+  },
+  // What a join would currently be sized at, joining nothing.
+  founderSizePreview(): Promise<{ preview: FounderSizePreview }> {
+    return request('/api/founder-trades/size-preview');
   },
   saveFounderPrefs(patch: FounderTradePrefsPatch): Promise<{ prefs: FounderTradePrefs }> {
     return request('/api/founder-trades/prefs', { method: 'PUT', body: JSON.stringify(patch) });

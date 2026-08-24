@@ -6,6 +6,8 @@ import type {
   FounderLinks,
   FounderPerson,
   FounderShareConfig,
+  FounderSizeMode,
+  FounderSizePreview,
   FounderTestPlan,
   FounderTradeEvent,
   FounderTradePrefs,
@@ -501,18 +503,49 @@ function SizeSettings({
   canTrade: boolean;
   onSaved: (p: FounderTradePrefs) => void;
 }) {
+  const [mode, setMode] = useState<FounderSizeMode>(prefs.sizeMode);
   const [units, setUnits] = useState(prefs.defaultUnits == null ? '' : String(prefs.defaultUnits));
+  const [pct, setPct] = useState(prefs.sizePct == null ? '' : String(prefs.sizePct));
+  const [round, setRound] = useState(prefs.pctRound);
+  const [increment, setIncrement] = useState(String(prefs.pctRoundIncrement));
   const [connectionId, setConnectionId] = useState(prefs.defaultConnectionId ?? '');
   const [saving, setSaving] = useState(false);
   const [note, setNote] = useState<string | null>(null);
+  const [preview, setPreview] = useState<FounderSizePreview | null>(null);
+
+  // THE PREVIEW IS READ FROM THE SERVER, from the same code that will size the
+  // join — not worked out here. A second calculation on this screen is exactly
+  // how a preview comes to promise a size the join does not place.
+  const loadPreview = useCallback(async () => {
+    if (prefs.sizeMode !== 'account_pct') {
+      setPreview(null);
+      return;
+    }
+    try {
+      setPreview((await api.founderSizePreview()).preview);
+    } catch {
+      /* a preview is informational; leave whatever was last read */
+    }
+  }, [prefs.sizeMode, prefs.sizePct, prefs.pctRound, prefs.pctRoundIncrement, prefs.defaultConnectionId]);
+  useEffect(() => {
+    void loadPreview();
+  }, [loadPreview]);
 
   const save = async () => {
     setSaving(true);
     setNote(null);
     try {
       const n = Number(units);
+      const p = Number(pct);
+      const inc = Number(increment);
       const { prefs: next } = await api.saveFounderPrefs({
+        sizeMode: mode,
+        // Both are sent whichever mode is chosen, so switching back and forth
+        // does not lose the other one — only the mode decides which is read.
         defaultUnits: Number.isFinite(n) && n > 0 ? n : null,
+        sizePct: Number.isFinite(p) && p > 0 && p <= 100 ? p : null,
+        pctRound: round,
+        ...(Number.isFinite(inc) && inc > 0 ? { pctRoundIncrement: inc } : {}),
         defaultConnectionId: connectionId || null,
       });
       onSaved(next);
@@ -538,11 +571,37 @@ function SizeSettings({
           Advanced Trading is off for your account, so you cannot join a trade until it is on.
         </div>
       )}
+      <div style={{ display: 'flex', gap: 6, marginBottom: 12 }}>
+        {([
+          ['units', 'Fixed units'],
+          ['account_pct', 'Account %'],
+        ] as const).map(([key, text]) => (
+          <button
+            key={key}
+            type="button"
+            onClick={() => setMode(key)}
+            aria-pressed={mode === key}
+            style={{
+              ...ghostBtn,
+              ...(mode === key ? { borderColor: C.gold, color: C.gold } : null),
+            }}
+          >
+            {text}
+          </button>
+        ))}
+      </div>
       <div style={{ display: 'grid', gap: 10, gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))' }}>
-        <label style={label}>
-          Position size (units)
-          <input value={units} onChange={(e) => setUnits(e.target.value)} inputMode="decimal" style={field} />
-        </label>
+        {mode === 'units' ? (
+          <label style={label}>
+            Position size (units)
+            <input value={units} onChange={(e) => setUnits(e.target.value)} inputMode="decimal" style={field} />
+          </label>
+        ) : (
+          <label style={label}>
+            Share of account value (%)
+            <input value={pct} onChange={(e) => setPct(e.target.value)} inputMode="decimal" style={field} />
+          </label>
+        )}
         <label style={label}>
           Account
           <select value={connectionId} onChange={(e) => setConnectionId(e.target.value)} style={field}>
@@ -555,6 +614,38 @@ function SizeSettings({
           </select>
         </label>
       </div>
+      {mode === 'account_pct' && (
+        <>
+          <div style={{ fontSize: 11.5, color: C.faint, marginTop: 10, lineHeight: 1.5 }}>
+            The share of your account value the position&rsquo;s estimated margin uses. It is worked
+            out again at the moment you join, from your account and your broker&rsquo;s own margin
+            requirement — never from a size saved here, and never from the sender&rsquo;s size.
+          </div>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 10, fontSize: 12, color: C.muted }}>
+            <input
+              type="checkbox"
+              checked={round}
+              onChange={(e) => setRound(e.target.checked)}
+              style={{ accentColor: C.gold, width: 15, height: 15 }}
+            />
+            Round calculated $/pip
+          </label>
+          {round && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 8, fontSize: 12, color: C.muted }}>
+              <span>To the nearest</span>
+              <input
+                value={increment}
+                onChange={(e) => setIncrement(e.target.value)}
+                inputMode="decimal"
+                aria-label="Round to the nearest, per pip"
+                style={{ ...field, width: 78, textAlign: 'right' }}
+              />
+              <span>per pip — always rounded down</span>
+            </div>
+          )}
+          <SizePreview preview={preview} />
+        </>
+      )}
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 12 }}>
         <button
           type="button"
@@ -579,6 +670,55 @@ function SizeSettings({
     </div>
   );
 }
+
+// What the saved share currently comes to. INFORMATIONAL: none of these numbers
+// is stored, and the join re-derives every one of them at the moment it sends.
+function SizePreview({ preview }: { preview: FounderSizePreview | null }) {
+  if (!preview || preview.mode !== 'account_pct') return null;
+  const ccy = (v: number | null): string =>
+    v == null ? '—' : preview.currency === 'USD' ? `$${round2(v)}` : `${round2(v)} ${preview.currency}`;
+  return (
+    <div
+      style={{
+        marginTop: 12,
+        padding: '10px 12px',
+        borderRadius: 8,
+        border: `1px solid ${C.line2}`,
+        background: C.bg,
+        fontSize: 11.5,
+        fontFamily: C.mono,
+        color: C.muted,
+        lineHeight: 1.7,
+      }}
+    >
+      <div style={{ fontFamily: C.sans, fontWeight: 700, color: C.text, marginBottom: 4 }}>
+        Right now, that would be
+      </div>
+      {preview.problem ? (
+        <div style={{ color: C.amber, fontFamily: C.sans }}>{preview.problem}</div>
+      ) : (
+        <>
+          <div>{`Target ${preview.targetPct ?? '—'}% · account value ${ccy(preview.accountValue)}`}</div>
+          <div>
+            {`${preview.units == null ? '—' : preview.units.toLocaleString('en-US')} units · ${ccy(preview.perStep)}/pip`}
+          </div>
+          <div>
+            {`Margin ${ccy(preview.cost)} · ${
+              preview.actualPct == null ? '—' : `${round2(preview.actualPct)}% of account value`
+            }${preview.rounded ? ' after rounding' : ''}`}
+          </div>
+          {preview.instrument && (
+            <div style={{ color: C.faint }}>
+              {`Priced on ${preview.instrument}${preview.accountLabel ? ` · ${preview.accountLabel}` : ''}. Another instrument sizes differently.`}
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
+const round2 = (v: number): number => Number(v.toFixed(2));
 
 function InviteRow({
   invite,

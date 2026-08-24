@@ -35,6 +35,7 @@ const STEPS = [
   ['credential encryption', 'verify:secretbox'],
   ['market data macro', 'verify:market-macro'],
   ['investments math', 'verify:investments'],
+  ['position sizing (web ↔ server)', 'verify:sizing'],
   ['rollover alerts and re-entry math', 'verify:rollover'],
   ['study packages', 'verify:study-packages'],
   ['study category draw and breakdown', 'verify:study-categories'],

@@ -276,6 +276,45 @@ async function main() {
   );
   await setFounderPrefs(beta, { defaultConnectionId: conn });
 
+  section('Account % sizing — the share is what is stored, not a size');
+  // FIXED UNITS IS UNTOUCHED BY THE NEW MODE. A setting made before this
+  // existed has a null `size_mode`, which reads as 'units' — checked above,
+  // where every join so far has gone out at the stated 1,000.
+  ok('a pre-existing setting reads as fixed units', (await getFounderPrefs(beta.id)).sizeMode === 'units');
+  const pctSaved = await setFounderPrefs(beta, { sizeMode: 'account_pct', sizePct: 25 });
+  ok('a share can be stated', pctSaved.sizeMode === 'account_pct' && pctSaved.sizePct === 25);
+  ok('and the fixed size is kept beside it, so switching back loses nothing', pctSaved.defaultUnits === 1000);
+  ok('rounding starts off', pctSaved.pctRound === false);
+  ok('at a 0.50 increment', pctSaved.pctRoundIncrement === 0.5);
+  const rounded = await setFounderPrefs(beta, { pctRound: true, pctRoundIncrement: 0.25 });
+  ok('rounding can be turned on with its own increment', rounded.pctRound && rounded.pctRoundIncrement === 0.25);
+  // Never read as a number: a share of nothing, or of more than the whole
+  // account, is stored as "not stated" so the join refuses rather than guessing.
+  ok('a share of zero is not a share', (await setFounderPrefs(beta, { sizePct: 0 })).sizePct === null);
+  ok('nor is more than the whole account', (await setFounderPrefs(beta, { sizePct: 150 })).sizePct === null);
+  await expectRefusal(
+    'and a JOIN with no share stated is refused rather than falling back to the units',
+    () => joinPrimary(beta, inviteId, SYSTEM),
+    'share of your account',
+  );
+  await setFounderPrefs(beta, { sizePct: 25 });
+  // THE SIZE COMES FROM THE RECIPIENT'S OWN ACCOUNT. There is no reachable
+  // broker here, so it refuses at the account read — which is the point: it
+  // never falls back to a stored unit count, and it never reads the inviter's.
+  await expectRefusal(
+    "a share that cannot be priced refuses rather than using a stale or the inviter's size",
+    () => joinPrimary(beta, inviteId, SYSTEM),
+  );
+  const afterPct = await pendingForRecipient(beta);
+  ok('the workflow is left exactly where it was', afterPct[0]?.status === 'primary_pending');
+  ok(
+    'and the invitation states no fixed size, because a share has none until it is sent',
+    afterPct[0]?.recipientUnits === null,
+  );
+  // Back to fixed units for the rest of the walk-through.
+  await setFounderPrefs(beta, { sizeMode: 'units', pctRound: false });
+  ok('switching back restores the fixed size', (await getFounderPrefs(beta.id)).defaultUnits === 1000);
+
   section('an order the broker refuses leaves the workflow where it was');
   // The connection's stored secret cannot be read here, so this gets past every
   // pre-flight check and fails at the broker — the real failure path.

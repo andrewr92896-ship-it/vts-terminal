@@ -1649,11 +1649,16 @@ const deskSettingsSchema = z
 const presetLadder = z.array(z.number().finite().positive().max(1_000_000_000)).max(15).nullable();
 const ticketPresetsSchema = z
   .object({
-    mode: z.enum(['units', 'per_step', 'cost']).nullable().optional(),
+    mode: z.enum(['units', 'per_step', 'cost', 'account_pct']).nullable().optional(),
     units: presetLadder.optional(),
     fractional: presetLadder.optional(),
     step: presetLadder.optional(),
     cost: presetLadder.optional(),
+    // Shares of the account's own value. Bounded at 100 here as well as in the
+    // service: a position cannot take more of an account than the account has.
+    pct: z.array(z.number().finite().positive().max(100)).max(15).nullable().optional(),
+    pctRound: z.boolean().optional(),
+    pctRoundIncrement: z.number().finite().positive().max(1000).optional(),
     showMargin: z.boolean().optional(),
     // Which reading colours a preset, and the threshold for each — one per
     // basis, since 100% of free margin and 100% of the account are different
