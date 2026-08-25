@@ -4,8 +4,9 @@ import { db } from '../db/index.js';
 import { sessions, users } from '../db/schema.js';
 import { config } from '../config.js';
 import { applyPreview, type PreviewedUser } from '../dev/preview.js';
+import { isPrivateUserAllowed } from './privateAccess.js';
 
-export const SESSION_COOKIE = 'vts_session';
+export const SESSION_COOKIE = config.PRIVATE_SESSION_COOKIE;
 
 /** The session id a request is authenticated by — what a preview is stored on. */
 export function sessionIdForToken(token: string): string {
@@ -23,7 +24,7 @@ export function cookieOptions(maxAgeSeconds?: number) {
     path: '/',
     httpOnly: true,
     sameSite: 'lax' as const,
-    secure: config.COOKIE_SECURE,
+    secure: config.isProd || config.COOKIE_SECURE,
     signed: true,
     ...(maxAgeSeconds != null ? { maxAge: maxAgeSeconds } : {}),
   };
@@ -70,7 +71,7 @@ export async function getUserForToken(
     .where(eq(users.id, session.userId))
     .limit(1);
   const user = userRows[0];
-  if (!user || !user.active) return null;
+  if (!user || !user.active || !isPrivateUserAllowed(user.id)) return null;
 
   // Touch last-seen without blocking the request.
   void db

@@ -24,6 +24,11 @@ const envSchema = z.object({
   PORT: z.coerce.number().int().positive().default(4000),
   WEB_ORIGIN: z.string().default('http://localhost:5173'),
   DATABASE_URL: z.string().default('file:./data/vts.db'),
+  PRIVATE_DATABASE_URL: blankAsUnset,
+  PRIVATE_PORTAL_ORIGIN: blankAsUnset,
+  PRIVATE_SESSION_SECRET: blankAsUnset,
+  PRIVATE_SESSION_COOKIE: blankAsUnset,
+  PRIVATE_ACCESS_USER_IDS: blankAsUnset,
   SESSION_SECRET: z.string().min(16, 'SESSION_SECRET must be at least 16 characters'),
   SESSION_TTL_DAYS: z.coerce.number().int().positive().default(14),
   COOKIE_SECURE: z
@@ -185,6 +190,7 @@ const parsed = envSchema.safeParse({
   // In development, fall back to a fixed dev secret so the server still
   // boots before the user creates a .env. Production requires a real one.
   SESSION_SECRET:
+    process.env.PRIVATE_SESSION_SECRET ||
     process.env.SESSION_SECRET ||
     (process.env.NODE_ENV === 'production' ? undefined : DEV_SESSION_SECRET),
 });
@@ -192,6 +198,11 @@ const parsed = envSchema.safeParse({
 if (!parsed.success) {
   console.error('Invalid environment configuration:');
   console.error(parsed.error.flatten().fieldErrors);
+  process.exit(1);
+}
+
+if (parsed.data.NODE_ENV === 'production' && !parsed.data.PRIVATE_ACCESS_USER_IDS) {
+  console.error('[config] PRIVATE_ACCESS_USER_IDS is required for the private portal in production.');
   process.exit(1);
 }
 
@@ -236,8 +247,13 @@ function resolveDbUrl(url: string): string {
 
 export const config = {
   ...parsed.data,
+  WEB_ORIGIN: parsed.data.PRIVATE_PORTAL_ORIGIN ?? parsed.data.WEB_ORIGIN,
+  SESSION_SECRET: parsed.data.PRIVATE_SESSION_SECRET ?? parsed.data.SESSION_SECRET,
+  PRIVATE_SESSION_COOKIE:
+    parsed.data.PRIVATE_SESSION_COOKIE ??
+    (parsed.data.NODE_ENV === 'production' ? '__Host-vts_portal_session' : 'vts_portal_session'),
   apiRoot,
-  databaseUrl: resolveDbUrl(parsed.data.DATABASE_URL),
+  databaseUrl: resolveDbUrl(parsed.data.PRIVATE_DATABASE_URL ?? parsed.data.DATABASE_URL),
   isProd: parsed.data.NODE_ENV === 'production',
 };
 

@@ -40,6 +40,7 @@ const STEPS = [
   ['study packages', 'verify:study-packages'],
   ['study category draw and breakdown', 'verify:study-categories'],
   ['study sharing, alerts and package edits', 'verify:db'],
+  ['public/private application boundary', 'verify:boundaries'],
   ['build', 'build'],
 ];
 

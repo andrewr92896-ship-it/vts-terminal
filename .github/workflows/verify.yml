@@ -13,7 +13,9 @@ name: verify
 on:
   pull_request:
   push:
-    branches: [main]
+    branches:
+      - main
+      - 'codex/**'
 
 # A branch pushed twice in quick succession only needs the newer run. Several
 # branches are usually in flight here, so this keeps them from queueing behind
