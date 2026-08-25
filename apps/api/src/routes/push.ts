@@ -56,9 +56,14 @@ export async function pushRoutes(app: FastifyInstance) {
   });
 
   // Fire a test notification to the caller's devices so they can confirm setup.
+  //
+  // An optional message of their own, so a real wording can be seen on a real
+  // lock screen. Bounded, and the TEST title is added by the sender either way
+  // — that half is not the caller's to change.
   app.post('/api/push/test', signedIn, async (request, reply) => {
     if (!pushConfigured()) return reply.code(503).send({ error: 'Push is not configured on the server' });
-    await sendTest(request.currentUser!.id);
+    const parsed = z.object({ message: z.string().trim().max(200).optional() }).safeParse(request.body ?? {});
+    await sendTest(request.currentUser!.id, parsed.success ? parsed.data.message : undefined);
     return { ok: true };
   });
 }

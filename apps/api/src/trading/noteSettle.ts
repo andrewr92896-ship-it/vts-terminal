@@ -4,6 +4,7 @@ import { tradingNotes, type NoteOutcome, type TradingNoteRow } from '../db/schem
 import { config } from '../config.js';
 import { sendToUsers } from '../notifications/push.js';
 import { sendPushoverToUsers } from '../notifications/pushover.js';
+import { sendSmsToUsers } from '../notifications/sms.js';
 import { fetchLivePrices, hasPriceSource } from './priceSource.js';
 import { toPricingInstrument } from './priceAlerts.js';
 import { autoSettles } from './notes.js';
@@ -193,17 +194,27 @@ async function notifySettled(row: TradingNoteRow, verdict: Verdict): Promise<voi
     verdict.outcome === 'hit' ? 'came true' : verdict.outcome === 'miss' ? 'did not come true' : 'could not be settled';
   const title = `Trading note · ${row.instrument ?? 'call'} ${word}`;
   const body = `${row.title}${verdict.note ? ` — ${verdict.note}` : ''}`;
-  await sendToUsers([row.userId], { title, body, url: '/?screen=notes', tag: `note-${row.id}` }).catch(() => {});
-  await sendPushoverToUsers([row.userId], {
-    title,
-    message: body,
-    // Deliberately quiet. A settled prediction is something to read when you next
-    // sit down, not something to be woken for — the loud priorities belong to a
-    // level being hit and a position changing.
-    priority: 0,
-    url: '/?screen=notes',
-    urlTitle: 'Open Trading Notes',
-  }).catch(() => {});
+  await sendToUsers(
+    [row.userId],
+    { title, body, url: '/?screen=notes', tag: `note-${row.id}` },
+    { category: 'note' },
+  ).catch(() => {});
+  await sendPushoverToUsers(
+    [row.userId],
+    {
+      title,
+      message: body,
+      // Deliberately quiet. A settled prediction is something to read when you
+      // next sit down, not something to be woken for — the loud priorities
+      // belong to a level being hit and a position changing.
+      priority: 0,
+      url: '/?screen=notes',
+      urlTitle: 'Open Trading Notes',
+    },
+    'note',
+    { category: 'note' },
+  ).catch(() => {});
+  await sendSmsToUsers([row.userId], { title, body }, { category: 'note' }).catch(() => {});
 }
 
 // ---- The loop ----

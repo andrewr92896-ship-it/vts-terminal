@@ -5,14 +5,27 @@ import { config } from '../config.js';
 import { isDemoUser } from '../demo/identity.js';
 import { pushConfigured, sendToUsers } from '../notifications/push.js';
 import { pushoverConfigured, sendPushoverToUsers } from '../notifications/pushover.js';
-import { usersWithSessionAlerts, type SessionAlertPrefs } from './sessionAlertPrefs.js';
+import { smsConfigured, sendSmsToUsers } from '../notifications/sms.js';
+import {
+  sessionAlertAudience,
+  usersWithSessionAlerts,
+  type SessionAlertPrefs,
+} from './sessionAlertPrefs.js';
 import { etNow, etDayStamp, etDowKey, scheduleForRow, parseHHMM } from './sessions.js';
 
-// Background watch that fires a user's OWN Strategy Session notifications: a
-// heads-up a set number of minutes before a session opens, a buzz when it opens,
-// and a buzz when it closes. Opt-in per user (see sessionAlertPrefs) and only
-// for the events they enabled. Production-only, and only when push or Pushover
-// is configured — mirrors the desk watch.
+// Background watch that fires a Strategy Session's notifications: a heads-up a
+// set number of minutes before it opens, a buzz when it opens, and a buzz when
+// it closes. Opt-in per user (see sessionAlertPrefs) and only for the events
+// they enabled. Production-only, and only when a delivery channel is configured
+// — mirrors the desk watch.
+//
+// **A session belongs to the trader who built it, and its alerts go to them
+// plus anybody they copied in** (`sessionAlertAudience`). What each event is,
+// when it fires and which events are on are all still the OWNER'S settings —
+// a recipient is copied in, not subscribed, so there is nothing for them to
+// configure and no way for them to change somebody else's routine. What they do
+// keep is the ability to stop it: their own group-notifications switch is
+// re-checked on every fire.
 //
 // Dedup is in-memory and keyed by ET calendar day, so each event fires at most
 // once per session per day. The set is cleared when the ET day rolls over, so it
@@ -135,12 +148,49 @@ export async function tickSessionWatch(now: Date = new Date()): Promise<void> {
     pending.push(...dueForUser(userId, prefs, rows, clock, dayStamp));
   }
 
-  // Deliver: each notification goes only to its own owner, via push + Pushover.
+  if (pending.length === 0) return;
+
+  // Who each owner's alerts reach. Read once for every owner with something due
+  // rather than per notification — a trader with three sessions opening on the
+  // same minute resolves one audience, not three.
+  const owners = [...new Set(pending.map((n) => n.userId))];
+  const audience = await sessionAlertAudience(owners);
+  const ownerNames = new Map(
+    (
+      await db
+        .select({ id: users.id, username: users.username, displayName: users.displayName })
+        .from(users)
+        .where(inArray(users.id, owners))
+    ).map((u) => [u.id, u.displayName?.trim() || u.username]),
+  );
+
+  // **A COPIED-IN RECIPIENT IS TOLD WHOSE SESSION IT IS; THE OWNER IS NOT.**
+  // "Dale's Method is now active" reads perfectly to Dale and is a puzzle to
+  // anybody else, who has no way to know which of four people on the desk it
+  // belongs to — and a session name is whatever its author typed, so it cannot
+  // be relied on to carry that. So the body is composed twice: unchanged for
+  // the owner, prefixed with the owner's name for everybody else. That matches
+  // how a trade notification already names the trader.
   await Promise.all(
     pending.map(async (n) => {
-      const payload = { title: n.title, body: n.body, url: '/', tag: n.tag };
-      await sendToUsers([n.userId], payload).catch(() => {});
-      await sendPushoverToUsers([n.userId], { title: n.title, message: n.body, priority: 0 }).catch(() => {});
+      const to = audience.get(n.userId) ?? [n.userId];
+      const others = to.filter((id) => id !== n.userId);
+      const who = ownerNames.get(n.userId);
+      const send = async (ids: string[], body: string) => {
+        if (ids.length === 0) return;
+        await sendToUsers(ids, { title: n.title, body, url: '/', tag: n.tag }, { category: 'session' }).catch(
+          () => {},
+        );
+        await sendPushoverToUsers(
+          ids,
+          { title: n.title, message: body, priority: 0 },
+          'session',
+          { category: 'session' },
+        ).catch(() => {});
+        await sendSmsToUsers(ids, { title: n.title, body }, { category: 'session' }).catch(() => {});
+      };
+      await send([n.userId], n.body);
+      await send(others, who ? `${who} · ${n.body}` : n.body);
     }),
   );
 }
@@ -152,7 +202,7 @@ const SESSION_WATCH_MS = Math.max(10, Number(process.env.SESSION_WATCH_SECONDS) 
 // Start the background session-notification watch. Production-only and only when
 // a delivery channel is configured (no point polling otherwise).
 export function startSessionWatch(): void {
-  if (!config.isProd || (!pushConfigured() && !pushoverConfigured())) return;
+  if (!config.isProd || (!pushConfigured() && !pushoverConfigured() && !smsConfigured())) return;
   const tick = () => {
     void tickSessionWatch().catch((err) => console.error('Session watch error:', err));
   };

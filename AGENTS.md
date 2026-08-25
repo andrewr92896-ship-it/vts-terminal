@@ -189,11 +189,71 @@ Tech:
 - **AI:** Claude via `@anthropic-ai/sdk`, server-side only (`apps/api/src/ai`).
 - **Secrets at rest:** broker credentials are AES-256-GCM encrypted
   (`security/secretbox.ts`).
-- **Notifications:** web push (VAPID, `web-push`) and **Pushover**. Both are on
+- **Notifications: THREE channels — web push (VAPID, `web-push`), **text
+  messages** (Twilio) and **Pushover**.** Push and Pushover are on
   `requireMarkets` (**signed in**), deliberately **not** the Advanced Trading
   opt-in: price alerts are included with every account, and
   gating the delivery channel behind the desk left a user without the desk able to set
   an alert and never be told it fired.
+  - **Which channels carry which kind of alert is the user's, per kind**
+    (`notifications/channels.ts`, `alert_channels`, migration `0137`;
+    `AlertRoutingSection` on Alert Settings). Nine categories — `trade`,
+    `alert`, `session`, `rollover`, `price`, `note`, `founder`, `group`,
+    `system` — each routed to any combination of the three.
+    - **A MISSING ROW IS THE DEFAULT, AND THE DEFAULT IS WHAT THE TERMINAL DID
+      BEFORE THIS EXISTED**: app push on, Pushover on, **text OFF**. That is
+      what made it invisible on deploy — nobody's alerts changed, and nobody
+      was signed up to be texted by a feature they had not asked for. **Do not
+      flip the text default**: every message costs money and lands on a phone
+      whether or not anything is installed on it.
+    - **The filter is applied INSIDE each channel's own send function**, beside
+      `filterAccountAlerts` — the one place a message of that kind leaves the
+      server — so a caller cannot forget it. **`category` is REQUIRED on
+      `sendToUsers` / `sendPushoverToUsers` / `sendSmsToUsers` and on both desk
+      senders**, deliberately: an optional one would be the thing you get by
+      forgetting to pass anything, and a new notification would quietly ignore
+      everybody's routing with nothing to catch it. Required makes the next one
+      a compile error — the same argument that made `canAccessWorkspace`'s
+      features argument required.
+    - **Choosing the routing is FREE for everyone**, including the paid
+      channels: turning an alert **off** must never require a membership.
+      What a tier gates is connecting the channel in the first place.
+  - **Text alerts are `textAlerts` (Max), and ONLY A VERIFIED NUMBER IS EVER
+    TEXTED** (`notifications/sms.ts`, `sms_numbers`, migration `0136`, routes
+    `/api/sms/*`). Twilio over HTTPS on **port 443**, for the reason Resend is
+    preferred over SMTP: a PaaS cannot block 443 without breaking the app.
+    - **The verification is the point of the whole module.** A wrong Pushover
+      key reaches nobody; a wrong phone number reaches a real stranger,
+      repeatedly, with somebody else's trading alerts — and their only way to
+      stop it is to reply STOP to a service they never signed up for. The code
+      is stored as a SHA-256, single-use, expiring, attempt-capped, and
+      throttled **per account** (a per-request throttle is none at all: the
+      flood is made by asking again). Changing the number clears the
+      verification, so an edit cannot inherit the previous number's proof.
+    - **A 10-digit number is read as US/Canada and nothing else is guessed.**
+      Anything international must be typed with its own `+`. Guessing a country
+      from a bare local number is how a text lands in the wrong one.
+    - **A text has no loudness and never repeats.** The silent/normal/alert/
+      repeating ladder is Pushover-only, so a `repeating` alert sends exactly
+      one text — which is the right answer, not a limitation: a siren that also
+      billed per retry would be a slip of the finger nobody could stop. Capped
+      at 300 characters, title and body composed into one line.
+    - **The founder-trade reminder texts ONLY ON THE FIRST PASS**
+      (`notifyCount === 0` in `founderTradeWatch.ts`) while push and Pushover go
+      on repeating until the row is answered. That is the one deliberate
+      difference between the channels, and the reason is arithmetic: a text has
+      no acknowledgement path, so repeating one adds no mechanism — the first
+      has already reached a phone with nothing installed on it — while a
+      reminder every minute across the 24 hours those run for is 1,440 messages
+      per unanswered invitation, at real money each. **The text is the opening
+      knock; Pushover is the nagging.**
+    - Max for the same reason Pushover is — it runs on something of the user's
+      own that the terminal then holds — and arguably a stronger case: a
+      Pushover key addresses an app somebody installed, a phone number is the
+      person. **Reading the status and removing the number are NOT gated**, so
+      a lapsed member can always take their own number back out.
+    - Unset Twilio credentials mean the channel reports "not configured" and
+      the other two are unaffected.
   - **The SERVER guards are still exactly that. The SCREEN is not** (owner
     instruction, 2026-08). Every alert control now lives on **Advanced Trading ▸
     Alert Settings**, and that workspace is an opt-in — so an account without
@@ -210,7 +270,7 @@ Tech:
 - API modules: `apps/api/src/{admin,ai,auth,badges,chat,demo,earlyAccess,employee,feedback,features,legal,messageTemplates,notifications,patchNotes,security,settings,studies,support,teams,todo,trading,userTeams}`.
   Routes in `apps/api/src/routes/*`, registered in `server.ts` (health, auth,
   admin, earlyAccess, brokers, trading, tradeDesk, webhooks, tvWebhook, todo, ai,
-  chat, feedback, features, studies, push, pushover, content).
+  chat, feedback, features, studies, push, pushover, sms, content).
 - Web shell: `apps/web/src/components` (`Portal.tsx` is the router/shell,
   `Sidebar.tsx`, `TopBar.tsx`, `AskClaudePanel.tsx`, `TeamChat.tsx`,
   `UpdatePrompt.tsx`, `InstallPrompt.tsx`, …).
@@ -757,15 +817,38 @@ workspaces list** (see `theme/nav.ts` order).
       17:15 ET, each with its own time and its own rung on the existing
       notification ladder — `close` defaults to `alert` because it is the only
       one with a deadline attached.
-    - **THE FIRST TWO ONLY FIRE WHEN A FUNDED POSITION IS ACTUALLY OPEN, AND
-      THAT GATE IS WHY THERE IS NO WEEKDAY PICKER.** A flat day, or a weekend
-      with nothing on, is silent by itself. A day picker would be a second
-      switch for a job one gate already does — and one more thing to be wrong
-      when a trader is holding over a bank holiday.
-    - **THE RECHECK IS DELIBERATELY THE EXCEPTION.** By the time it is due the
-      position it is about has usually been closed, so gating it on "still open"
-      would silence it in precisely the case it exists for. It fires when
-      something is open **or** a funded trade closed **today** — an ET day,
+    - **THE GATE IS TWO QUESTIONS, ASKED SEPARATELY, AND BOTH ARE NOW THE
+      TRADER'S** (owner request, 2026-08; migration `0139`). Which kinds of open
+      trade count — `openKinds`, a subset of `funded` / `broker` / `manual`,
+      once for the whole plan — and whether each event needs one at all
+      (`requireOpen`, per event). Both were hard-coded, and **every default is
+      exactly what was hard-coded**: funded alone, evaluate and close gated, the
+      recheck not. So no stored plan changed meaning on deploy.
+    - **A GATED EVENT IS WHY THERE IS NO WEEKDAY PICKER.** A flat day, or a
+      weekend with nothing on, is silent by itself. A day picker would be a
+      second switch for a job that gate already does — and one more thing to be
+      wrong when a trader is holding over a bank holiday. Ungating an event
+      makes it a plain reminder at its time, which is what somebody who wants
+      telling to *check* rather than telling to *close* is asking for.
+    - **AN EMPTY `openKinds` IS READ AS "NOT SUPPLIED", NEVER AS "NOTHING
+      COUNTS".** Stored, it would be a gate no trade could ever satisfy — a
+      routine that reads as switched on and silently never fires — so the
+      service keeps what is already there, exactly as an unparseable time does,
+      and the picker will not let the last kind be unticked. Note `??` is not
+      enough on its own: an empty array is not nullish.
+    - **The three kinds are read into their own buckets** (`openActivityFor` —
+      `funded_trades`, `trading_positions`, `manual_positions`, three queries
+      rather than a join). A funded-only plan must not be satisfied by a broker
+      position, which is only true if the read keeps them apart. Soft-deleted
+      broker rows are excluded: a trade the trader removed by hand is not
+      something to be reminded to close.
+    - **THE RECHECK IS DELIBERATELY THE EXCEPTION**, and its `requireOpen`
+      defaults off for that reason. By the time it is due the position it is
+      about has usually been closed, so gating it on "still open" would silence
+      it in precisely the case it exists for. Ungated it still keeps a floor of
+      its own — something open **or** a funded trade closed **today**, which is
+      not a setting — so it cannot arrive every evening of a week nobody traded.
+      That day is an ET day,
       matched on the day stamp rather than a midnight instant, so it needs no
       zone arithmetic to get wrong across DST. That also makes it restart-proof:
       the fact is read from the database rather than from the watch's in-memory
@@ -1114,10 +1197,25 @@ workspaces list** (see `theme/nav.ts` order).
       makes with its free calendar, and it is what keeps charging for Pushover
       honest. **Do not fold those two into the paid block.**
     - **Every test SAYS it is a test, in the title, before anything else** —
-      `TEST · VTS Terminal`, on Pushover and web push alike. Somebody woken at
-      3am reads the first line on a lock screen and little more; a test
+      `TEST · VTS Terminal`, on Pushover, web push and text alike. Somebody
+      woken at 3am reads the first line on a lock screen and little more; a test
       indistinguishable from a fill gets acted on, and a notification system
       that cries wolf is worse than one that stays quiet.
+      - **A test can carry the sender's OWN MESSAGE** (owner request, 2026-08;
+        the box on Send a test, bounded at 200 characters, carried to all three
+        channels). Seeing the wording you are planning to use on a real lock
+        screen is the thing a canned test cannot show you.
+      - **THE TITLE IS NOT THEIRS TO WRITE, AND MUST NOT BECOME SO.** A custom
+        message changes the BODY; the title stays `TEST · VTS Terminal`,
+        applied server-side in `sendTest` / `sendPushoverTest` / `sendSmsTest`
+        rather than by the caller. The title is the line a lock screen shows, so
+        a test that could be titled like a real fill is one somebody acts on —
+        which is the whole rule above, and letting it be typed would undo it.
+      - A test also ignores the account master switch **and the channel
+        routing**, for the reason it always ignored the first: a test is a
+        direct request made in the moment, and one that silently does nothing is
+        indistinguishable from a broken setup — the exact failure it exists to
+        detect.
     - **EVERY TRADE EVENT HAS ITS OWN VOLUME** — the four-rung ladder in
       `notifications/prefs.ts` (`NOTIF_LEVELS`, `LEVEL_PRIORITY`), stored per
       `(recipient, watched trader, event)` beside the on/off boolean that
@@ -1260,11 +1358,18 @@ workspaces list** (see `theme/nav.ts` order).
     - `npm run db:check-alerts` walks all of it through the real services against
       a scratch database. Like `db:check-sharing` it **writes**, so it refuses any
       database that already holds a user. Run it after touching `prefs.ts`,
-      `alertPrefs.ts`, `pushoverReceipts.ts` or `groupAlerts.ts`.
-    - **The push hook and the Pushover status are owned by the SCREEN and passed
-      down** (`PushControls`, `onConnectedChange`). Two hook instances do not see
-      each other, so turning phone alerts on in one panel left the test panel
-      still reading "off" with its button disabled for no visible reason.
+      `alertPrefs.ts`, `pushoverReceipts.ts`, `groupAlerts.ts`, `channels.ts` or
+      `sms.ts`. It pins two things nothing else can: that the channel defaults
+      are still app-on / Pushover-on / **text-off**, and what the phone-number
+      normalizer REFUSES — which is where a wrong number becomes a stranger's
+      phone.
+    - **The push hook, the Pushover status AND the text-alert status are owned
+      by the SCREEN and passed down** (`PushControls`, `onConnectedChange`,
+      `onVerifiedChange`). Two hook instances do not see each other, so turning
+      phone alerts on in one panel left the test panel still reading "off" with
+      its button disabled for no visible reason. The same rule now covers text:
+      the routing table and the test buttons both need to know whether the
+      channel is usable, so the screen holds it once.
     - `alertPanels.tsx` was `alertSettings.tsx` and had to be renamed: it differs
       from the screen's `AlertSettings.tsx` only in casing, which is the same
       file on a case-insensitive filesystem and a hard `TS1149` on a
@@ -3191,10 +3296,11 @@ They are split because `service.ts` asks `rbac.ts` who is an admin and `rbac.ts`
 needs the membership *type* for the public user — importing each other would be a
 cycle.
 
-- **`FEATURE_TIER` is the entire paywall, in one object.** Twenty paid features
-  (owner decisions, 2026-08). **Max:** `ai`, `studyAsk`, `tradeDesk`, `teams`,
-  `teamChat`, `customStreams`, `brokerConnections` (**Trade History ▸ Live
-  Brokers carries its diamond**), `pushover`. **Premium:** `funded`,
+- **`FEATURE_TIER` is the entire paywall, in one object.** Twenty-one paid
+  features (owner decisions, 2026-08). **Max:** `ai`, `studyAsk`, `tradeDesk`,
+  `teams`, `teamChat`, `customStreams`, `brokerConnections` (**Trade History ▸
+  Live Brokers carries its diamond**), `pushover`, `textAlerts`.
+  **Premium:** `funded`,
   `studyExplain`, `studyCreation`, `customBoards`, `premiumBadges`,
   `strategySessions`, `marketData`, `presetStreams`, `suggestions`,
   `supportChat`, `alertSettings`, `tradingNotes`. Everything absent
@@ -3221,12 +3327,17 @@ cycle.
   hold. A key of somebody else's is a responsibility, and the worst case is their
   money or their account rather than their screen, so the terminal only accepts
   one from the top tier. **The test when adding a feature is simply: does the
-  user paste something of theirs into it?** Today that is exactly two surfaces —
-  `brokerConnections` (the OANDA token, the Kraken key/secret, AES-encrypted via
-  `security/secretbox.ts`) and `pushover` (their Pushover user key). Nothing else
-  in the terminal accepts a credential; the FRED, Finnhub, YouTube and Anthropic
-  keys are all server-side env, and the Investments workspace has **no credential
-  column at all** by design.
+  user hand over something of theirs to make it work?** Today that is exactly
+  three surfaces — `brokerConnections` (the OANDA token, the Kraken key/secret,
+  AES-encrypted via `security/secretbox.ts`), `pushover` (their Pushover user
+  key) and `textAlerts` (their mobile number, proved by a texted code before a
+  single alert reaches it). Nothing else in the terminal accepts one; the FRED,
+  Finnhub, YouTube, Twilio and Anthropic keys are all server-side env, and the
+  Investments workspace has **no credential column at all** by design.
+  - A phone number is arguably the strongest case of the three: a Pushover key
+    addresses an app somebody installed, a phone number is the person — and a
+    wrong one reaches a real stranger rather than nobody. It is also the only
+    channel that costs money per message.
   - **Two things stay ungated on a credential feature**, and both matter:
     **reading its status**, so a free account can see what the tier buys rather
     than a blank panel, and **disconnecting**. Blocking the disconnect would
@@ -3344,6 +3455,7 @@ cycle.
     | `suggestions`, `supportChat` | the intake choices in `SupportTab` |
     | `brokerConnections` | Trade History ▸ Live Brokers, **and** the Settings section |
     | `pushover` | its panel on Advanced Trading ▸ Alert Settings |
+    | `textAlerts` | its panel on Advanced Trading ▸ Alert Settings |
     | `premiumBadges` | the **Badge** button in My Terminal ▸ My Group |
     | `customBoards` | the Live Wall's "Build your own" button |
     | `studyCreation` | the Studies **Create** `ActionTile` |
@@ -5084,6 +5196,37 @@ for founders, software developers and admins — **Administrator chat**.
   Sessions screen until 2026-08).
   All default **off** (opt-in). The session watch reads these to fire a trader's
   own session notifications.
+  - **WHO GETS THEM IS A SEPARATE QUESTION FROM WHETHER THEY FIRE**, and the two
+    are stored apart (`session_alert_recipients`, migration `0138`; owner
+    request, 2026-08). The prefs row is what the OWNER switched on for their own
+    sessions; the recipients table is who else is copied in.
+    - **AN EMPTY LIST IS THE OWNER ALONE**, which is what the feature did before
+      anybody could be added, and **the owner is never a row in that table** —
+      they are the baseline rather than an entry. That is what stops "remove
+      everyone" quietly meaning "silence my own sessions", which is the one
+      mistake a picker like this could make that nobody notices until a session
+      opens without them.
+    - **Who may be added, and whether they still receive, is resolved at request
+      time from the owner's PRIVATE GROUP and each recipient's own
+      `alert_prefs.group_alerts` switch — never from the stored row.** A
+      recipient who leaves the group or switches group notifications off stops
+      receiving with nobody editing anything, and a saved id outside the group
+      is dropped rather than stored. The picker cannot become a way to send an
+      arbitrary account a stream of session alerts.
+    - **An opted-out person is SHOWN and still selectable**, marked. Their
+      switch is their own decision to undo, and an owner who could not see why
+      somebody never hears a session opening would file it as a bug — the same
+      honesty rule the group nudge follows when it reports how many people it
+      actually reached.
+    - **A copied-in recipient is told WHOSE session it is; the owner is not.**
+      "Dale's Method is now active" reads perfectly to Dale and is a puzzle to
+      anybody else, and a session name is whatever its author typed. So the body
+      is composed twice — unchanged for the owner, prefixed with the owner's
+      name for everybody else — matching how a trade notification already names
+      the trader.
+    - `recipientIds` on the save is **optional**, and absent leaves the stored
+      list alone: a cached PWA bundle that predates the picker must not un-copy
+      everybody by omission. An empty **array** is the explicit "just me".
 
 ## Employee Portal (`/employee`) — a separate, hardened surface
 
@@ -5537,6 +5680,17 @@ defaults; the app runs locally with almost nothing set.
 - **Notifications:** `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT`,
   `PUSHOVER_APP_TOKEN`, `PUSHOVER_SOUND`, `SESSION_WATCH_SECONDS` (session-notif
   poll cadence, default 30).
+- **Text alerts (Twilio):** `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, plus a
+  sender — **either** `TWILIO_MESSAGING_SERVICE_SID` (an `MG…` Messaging
+  Service, the better choice: Twilio picks the number and handles STOP/START
+  replies itself) **or** `TWILIO_FROM_NUMBER` in E.164. The Messaging Service
+  wins when both are set. All optional and blank-as-unset: with none of them the
+  text channel reports "not configured", every text control says so rather than
+  silently doing nothing, and app push and Pushover are unaffected. HTTPS on
+  port **443**, for the reason Resend is preferred over SMTP below — a PaaS
+  cannot block 443 without breaking the app itself. A Twilio **trial** account
+  can only text numbers verified in its own Console, which is fine for testing
+  and is not a production setup.
 - **Email — two transports, Resend first.** `RESEND_API_KEY` (an HTTPS send API
   on port **443**) is the preferred path and wins when set; `SMTP_*` is the
   fallback, kept for local catchers like MailHog. `MAIL_FROM` is the From header

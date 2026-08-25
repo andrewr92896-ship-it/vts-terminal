@@ -11,9 +11,20 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 7.37';
+export const APP_VERSION = 'Beta V 7.38';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 7.38',
+    date: 'August 25, 2026',
+    notes: [
+      'Text message alerts. Add your mobile number on Alert Settings, verify it with the code we text you, and alerts can reach you with nothing installed on the phone.',
+      'Choose how every kind of alert reaches you — the app, a text, Pushover, or any combination — on the new "How alerts reach you" table.',
+      'Strategy session alerts can now be sent to other people in your group as well as to you.',
+      'Rollover alerts: pick whether each one needs a trade actually open, and which kinds count — funded, broker or manual.',
+      'Send a test alert with your own wording, so you can see how it reads on a lock screen.',
+    ],
+  },
   {
     version: 'Beta V 7.37',
     date: 'August 24, 2026',

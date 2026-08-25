@@ -8,6 +8,7 @@ import { isDemoUser } from '../demo/identity.js';
 import { config } from '../config.js';
 import { recipientsWantingEvent, type NotifEvent } from './prefs.js';
 import { filterAccountAlerts } from './alertPrefs.js';
+import { channelRecipients, type AlertCategory } from './channels.js';
 
 // Web Push (VAPID) delivery for phone notifications. Everything is best-effort:
 // a failed send never throws into the caller (an alert or a trade event must
@@ -81,19 +82,42 @@ export async function hasSubscription(userId: string): Promise<boolean> {
   return rows.length > 0;
 }
 
+// What a send needs to know beyond the payload.
+//
+// **`category` is REQUIRED, deliberately.** It is what the recipient's channel
+// routing is read against, and an optional one would be the thing you get by
+// forgetting to pass anything — so a new notification would quietly ignore
+// everybody's "don't send me this on the app" and there would be nothing to
+// catch it. Required makes the next one a compile error, which is the same
+// argument that made `canAccessWorkspace`'s features argument required.
+export interface SendOpts {
+  category: AlertCategory;
+  // The test button only. A test is a direct request made in the moment, and
+  // one that silently does nothing is indistinguishable from a broken setup —
+  // which is the exact failure a test exists to detect.
+  ignoreAccountSwitch?: boolean;
+  ignoreChannelChoice?: boolean;
+}
+
 // Send a payload to every device of the given users. No-op when push is not
 // configured or no users are given. Prunes subscriptions the push service has
 // expired (HTTP 404/410).
 export async function sendToUsers(
   userIds: string[],
   payload: PushPayload,
-  opts: { ignoreAccountSwitch?: boolean } = {},
+  opts: SendOpts,
 ): Promise<void> {
   if (!configured || userIds.length === 0) return;
-  // The account-level master switch. Applied here, at the one place every web
-  // push leaves the server, so a caller cannot forget it. `ignoreAccountSwitch`
-  // exists for the test button alone — see sendTest.
-  const ids = opts.ignoreAccountSwitch ? userIds : await filterAccountAlerts(userIds);
+  // Two filters, both applied here at the one place every web push leaves the
+  // server, so a caller cannot forget either.
+  //
+  //   • the account-level master switch;
+  //   • whether this recipient wants THIS KIND of alert on the app channel at
+  //     all — the routing table in channels.ts.
+  //
+  // `ignoreAccountSwitch` exists for the test button alone — see sendTest.
+  let ids = opts.ignoreAccountSwitch ? userIds : await filterAccountAlerts(userIds);
+  if (!opts.ignoreChannelChoice) ids = await channelRecipients(ids, opts.category, 'push');
   if (ids.length === 0) return;
   const subs = await db
     .select()
@@ -135,6 +159,9 @@ export async function sendToUsers(
 // by their per-user notification preference for that trader + event; omit them
 // for notices that carry no per-trader event (e.g. TradingView alerts).
 export interface DeskSendOpts {
+  // Which kind of alert this is, for the recipient's channel routing. Required
+  // for the same reason it is on SendOpts.
+  category: AlertCategory;
   excludeUserId?: string;
   scopeIds?: Set<string>;
   ownerId?: string;
@@ -143,9 +170,9 @@ export interface DeskSendOpts {
 
 // Send a trading notification to a team (everyone who can access the Trading
 // workspace and has a subscription). Demo never notified.
-export async function sendToTradingDesk(payload: PushPayload, opts: DeskSendOpts = {}): Promise<void> {
+export async function sendToTradingDesk(payload: PushPayload, opts: DeskSendOpts): Promise<void> {
   if (!configured) return;
-  const { excludeUserId, scopeIds, ownerId, event } = opts;
+  const { excludeUserId, scopeIds, ownerId, event, category } = opts;
   const rows = await db
     .select({ id: users.id, roles: users.roles, username: users.username })
     .from(pushSubscriptions)
@@ -162,27 +189,36 @@ export async function sendToTradingDesk(payload: PushPayload, opts: DeskSendOpts
   // Honour each recipient's per-trader event preference when this is a per-trader
   // trade event; a recipient with no stored pref keeps the default (on).
   if (ownerId && event) ids = await recipientsWantingEvent(ids, ownerId, event);
-  await sendToUsers(ids, payload);
+  await sendToUsers(ids, payload, { category });
 }
 
+// The default body of a test, when the sender did not write one.
+export const DEFAULT_TEST_BODY =
+  'This is a test alert. Nothing has happened on your desk — phone alerts are working.';
+
 // Used by tests / a manual "send test" so a user can confirm a device works.
-export async function sendTest(userId: string): Promise<void> {
-  // Says TEST in the title, before anything else. A lock-screen glance shows the
-  // first line and little more — if that line reads like a real fill, somebody
-  // acts on a trade that never happened.
-  //
-  // Deliberately ignores the account master switch: a test is a direct request
-  // made in the moment, and a test that silently does nothing is
-  // indistinguishable from a broken setup — which is the exact failure the test
-  // exists to detect.
+//
+// `message` is the sender's own wording, which is the point of letting them
+// write one: a test that reads exactly like the alert they are setting up is
+// the only way to see how it will actually land on a lock screen at 3am.
+//
+// **THE TITLE IS NOT THEIRS TO WRITE.** It stays 'TEST · VTS Terminal', because
+// a lock-screen glance shows the first line and little more — and a test that
+// could be titled like a real fill is one somebody acts on. What a custom
+// message changes is the body underneath.
+export async function sendTest(userId: string, message?: string): Promise<void> {
+  // Deliberately ignores the account master switch and the channel routing: a
+  // test is a direct request made in the moment, and one that silently does
+  // nothing is indistinguishable from a broken setup — which is the exact
+  // failure the test exists to detect.
   await sendToUsers(
     [userId],
     {
       title: 'TEST · VTS Terminal',
-      body: 'This is a test alert. Nothing has happened on your desk — phone alerts are working.',
+      body: message?.trim() || DEFAULT_TEST_BODY,
       url: '/',
       tag: 'vts-test',
     },
-    { ignoreAccountSwitch: true },
+    { category: 'system', ignoreAccountSwitch: true, ignoreChannelChoice: true },
   );
 }

@@ -143,6 +143,26 @@ const envSchema = z.object({
   // so an existing SMTP deployment keeps working untouched. With Resend this
   // address must be on a domain verified in the Resend dashboard.
   MAIL_FROM: blankAsUnset,
+  // ---- Outbound SMS (Twilio) — the text-message alert channel ----
+  // An HTTPS API on port 443, chosen for exactly the reason Resend is preferred
+  // over SMTP above: a PaaS cannot block 443 without breaking the app itself.
+  //
+  // Optional throughout. With no credentials the SMS channel reports "not
+  // configured", every text-alert control says so rather than silently doing
+  // nothing, and the other two channels are unaffected — a terminal with no
+  // Twilio account still notifies by phone and Pushover exactly as it did.
+  //
+  // Blank-as-unset for the same reason the SMTP block is: a hosting dashboard
+  // hands you an empty string the moment somebody adds a variable and tabs away,
+  // and a half-set Twilio account would send every text to nowhere.
+  TWILIO_ACCOUNT_SID: blankAsUnset,
+  TWILIO_AUTH_TOKEN: blankAsUnset,
+  // The sender. EITHER a Messaging Service SID (starts `MG…`, and the better
+  // choice — Twilio then picks the number and handles opt-out keywords itself)
+  // or one of the account's own numbers in E.164. Whichever is set is used;
+  // the Messaging Service wins when both are.
+  TWILIO_MESSAGING_SERVICE_SID: blankAsUnset,
+  TWILIO_FROM_NUMBER: blankAsUnset,
   // ---- Employee portal (/employee) ----
   // A deliberately separate, hardened surface with its own sessions. These knobs
   // are all "secure by default": the shipped values are the strict ones, and

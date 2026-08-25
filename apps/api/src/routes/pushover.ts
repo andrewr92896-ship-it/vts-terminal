@@ -78,11 +78,18 @@ export async function pushoverRoutes(app: FastifyInstance) {
     // app is a service-worker-cached PWA, so a browser on yesterday's bundle can
     // still be posting it.
     const parsed = z
-      .object({ kind: z.enum(['standard', 'repeating', 'emergency']).optional() })
+      .object({
+        kind: z.enum(['standard', 'repeating', 'emergency']).optional(),
+        // The sender's own wording for the body. The TEST title is added by the
+        // sender either way — that half is not the caller's to change, because
+        // it is the line a lock screen shows.
+        message: z.string().trim().max(200).optional(),
+      })
       .safeParse(request.body ?? {});
     const raw = parsed.success ? (parsed.data.kind ?? 'standard') : 'standard';
     const kind: PushoverTestKind = raw === 'standard' ? 'standard' : 'repeating';
-    const ok = await sendPushoverTest(request.currentUser!.id, kind);
+    const message = parsed.success ? parsed.data.message : undefined;
+    const ok = await sendPushoverTest(request.currentUser!.id, kind, message);
     if (!ok) return reply.code(400).send({ error: 'Connect your Pushover user key first, or check that it’s valid.' });
     return { ok: true };
   });

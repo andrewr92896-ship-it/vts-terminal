@@ -81,6 +81,11 @@ import type {
   TradingNote,
   MarketHoursResult,
   SessionAlertPrefs,
+  SessionAlertRecipient,
+  SmsStatus,
+  AlertCategory,
+  AlertChannel,
+  ChannelChoice,
   RolloverPlan,
   RolloverPlanInput,
   ReentryReport,
@@ -879,11 +884,24 @@ export const api = {
   marketHours(symbol: string): Promise<MarketHoursResult> {
     return request('/api/trading/market-hours', { method: 'POST', body: JSON.stringify({ symbol }) });
   },
-  sessionAlertPrefs(): Promise<{ prefs: SessionAlertPrefs }> {
+  // The owner's own session alert settings, plus who else is copied in.
+  // `recipients` is everybody in the caller's private group, each flagged with
+  // whether they are on the list — the picker needs the whole group, not just
+  // the chosen ones.
+  sessionAlertPrefs(): Promise<{ prefs: SessionAlertPrefs; recipients: SessionAlertRecipient[] }> {
     return request('/api/trading/session-alert-prefs');
   },
-  saveSessionAlertPrefs(prefs: SessionAlertPrefs): Promise<{ prefs: SessionAlertPrefs }> {
-    return request('/api/trading/session-alert-prefs', { method: 'PUT', body: JSON.stringify(prefs) });
+  // `recipientIds` is optional and an absent one leaves the stored list alone;
+  // an empty ARRAY is the explicit "just me". Sending the two apart is what
+  // stops a save of the toggles quietly un-copying everybody.
+  saveSessionAlertPrefs(
+    prefs: SessionAlertPrefs,
+    recipientIds?: string[],
+  ): Promise<{ prefs: SessionAlertPrefs; recipients: SessionAlertRecipient[] }> {
+    return request('/api/trading/session-alert-prefs', {
+      method: 'PUT',
+      body: JSON.stringify(recipientIds ? { ...prefs, recipientIds } : prefs),
+    });
   },
   // Rollover close — the timed alerts around the 5pm ET rollover. The save takes
   // a patch: the server merges onto what is stored, so sending one event never
@@ -1751,8 +1769,11 @@ export const api = {
   pushUnsubscribe(endpoint: string): Promise<{ ok: true }> {
     return request('/api/push/unsubscribe', { method: 'POST', body: JSON.stringify({ endpoint }) });
   },
-  pushTest(): Promise<{ ok: true }> {
-    return request('/api/push/test', { method: 'POST', body: JSON.stringify({}) });
+  // `message` is the sender's own wording for the body. The TEST title is added
+  // server-side either way — that half is not the caller's to change, because
+  // it is the line a lock screen shows.
+  pushTest(message?: string): Promise<{ ok: true }> {
+    return request('/api/push/test', { method: 'POST', body: JSON.stringify({ message }) });
   },
   // ---- Memberships (admin) ----
   // Granting requires a note saying why; the server refuses without one, and an
@@ -1853,8 +1874,46 @@ export const api = {
   // 'standard' goes out exactly the way a real trade notification does;
   // 'emergency' repeats until acknowledged in the Pushover app, which is the
   // only level iOS lets through silent mode and Focus.
-  pushoverTest(kind: PushoverTestKind = 'standard'): Promise<{ ok: true }> {
-    return request('/api/pushover/test', { method: 'POST', body: JSON.stringify({ kind }) });
+  pushoverTest(kind: PushoverTestKind = 'standard', message?: string): Promise<{ ok: true }> {
+    return request('/api/pushover/test', { method: 'POST', body: JSON.stringify({ kind, message }) });
+  },
+
+  // ---- Text alerts (SMS) ----
+  // Connecting a number is Max; reading the status and disconnecting are not,
+  // so a lapsed member can always take their own number back out.
+  smsStatus(): Promise<SmsStatus> {
+    return request('/api/sms/status');
+  },
+  // Claims the number and texts it a code. Also the resend path — asking again
+  // simply issues a fresh one. `delivered` says whether the text actually went
+  // out, so a provider that refused it is not reported as a success.
+  smsVerifyStart(phone: string): Promise<{ ok: true; delivered: boolean; expiresInMinutes: number }> {
+    return request('/api/sms/verify/start', { method: 'POST', body: JSON.stringify({ phone }) });
+  },
+  smsVerifyConfirm(code: string): Promise<{ ok: true }> {
+    return request('/api/sms/verify/confirm', { method: 'POST', body: JSON.stringify({ code }) });
+  },
+  smsRemove(): Promise<{ ok: true }> {
+    return request('/api/sms/number', { method: 'DELETE' });
+  },
+  smsTest(message?: string): Promise<{ ok: true }> {
+    return request('/api/sms/test', { method: 'POST', body: JSON.stringify({ message }) });
+  },
+
+  // ---- Which channels carry which kind of alert ----
+  // Free for everyone, including the free channels: turning an alert off must
+  // never require a membership.
+  alertChannels(): Promise<{
+    categories: AlertCategory[];
+    channels: AlertChannel[];
+    choices: Record<AlertCategory, ChannelChoice>;
+  }> {
+    return request('/api/alert-channels');
+  },
+  // All three channels are sent together — the panel has them all on screen, so
+  // a partial save would leave "off" and "not mentioned" indistinguishable.
+  setAlertChannels(category: AlertCategory, choice: ChannelChoice): Promise<{ choice: ChannelChoice }> {
+    return request(`/api/alert-channels/${category}`, { method: 'PUT', body: JSON.stringify(choice) });
   },
   // ---- Per-user notification preferences ----
   notificationPrefs(): Promise<{

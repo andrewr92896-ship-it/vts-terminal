@@ -29,7 +29,7 @@ import { randomUUID } from 'node:crypto';
 import { eq } from 'drizzle-orm';
 import { db } from '../db/index.js';
 import { fundedAccounts, fundedTrades, rolloverPlans, users } from '../db/schema.js';
-import { fundedActivityFor, getRolloverPlan, setRolloverPlan } from './rollover.js';
+import { openActivityFor, getRolloverPlan, setRolloverPlan } from './rollover.js';
 import { getReentryChecks } from './reentry.js';
 import { SYSTEM } from './credentialAudit.js';
 
@@ -138,6 +138,13 @@ async function main() {
   ok('close defaults to 16:45', fresh.close.at === '16:45');
   ok('recheck defaults to 17:15', fresh.recheck.at === '17:15');
   ok('the close alert is the loud one', fresh.close.level === 'alert' && fresh.evaluate.level === 'normal');
+  // The open gate's defaults ARE what was hard-coded before it was a setting.
+  // If any of these move, every plan stored before this feature existed has
+  // silently changed meaning.
+  ok('it asks about funded trades by default', fresh.openKinds.join(',') === 'funded');
+  ok('evaluate needs something open by default', fresh.evaluate.requireOpen === true);
+  ok('close needs something open by default', fresh.close.requireOpen === true);
+  ok('the recheck does not', fresh.recheck.requireOpen === false);
   const noRow = await db.select().from(rolloverPlans).where(eq(rolloverPlans.userId, andrew));
   ok('reading the plan writes no row', noRow.length === 0);
 
@@ -174,13 +181,36 @@ async function main() {
   const rows = await db.select().from(rolloverPlans).where(eq(rolloverPlans.userId, andrew));
   ok('saving repeatedly keeps one row', rows.length === 1);
 
+  // ---- The open gate is stored, and refuses a setting that cannot fire ----
+  section('which trades count, and whether an event needs one');
+  const kinds = await setRolloverPlan(andrew, { openKinds: ['broker', 'manual'] });
+  ok('the kinds asked for are stored', kinds.openKinds.join(',') === 'broker,manual');
+  const reread = await getRolloverPlan(andrew);
+  ok('and survive a re-read', reread.openKinds.join(',') === 'broker,manual');
+
+  // An empty list would mean "no trade can ever satisfy the gate" — a routine
+  // that reads as switched on and never fires. It keeps what is stored, the
+  // same way an unusable time does.
+  const emptied = await setRolloverPlan(andrew, { openKinds: [] });
+  ok('an empty kinds list keeps the stored one', emptied.openKinds.join(',') === 'broker,manual');
+  const nonsense = await setRolloverPlan(andrew, { openKinds: ['nope'] as unknown as ['funded'] });
+  ok('an unrecognised kind falls back to funded', nonsense.openKinds.join(',') === 'funded');
+
+  // The per-event gate patches like every other field, and a save that does not
+  // mention it leaves it alone.
+  const ungated = await setRolloverPlan(andrew, { evaluate: { requireOpen: false } });
+  ok('an event can be ungated', ungated.evaluate.requireOpen === false);
+  ok('and its other fields survive', ungated.evaluate.at === '09:05');
+  const elsewhere = await setRolloverPlan(andrew, { close: { at: '16:44' } });
+  ok('a save elsewhere leaves the gate alone', elsewhere.evaluate.requireOpen === false);
+
   // ---- The funded-activity gate ------------------------------------------
   section('what the alerts are gated on');
   const acct = await makeAccount(andrew, null);
   const twoDaysAgo = new Date(Date.now() - 48 * 3_600_000);
 
-  const beforeAnything = await fundedActivityFor([andrew, dale]);
-  ok('a flat trader has nothing open', (beforeAnything.get(andrew)?.open.length ?? -1) === 0);
+  const beforeAnything = await openActivityFor([andrew, dale]);
+  ok('a flat trader has nothing open', (beforeAnything.get(andrew)?.open.funded.length ?? -1) === 0);
   ok('and nothing closed today', (beforeAnything.get(andrew)?.closedToday ?? -1) === 0);
   ok('every asked-for trader gets an entry', beforeAnything.has(dale));
 
@@ -188,13 +218,18 @@ async function main() {
   await makeTrade(andrew, acct, { instrument: 'GBP/USD', status: 'closed', exitPrice: 1.2, closedAt: new Date() });
   await makeTrade(andrew, acct, { instrument: 'USD/JPY', status: 'closed', exitPrice: 150, closedAt: twoDaysAgo });
 
-  const activity = await fundedActivityFor([andrew, dale]);
+  const activity = await openActivityFor([andrew, dale]);
   const mine = activity.get(andrew)!;
-  ok('the open position is counted once', mine.open.length === 1);
-  ok('and named, so the alert can say what it is', mine.open[0] === 'EUR/USD');
+  ok('the open position is counted once', mine.open.funded.length === 1);
+  ok('and named, so the alert can say what it is', mine.open.funded[0] === 'EUR/USD');
   ok('a trade closed today counts', mine.closedToday === 1, `got ${mine.closedToday}`);
   ok('a trade closed two days ago does not', mine.closedToday === 1);
-  ok("another trader's book is not counted into it", (activity.get(dale)?.open.length ?? -1) === 0);
+  ok("another trader's book is not counted into it", (activity.get(dale)?.open.funded.length ?? -1) === 0);
+  // The three kinds are read into their own buckets. A funded-only plan must
+  // not be satisfied by a broker position, which is only true if the read keeps
+  // them apart in the first place.
+  ok('a broker position is not filed as funded', mine.open.broker.length === 0);
+  ok('nor a manual one', mine.open.manual.length === 0);
 
   // ---- The re-entry check ------------------------------------------------
   section('the re-entry check, with no price source configured');

@@ -4,6 +4,7 @@ import { marketNewsStreams, users } from '../db/schema.js';
 import { config } from '../config.js';
 import { sendToUsers } from '../notifications/push.js';
 import { sendPushoverToUsers } from '../notifications/pushover.js';
+import { sendSmsToUsers } from '../notifications/sms.js';
 import { DEMO_USERNAME } from '../demo/identity.js';
 import {
   channelsWithId,
@@ -155,8 +156,13 @@ async function notifyGoLive(channelId: string, state: LiveState): Promise<void> 
   const title = `${followers[0].name} is live`;
   const body = state.streamTitle ?? 'Streaming now on YouTube.';
   await Promise.all([
-    sendToUsers(recipients, { title, body, url: '/?screen=news', tag: `golive-${channelId}` }),
-    sendPushoverToUsers(recipients, { title, message: body }),
+    sendToUsers(
+      recipients,
+      { title, body, url: '/?screen=news', tag: `golive-${channelId}` },
+      { category: 'system' },
+    ),
+    sendPushoverToUsers(recipients, { title, message: body }, 'system', { category: 'system' }),
+    sendSmsToUsers(recipients, { title, body }, { category: 'system' }),
   ]);
 }
 

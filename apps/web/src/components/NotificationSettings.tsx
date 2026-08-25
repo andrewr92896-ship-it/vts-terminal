@@ -11,6 +11,16 @@ import {
   type NotifTarget,
   type PushoverTestKind,
 } from '../api/client';
+import {
+  ALERT_CATEGORIES,
+  ALERT_CATEGORY_LABELS,
+  ALERT_CHANNELS,
+  ALERT_CHANNEL_LABELS,
+  type AlertCategory,
+  type AlertChannel,
+  type ChannelChoice,
+  type SmsStatus,
+} from '../api/types';
 import { hasEntitlement, tierOfFeature } from '../auth/access';
 import { TierMark } from './TierMark';
 import { ReviewMark } from './ReviewMark';
@@ -452,6 +462,355 @@ export function PushoverSection({
 }
 
 // ---------------------------------------------------------------------------
+// Text alerts (SMS)
+// ---------------------------------------------------------------------------
+
+// Connect a mobile number and prove it is yours.
+//
+// **The number is VERIFIED before a single alert goes to it**, which is the one
+// thing that makes this panel different from the Pushover one beside it. A
+// wrong Pushover key reaches nobody; a wrong phone number reaches a real
+// stranger, repeatedly, with somebody else's trading alerts — and their only way
+// to stop it is to reply STOP to a service they never signed up for.
+//
+// Max, like Pushover and for the same reason: the feature runs on something of
+// the user's own that the terminal then holds. Reading the status and removing
+// the number are NOT gated, so a lapsed member can always take their own number
+// back out.
+export function TextAlertsSection({
+  accent,
+  accentText,
+  onVerifiedChange,
+}: {
+  accent: string;
+  accentText: string;
+  onVerifiedChange?: (verified: boolean) => void;
+}) {
+  const { user } = useAuth();
+  const canConnect = !!user && hasEntitlement(user, 'textAlerts');
+  const [status, setStatus] = useState<SmsStatus | null>(null);
+  const [phone, setPhone] = useState('');
+  const [code, setCode] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+
+  function apply(s: SmsStatus) {
+    setStatus(s);
+    onVerifiedChange?.(s.configured && s.verified);
+  }
+
+  useEffect(() => {
+    let alive = true;
+    api
+      .smsStatus()
+      .then((s) => alive && apply(s))
+      .catch(() => alive && setStatus({ configured: false, phone: null, verified: false, awaitingCode: false }));
+    return () => {
+      alive = false;
+    };
+    // The callback is a stable useCallback in the one screen that passes it;
+    // depending on it would re-fetch the status on every parent render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  async function refresh() {
+    await api.smsStatus().then(apply).catch(() => {});
+  }
+
+  async function run(p: Promise<unknown>, okText: string): Promise<boolean> {
+    setBusy(true);
+    setMsg(null);
+    try {
+      await p;
+      setMsg({ ok: true, text: okText });
+      return true;
+    } catch (e) {
+      setMsg({ ok: false, text: e instanceof ApiError ? e.message : 'Something went wrong' });
+      return false;
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const primaryBtn: React.CSSProperties = {
+    border: 'none',
+    background: accent,
+    color: accentText,
+    fontWeight: 600,
+    fontSize: 13,
+    padding: '10px 16px',
+    borderRadius: 8,
+    cursor: busy ? 'default' : 'pointer',
+    opacity: busy ? 0.6 : 1,
+    minHeight: 40,
+  };
+  const ghost: React.CSSProperties = {
+    background: 'rgba(255,255,255,.05)',
+    border: '1px solid #1d3560',
+    color: '#dfe7fa',
+    fontWeight: 600,
+    fontSize: 12.5,
+    padding: '10px 14px',
+    borderRadius: 8,
+    cursor: 'pointer',
+    minHeight: 40,
+  };
+
+  return (
+    <section>
+      <div style={{ ...sectionLabel, display: 'flex', alignItems: 'center', gap: 7 }}>
+        <span>Text alerts</span>
+        <TierMark tier={tierOfFeature('textAlerts', user?.access.membership)} size={12} dim={!canConnect} />
+      </div>
+      <p style={{ ...hintStyle, marginTop: 0, marginBottom: 12 }}>
+        Get alerts as a text message — on a phone with nothing installed on it, and with no app to
+        open. Choose which alerts come this way under <b>How alerts reach you</b> below.
+      </p>
+
+      {!canConnect && !status?.verified ? (
+        <UpgradeNotice feature="textAlerts" compact />
+      ) : status == null ? (
+        <div style={hintStyle}>Checking…</div>
+      ) : !status.configured ? (
+        <div style={hintStyle}>Text alerts aren’t set up on the server yet.</div>
+      ) : status.verified ? (
+        <>
+          <div style={{ fontSize: 12.5, color: '#7fd6a3', marginBottom: 10, fontWeight: 600 }}>
+            Verified · {status.phone} ✓
+          </div>
+          <button
+            onClick={() =>
+              void run(api.smsRemove(), 'Number removed.').then((ok) => {
+                if (!ok) return;
+                setPhone('');
+                setCode('');
+                void refresh();
+              })
+            }
+            disabled={busy}
+            style={{ ...ghost, color: '#ff9a9a' }}
+          >
+            Remove number
+          </button>
+        </>
+      ) : status.awaitingCode ? (
+        <>
+          <div style={{ fontSize: 12.5, color: '#dfe7fa', marginBottom: 8 }}>
+            We texted a code to {status.phone}.
+          </div>
+          <input
+            value={code}
+            onChange={(e) => setCode(e.target.value)}
+            placeholder="6-digit code"
+            inputMode="numeric"
+            autoComplete="one-time-code"
+            style={inputStyle}
+          />
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 4 }}>
+            <button
+              onClick={() =>
+                void run(api.smsVerifyConfirm(code.trim()), 'Number verified.').then((ok) => {
+                  if (!ok) return;
+                  setCode('');
+                  void refresh();
+                })
+              }
+              disabled={busy || code.trim().length < 4}
+              style={{ ...primaryBtn, opacity: busy || code.trim().length < 4 ? 0.6 : 1 }}
+            >
+              {busy ? 'Checking…' : 'Verify'}
+            </button>
+            {/* Asking again simply issues a fresh code, so there is one path
+                rather than two to keep in step. It is throttled server-side. */}
+            <button
+              onClick={() => void run(api.smsVerifyStart(phone.trim() || ''), 'New code sent.').then(refresh)}
+              disabled={busy || !phone.trim()}
+              style={ghost}
+              title={phone.trim() ? undefined : 'Re-enter the number to send another code'}
+            >
+              Send another
+            </button>
+            <button onClick={() => void run(api.smsRemove(), 'Cancelled.').then(refresh)} disabled={busy} style={ghost}>
+              Cancel
+            </button>
+          </div>
+        </>
+      ) : (
+        <>
+          <input
+            value={phone}
+            onChange={(e) => setPhone(e.target.value)}
+            placeholder="(555) 555-0147"
+            inputMode="tel"
+            autoComplete="tel"
+            style={inputStyle}
+          />
+          <p style={hintStyle}>
+            US and Canada numbers can be typed as 10 digits. For anywhere else, start with + and the
+            country code.
+          </p>
+          <div style={{ marginTop: 4 }}>
+            <button
+              onClick={() =>
+                void run(api.smsVerifyStart(phone.trim()), 'Code sent — check your phone.').then((ok) => {
+                  if (ok) void refresh();
+                })
+              }
+              disabled={busy || phone.trim().length < 7}
+              style={{ ...primaryBtn, opacity: busy || phone.trim().length < 7 ? 0.6 : 1 }}
+            >
+              {busy ? 'Sending…' : 'Send me a code'}
+            </button>
+          </div>
+        </>
+      )}
+      {msg && <div style={msgStyle(msg.ok)}>{msg.text}</div>}
+    </section>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// How alerts reach you
+// ---------------------------------------------------------------------------
+
+// One row per kind of alert, three switches each: the app's own notification, a
+// text, and Pushover. Any combination, including none.
+//
+// **Free for everyone, deliberately, and that includes the paid channels.**
+// Turning something OFF must never require a membership — somebody whose tier
+// lapsed still has to be able to say "stop texting me". What the tier gates is
+// connecting the channel in the first place, which is the panel above.
+//
+// A channel the account cannot currently use is drawn dimmed with a reason
+// rather than hidden: a routing table missing a row is one nobody can reason
+// about, and seeing "Pushover — not connected" is what sends somebody to the
+// panel that fixes it.
+export function AlertRoutingSection({ smsReady, pushoverReady }: { smsReady: boolean; pushoverReady: boolean }) {
+  const [choices, setChoices] = useState<Record<AlertCategory, ChannelChoice> | null>(null);
+  const [status, setStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
+
+  useEffect(() => {
+    let alive = true;
+    api
+      .alertChannels()
+      .then((r) => alive && setChoices(r.choices))
+      .catch(() => alive && setChoices(null));
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  async function toggle(category: AlertCategory, channel: AlertChannel) {
+    if (!choices) return;
+    const next = { ...choices[category], [channel]: !choices[category][channel] };
+    // Applied at once and written a beat later: a switch that lags reads as one
+    // that did not register.
+    setChoices({ ...choices, [category]: next });
+    setStatus('saving');
+    try {
+      await api.setAlertChannels(category, next);
+      setStatus('saved');
+      window.setTimeout(() => setStatus((s) => (s === 'saved' ? 'idle' : s)), 1500);
+    } catch {
+      setStatus('error');
+    }
+  }
+
+  if (!choices) return null;
+
+  // Why a channel cannot currently carry anything, or null when it can.
+  const unavailable = (c: AlertChannel): string | null => {
+    if (c === 'sms' && !smsReady) return 'Add a verified number above';
+    if (c === 'pushover' && !pushoverReady) return 'Connect Pushover above';
+    return null;
+  };
+
+  const head: React.CSSProperties = {
+    fontSize: 10,
+    fontWeight: 700,
+    letterSpacing: '.06em',
+    textTransform: 'uppercase',
+    color: '#6f84b0',
+    textAlign: 'center',
+    padding: '0 0 6px',
+  };
+
+  return (
+    <section>
+      <div style={sectionLabel}>How alerts reach you</div>
+      <p style={{ ...hintStyle, marginTop: 0, marginBottom: 12 }}>
+        Pick a channel, or several, for each kind of alert. A channel you haven’t set up is shown
+        greyed out — everything else here works whatever your membership is.
+      </p>
+
+      <div style={{ overflowX: 'auto' }}>
+        <table style={{ width: '100%', minWidth: 340, borderCollapse: 'collapse' }}>
+          <thead>
+            <tr>
+              <th style={{ ...head, textAlign: 'left' }} />
+              {ALERT_CHANNELS.map((c) => (
+                <th key={c} style={{ ...head, width: 62 }}>
+                  {ALERT_CHANNEL_LABELS[c]}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {ALERT_CATEGORIES.map((cat) => (
+              <tr key={cat} style={{ borderTop: '1px solid #16294f' }}>
+                <td style={{ fontSize: 12.5, color: '#eef3ff', padding: '9px 10px 9px 0' }}>
+                  {ALERT_CATEGORY_LABELS[cat]}
+                </td>
+                {ALERT_CHANNELS.map((ch) => {
+                  const why = unavailable(ch);
+                  const on = choices[cat][ch];
+                  return (
+                    <td key={ch} style={{ textAlign: 'center', padding: '6px 0' }}>
+                      <button
+                        onClick={() => void toggle(cat, ch)}
+                        role="switch"
+                        aria-checked={on}
+                        aria-label={`${ALERT_CATEGORY_LABELS[cat]} — ${ALERT_CHANNEL_LABELS[ch]}`}
+                        title={why ?? undefined}
+                        style={{
+                          width: 26,
+                          height: 26,
+                          borderRadius: 7,
+                          border: `1px solid ${on ? '#35c47b' : '#1c3a7a'}`,
+                          background: on ? 'rgba(53,196,123,.22)' : 'rgba(0,0,0,.18)',
+                          color: on ? '#7fd6a3' : '#4d5f88',
+                          fontSize: 13,
+                          lineHeight: 1,
+                          cursor: 'pointer',
+                          // Dimmed when the channel is not set up, but still
+                          // pressable: somebody may be routing an alert now and
+                          // connecting the channel in a minute.
+                          opacity: why && on ? 0.55 : why ? 0.4 : 1,
+                        }}
+                      >
+                        {on ? '✓' : ''}
+                      </button>
+                    </td>
+                  );
+                })}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      <div style={{ fontSize: 11, color: status === 'error' ? '#ffb4ab' : '#6f84b0', marginTop: 8, minHeight: 14 }}>
+        {status === 'saving' ? 'Saving…' : status === 'saved' ? 'Saved' : status === 'error' ? 'Could not save — try again.' : ''}
+      </div>
+      <p style={{ ...hintStyle, marginTop: 4, marginBottom: 0 }}>
+        Loudness — silent, normal, alert, repeating — applies to Pushover only. A text is a text, and
+        sends once however loud the alert is set.
+      </p>
+    </section>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Send a test
 // ---------------------------------------------------------------------------
 
@@ -470,24 +829,38 @@ export function SendTestSection({
   accentText,
   push,
   pushoverReady,
+  smsReady,
 }: {
   accent: string;
   accentText: string;
   push: PushControls;
   pushoverReady: boolean;
+  smsReady: boolean;
 }) {
-  const [busy, setBusy] = useState<'push' | PushoverTestKind | null>(null);
+  const [busy, setBusy] = useState<'push' | 'sms' | PushoverTestKind | null>(null);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  // The sender's own wording for the test. Empty means the standard text.
+  //
+  // **Only the BODY is theirs.** Every test keeps its 'TEST · VTS Terminal'
+  // title, added server-side, because the title is what a lock screen shows —
+  // and a test that could be titled like a real fill is one somebody acts on at
+  // 3am. What writing your own message is actually for is seeing how the
+  // wording you are planning to use reads on a real phone.
+  const [message, setMessage] = useState('');
 
-  async function fire(which: 'push' | PushoverTestKind) {
+  async function fire(which: 'push' | 'sms' | PushoverTestKind) {
     setBusy(which);
     setMsg(null);
+    const custom = message.trim() || undefined;
     try {
       if (which === 'push') {
-        await api.pushTest();
+        await api.pushTest(custom);
         setMsg({ ok: true, text: 'Test sent to this device’s phone alerts.' });
+      } else if (which === 'sms') {
+        await api.smsTest(custom);
+        setMsg({ ok: true, text: 'Test text sent.' });
       } else {
-        await api.pushoverTest(which);
+        await api.pushoverTest(which, custom);
         setMsg({
           ok: true,
           text:
@@ -532,10 +905,26 @@ export function SendTestSection({
         never be mistaken for a real trade.
       </p>
 
+      {/* Optional wording of your own, so you can see how the message you are
+          planning to use actually reads on a lock screen. The TEST title stays
+          whatever you type here. */}
+      <input
+        value={message}
+        onChange={(e) => setMessage(e.target.value)}
+        maxLength={200}
+        placeholder="Your own message (optional)"
+        style={{ ...inputStyle, marginBottom: 10 }}
+      />
+
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
         <button onClick={() => void fire('push')} disabled={!pushOn || busy != null} style={btn(busy === 'push')}>
           {busy === 'push' ? 'Sending…' : 'Test phone alert'}
         </button>
+        {smsReady && (
+          <button onClick={() => void fire('sms')} disabled={busy != null} style={btn(busy === 'sms')}>
+            {busy === 'sms' ? 'Sending…' : 'Test text'}
+          </button>
+        )}
         {pushoverReady && (
           <>
             <button onClick={() => void fire('standard')} disabled={busy != null} style={btn(busy === 'standard')}>

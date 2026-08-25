@@ -1,6 +1,7 @@
 import { config } from '../config.js';
 import { pushConfigured, sendToUsers } from '../notifications/push.js';
 import { pushoverConfigured, sendPushoverToUsers } from '../notifications/pushover.js';
+import { smsConfigured, sendSmsToUsers } from '../notifications/sms.js';
 import { LEVEL_PRIORITY } from '../notifications/prefs.js';
 import { dueReminders, markNotified, type DueReminder } from './founderTrades.js';
 
@@ -77,12 +78,11 @@ export async function tickFounderTradeWatch(now: Date = new Date()): Promise<voi
       // of a level, so it goes out unchanged; the Pushover priority comes from
       // the recipient's own level, which is what lets this break through silent
       // mode when they have asked it to.
-      await sendToUsers([r.recipientUserId], {
-        title: msg.title,
-        body: msg.body,
-        url: msg.url,
-        tag: msg.tag,
-      }).catch(() => {});
+      await sendToUsers(
+        [r.recipientUserId],
+        { title: msg.title, body: msg.body, url: msg.url, tag: msg.tag },
+        { category: 'founder' },
+      ).catch(() => {});
       await sendPushoverToUsers(
         [r.recipientUserId],
         {
@@ -93,7 +93,29 @@ export async function tickFounderTradeWatch(now: Date = new Date()): Promise<voi
           urlTitle: 'Open the terminal',
         },
         'founder_trade',
+        { category: 'founder' },
       ).catch(() => {});
+      // A text as well, for whoever routed this kind of alert there — but
+      // **ONLY ON THE FIRST REMINDER**, which is the one deliberate difference
+      // between this channel and the two above it.
+      //
+      // The other two repeat until the row is answered, which is the whole
+      // point of this watch. A text cannot join in: it has no acknowledgement
+      // path, so repeating one adds no mechanism at all — the first text has
+      // already done the thing the channel exists for, which is reaching a
+      // phone with nothing installed on it. What repeating WOULD add is a bill
+      // that grows with how long somebody takes to answer: a reminder every
+      // minute for the 24 hours these run for is 1,440 messages, per unanswered
+      // invitation, at real money each.
+      //
+      // So the text is the opening knock and Pushover is the nagging.
+      if (r.notifyCount === 0) {
+        await sendSmsToUsers(
+          [r.recipientUserId],
+          { title: msg.title, body: msg.body },
+          { category: 'founder' },
+        ).catch(() => {});
+      }
       // Stamped conditionally on the status it was sent for, so a reminder
       // racing a decision cannot re-pace a workflow that has already moved on.
       await markNotified(r.id, r.status).catch(() => {});
@@ -110,7 +132,7 @@ const WATCH_MS = Math.max(10, Number(process.env.SESSION_WATCH_SECONDS) || 30) *
 // there is nothing to poll for otherwise, and the terminal's own modal is
 // unaffected either way.
 export function startFounderTradeWatch(): void {
-  if (!config.isProd || (!pushConfigured() && !pushoverConfigured())) return;
+  if (!config.isProd || (!pushConfigured() && !pushoverConfigured() && !smsConfigured())) return;
   const tick = () => {
     void tickFounderTradeWatch().catch((err) => console.error('Founder trade watch error:', err));
   };

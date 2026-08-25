@@ -27,6 +27,7 @@ import { studyPackageRoutes } from './routes/studyPackages.js';
 import { devRoutes } from './routes/dev.js';
 import { pushRoutes } from './routes/push.js';
 import { pushoverRoutes } from './routes/pushover.js';
+import { smsRoutes } from './routes/sms.js';
 import { devBlogRoutes } from './routes/devBlog.js';
 import { notificationPrefsRoutes } from './routes/notificationPrefs.js';
 import { priceAlertRoutes } from './routes/priceAlerts.js';
@@ -129,6 +130,7 @@ export async function buildServer() {
   await app.register(devRoutes);
   await app.register(pushRoutes);
   await app.register(pushoverRoutes);
+  await app.register(smsRoutes);
   await app.register(notificationPrefsRoutes);
   await app.register(priceAlertRoutes);
   await app.register(widgetRoutes);

@@ -5,6 +5,7 @@ import { priceAlerts, tradingAlerts, type PriceAlertRow } from '../db/schema.js'
 import { config } from '../config.js';
 import { pushConfigured, sendToUsers } from '../notifications/push.js';
 import { pushoverConfigured, sendPushoverToUsers } from '../notifications/pushover.js';
+import { smsConfigured, sendSmsToUsers } from '../notifications/sms.js';
 import { fetchLivePrices } from './priceSource.js';
 import { activePriceAlerts, shouldFire, sideOf, toPricingInstrument } from './priceAlerts.js';
 
@@ -53,19 +54,24 @@ async function fireAlert(alert: PriceAlertRow, display: string, price: number, n
     })
     .catch(() => {});
 
-  await sendToUsers([alert.userId], {
-    title,
-    body: summary,
-    url: '/?screen=alerts',
-    tag: `price-alert-${alert.id}`,
-  }).catch(() => {});
-  await sendPushoverToUsers([alert.userId], {
-    title,
-    message: summary,
-    priority: 1, // high — a level was hit
-    url: '/?screen=alerts',
-    urlTitle: 'Open the desk',
-  }).catch(() => {});
+  await sendToUsers(
+    [alert.userId],
+    { title, body: summary, url: '/?screen=alerts', tag: `price-alert-${alert.id}` },
+    { category: 'price' },
+  ).catch(() => {});
+  await sendPushoverToUsers(
+    [alert.userId],
+    {
+      title,
+      message: summary,
+      priority: 1, // high — a level was hit
+      url: '/?screen=alerts',
+      urlTitle: 'Open the desk',
+    },
+    'price',
+    { category: 'price' },
+  ).catch(() => {});
+  await sendSmsToUsers([alert.userId], { title, body: summary }, { category: 'price' }).catch(() => {});
 }
 
 // One pass: price every active rule's instrument, fire any that crossed, and
@@ -119,7 +125,7 @@ const PRICE_ALERT_WATCH_MS = Math.max(10, Number(process.env.ALERT_WATCH_SECONDS
 // Start the background price-alert watch. Production-only and only when a
 // delivery channel is configured (no point polling prices otherwise).
 export function startPriceAlertWatch(): void {
-  if (!config.isProd || (!pushConfigured() && !pushoverConfigured())) return;
+  if (!config.isProd || (!pushConfigured() && !pushoverConfigured() && !smsConfigured())) return;
   const tick = () => {
     void tickPriceAlertWatch().catch((err) => console.error('Price alert watch error:', err));
   };

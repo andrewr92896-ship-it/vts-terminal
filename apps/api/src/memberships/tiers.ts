@@ -44,8 +44,9 @@ export const TIER_LABELS: Record<MembershipTier, string> = {
 // 2026-08). Holding somebody else's key is a responsibility rather than a
 // convenience — the worst case is their money or their account, not their
 // screen — so the terminal only takes one from the top tier. Today that is
-// `brokerConnections` (OANDA, Kraken) and `pushover`; the check when adding a
-// feature is simply "does the user paste something of theirs into it".
+// `brokerConnections` (OANDA, Kraken), `pushover` and `textAlerts`; the check
+// when adding a feature is simply "does the user hand over something of
+// theirs to make it work".
 export const PREMIUM_FEATURES = [
   // Max
   'ai',
@@ -56,6 +57,7 @@ export const PREMIUM_FEATURES = [
   'customStreams',
   'brokerConnections',
   'pushover',
+  'textAlerts',
   // Premium
   'funded',
   'studyExplain',
@@ -115,6 +117,16 @@ export const FEATURE_TIER: Record<PremiumFeature, MembershipTier> = {
   // free account still gets told when its price alert fires; what Max buys is
   // the Pushover channel and its custom sounds, not being notified at all.
   pushover: 'max',
+  // Text alerts, which run on the mobile number the user hands over. The same
+  // rule as Pushover and arguably a stronger case for it: a Pushover key
+  // addresses an app somebody installed, a phone number is the person. Every
+  // message also costs real money to send, which the free channels do not.
+  //
+  // **Web push stays out of this map**, so a free account is still told when
+  // its price alert fires. What the tier buys is the text channel, never being
+  // notified at all — and CHOOSING which channels carry what is free for
+  // everyone, because turning something off must not require a membership.
+  textAlerts: 'max',
 
   // ---- Premium ----
   // The prop-firm challenge tracker.
@@ -179,6 +191,7 @@ export const FEATURE_LABELS: Record<PremiumFeature, string> = {
   customStreams: 'Your own live streams',
   brokerConnections: 'Broker connections',
   pushover: 'Pushover notifications',
+  textAlerts: 'Text message alerts',
   funded: 'Funded Trades tracking',
   studyExplain: 'Study explanations',
   studyCreation: 'Study creation',
@@ -204,6 +217,7 @@ export const FEATURE_BLURBS: Record<PremiumFeature, string> = {
   customStreams: 'Add any YouTube channel to the live-stream wall.',
   brokerConnections: 'Connect OANDA and Kraken to stream your positions and balances.',
   pushover: 'Trade and alert notifications through Pushover, with your own sound.',
+  textAlerts: 'Get your alerts as a text message, on a phone with nothing installed on it.',
   funded: 'Track a prop-firm challenge: equity, target, and drawdown left.',
   studyExplain: 'A plain-language breakdown of the study question or term in front of you.',
   studyCreation: 'Build your own study games, flashcard sets and guides.',

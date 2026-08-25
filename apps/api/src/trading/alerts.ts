@@ -124,14 +124,14 @@ export async function ingestAlert(body: Record<string, unknown>, rawPayload: str
     body: summary,
     url: '/?screen=alerts',
     tag: 'vts-alert',
-  }, { scopeIds: teamIds }).catch(() => {});
+  }, { category: 'alert', scopeIds: teamIds }).catch(() => {});
   void sendPushoverToDesk({
     title: `Alert · ${instrument}`,
     message: summary,
     priority: 1, // high — alerts are time-sensitive
     url: '/?screen=alerts',
     urlTitle: 'Open the desk',
-  }, { scopeIds: teamIds }).catch(() => {});
+  }, { category: 'alert', scopeIds: teamIds }).catch(() => {});
 
   return id;
 }

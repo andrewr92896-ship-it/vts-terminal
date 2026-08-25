@@ -4,6 +4,7 @@ import { users } from '../db/schema.js';
 import { isDemoUser } from '../demo/identity.js';
 import { sendToUsers } from './push.js';
 import { sendPushoverToUsers, PUSHOVER_EMERGENCY } from './pushover.js';
+import { sendSmsToUsers } from './sms.js';
 import { recipientsAcceptingGroupAlerts } from './alertPrefs.js';
 
 // "Nudge my group" — one person in a private group buzzing the others in it,
@@ -110,12 +111,11 @@ export async function sendGroupAlert(
   // recipient to have the Advanced Trading opt-in, and a private group is not
   // the trading desk — somebody in your group who never turned the desk on
   // should still be reachable.
-  void sendToUsers(recipients, {
-    title,
-    body,
-    url: '/?screen=my_team',
-    tag: `vts-group-${sender.id}`,
-  }).catch(() => {});
+  void sendToUsers(
+    recipients,
+    { title, body, url: '/?screen=my_team', tag: `vts-group-${sender.id}` },
+    { category: 'group' },
+  ).catch(() => {});
   void sendPushoverToUsers(
     recipients,
     {
@@ -124,7 +124,14 @@ export async function sendGroupAlert(
       priority: kind === 'repeating' ? PUSHOVER_EMERGENCY : 1,
     },
     'group',
+    { category: 'group' },
   ).catch(() => {});
+  // And a text, for whoever routed group notifications there. `kind` does not
+  // reach it: a text has no loudness and cannot repeat, so a `repeating` nudge
+  // sends exactly one message — which is the right answer, not a limitation.
+  // A siren that also billed per repeat would be a slip of the finger nobody
+  // could stop from their side.
+  void sendSmsToUsers(recipients, { title, body }, { category: 'group' }).catch(() => {});
 
   return { recipients: recipients.length };
 }

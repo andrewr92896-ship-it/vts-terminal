@@ -227,14 +227,14 @@ export async function reconcile(
       body,
       url: '/?screen=live',
       tag: `vts-open-${t.id}`,
-    }, { scopeIds: teamIds, ownerId: userId, event: 'open' }).catch(() => {});
+    }, { category: 'trade', scopeIds: teamIds, ownerId: userId, event: 'open' }).catch(() => {});
     void sendPushoverToDesk({
       title: `Trade opened · ${t.instrument}`,
       message: body,
       priority: 1,
       url: '/?screen=live',
       urlTitle: 'Open the Live Wall',
-    }, { scopeIds: teamIds, ownerId: userId, event: 'open' }).catch(() => {});
+    }, { category: 'trade', scopeIds: teamIds, ownerId: userId, event: 'open' }).catch(() => {});
   }
   for (const c of closed) {
     const pl = fmtPl(c.pl);
@@ -244,14 +244,14 @@ export async function reconcile(
       body,
       url: '/?screen=history',
       tag: `vts-close-${c.instrument}`,
-    }, { scopeIds: teamIds, ownerId: userId, event: 'close' }).catch(() => {});
+    }, { category: 'trade', scopeIds: teamIds, ownerId: userId, event: 'close' }).catch(() => {});
     void sendPushoverToDesk({
       title: `Trade closed · ${c.instrument}`,
       message: body,
       priority: 1,
       url: '/?screen=history',
       urlTitle: 'Open History',
-    }, { scopeIds: teamIds, ownerId: userId, event: 'close' }).catch(() => {});
+    }, { category: 'trade', scopeIds: teamIds, ownerId: userId, event: 'close' }).catch(() => {});
   }
   // A stop/target change fires as its own event so each recipient's per-user
   // prefs can gate SL and TP — and placing vs moving each — independently. A
@@ -280,14 +280,14 @@ export async function reconcile(
         // Tag per trade + event so a rapid re-edit of the same level collapses
         // onto the last one, but an SL and a TP change stay distinct banners.
         tag: `vts-${ev.event}-${t.id}`,
-      }, { scopeIds: teamIds, ownerId: userId, event: ev.event }).catch(() => {});
+      }, { category: 'trade', scopeIds: teamIds, ownerId: userId, event: ev.event }).catch(() => {});
       void sendPushoverToDesk({
         title: `Trade updated · ${t.instrument}`,
         message: body,
         priority: 1,
         url: '/?screen=live',
         urlTitle: 'Open the Live Wall',
-      }, { scopeIds: teamIds, ownerId: userId, event: ev.event }).catch(() => {});
+      }, { category: 'trade', scopeIds: teamIds, ownerId: userId, event: ev.event }).catch(() => {});
     }
   }
 }

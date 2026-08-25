@@ -14,6 +14,7 @@ import { getPrompt } from '../ai/prompts.js';
 import { withGuardrails } from '../ai/guardrails.js';
 import { sendToUsers } from '../notifications/push.js';
 import { sendPushoverToUsers } from '../notifications/pushover.js';
+import { sendSmsToUsers } from '../notifications/sms.js';
 
 // Suggestions & bug reports submitted from the Site Help workspace. Both land in
 // the Admin workspace. Suggestions are a plain note; bug reports run through a
@@ -318,16 +319,22 @@ export async function adminReplyToBugReport(reportId: string, body: string): Pro
   const preview = text.length > 120 ? `${text.slice(0, 120)}…` : text;
   try {
     await Promise.allSettled([
-      sendToUsers([report.userId], {
-        title: 'Reply to your bug report',
-        body: preview,
-        url: '/',
-        tag: `bug-${reportId}`,
-      }),
-      sendPushoverToUsers([report.userId], {
-        title: 'Reply to your bug report',
-        message: preview,
-      }),
+      sendToUsers(
+        [report.userId],
+        { title: 'Reply to your bug report', body: preview, url: '/', tag: `bug-${reportId}` },
+        { category: 'system' },
+      ),
+      sendPushoverToUsers(
+        [report.userId],
+        { title: 'Reply to your bug report', message: preview },
+        'system',
+        { category: 'system' },
+      ),
+      sendSmsToUsers(
+        [report.userId],
+        { title: 'Reply to your bug report', body: preview },
+        { category: 'system' },
+      ),
     ]);
   } catch {
     /* notifications are best-effort */

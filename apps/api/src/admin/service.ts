@@ -22,11 +22,13 @@ import {
   aiUsage,
   notificationPrefs,
   sessionAlertPrefs,
+  sessionAlertRecipients,
   rolloverPlans,
   founderTradeEvents,
   founderTradeInvites,
   founderTradePrefs,
   alertPrefs,
+  alertChannels,
   pushoverReceipts,
   userFeatures,
   aiViolations,
@@ -70,6 +72,7 @@ import {
   studySections,
   pushSubscriptions,
   pushoverUsers,
+  smsNumbers,
   studyGame,
   studyGameRuns,
   studyDeckGame,
@@ -507,6 +510,12 @@ export async function deleteUser(actingUserId: string, targetId: string): Promis
     await tx.delete(tradingOrders).where(eq(tradingOrders.userId, targetId));
     await tx.delete(tradingSessions).where(eq(tradingSessions.userId, targetId));
     await tx.delete(sessionAlertPrefs).where(eq(sessionAlertPrefs.userId, targetId));
+    // Who this trader copied in on their session alerts, AND every list they
+    // themselves appear on. Both directions matter: leaving the second behind
+    // would keep a deleted person as somebody else's chosen recipient, so their
+    // name would go on being resolved on every fire.
+    await tx.delete(sessionAlertRecipients).where(eq(sessionAlertRecipients.ownerUserId, targetId));
+    await tx.delete(sessionAlertRecipients).where(eq(sessionAlertRecipients.recipientUserId, targetId));
     await tx.delete(rolloverPlans).where(eq(rolloverPlans.userId, targetId));
     // Founder trade coordination. The invitations this account raised or was
     // sent go with it — each one carries a trade snapshot and, on the funded
@@ -631,11 +640,18 @@ export async function deleteUser(actingUserId: string, targetId: string): Promis
     // Pushover user key behind after the account is gone).
     await tx.delete(pushSubscriptions).where(eq(pushSubscriptions.userId, targetId));
     await tx.delete(pushoverUsers).where(eq(pushoverUsers.userId, targetId));
+    // Their mobile number, and any half-finished verification of it. A phone
+    // number is the most identifying thing in this list — it must not outlive
+    // the account by so much as a pending code.
+    await tx.delete(smsNumbers).where(eq(smsNumbers.userId, targetId));
     // How long their repeating alerts repeated for, and the record of which ones
     // fired and were answered. The receipts are NOT an access audit — nothing
     // here records a credential being used, only that this person's own phone
     // was buzzed — so unlike credential_audit they go with the account.
     await tx.delete(alertPrefs).where(eq(alertPrefs.userId, targetId));
+    // Which channels carried which alerts for them. Preferences about their own
+    // notifications, so they go with the account.
+    await tx.delete(alertChannels).where(eq(alertChannels.userId, targetId));
     await tx.delete(pushoverReceipts).where(eq(pushoverReceipts.userId, targetId));
     // Per-user Studies progress (learned terms, custom vocab, starred questions,
     // custom subsections, game/test state and banked leaderboard runs).

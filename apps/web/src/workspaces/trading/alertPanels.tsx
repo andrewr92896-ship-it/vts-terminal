@@ -3,6 +3,10 @@ import { api, ApiError } from '../../api/client';
 import { SYMBOL_SUGGESTIONS, symbolLabel } from './tvChart';
 import { zoneFmt } from '../../lib/timezone';
 import { LevelPicker } from '../../components/NotificationSettings';
+import {
+  OPEN_KINDS,
+  OPEN_KIND_LABELS,
+} from '../../api/types';
 import type {
   PriceAlert,
   PriceAlertCondition,
@@ -11,6 +15,7 @@ import type {
   RolloverEventPlan,
   RolloverPlan,
   SessionAlertPrefs,
+  SessionAlertRecipient,
 } from '../../api/types';
 
 // The two alert SETTINGS panels. They lived on the Trading Alerts screen, which
@@ -52,28 +57,40 @@ function firedAt(ms: number): string {
 // Settings.
 export function SessionAlertSettings() {
   const [prefs, setPrefs] = useState<SessionAlertPrefs | null>(null);
+  const [people, setPeople] = useState<SessionAlertRecipient[]>([]);
   const [status, setStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
   const [open, setOpen] = useState(false);
 
   useEffect(() => {
     let alive = true;
     api.sessionAlertPrefs()
-      .then((r) => { if (alive) setPrefs(r.prefs); })
+      .then((r) => { if (!alive) return; setPrefs(r.prefs); setPeople(r.recipients); })
       .catch(() => { if (alive) setPrefs({ notifyOpen: false, notifyClose: false, notifyPreOpen: false, preOpenLeadMin: 30 }); });
     return () => { alive = false; };
   }, []);
 
-  async function persist(next: SessionAlertPrefs) {
+  // `recipientIds` is sent only when the picker is what changed. Absent leaves
+  // the stored list alone, which is what stops a toggle save quietly un-copying
+  // everybody — and an empty ARRAY is the explicit "just me".
+  async function persist(next: SessionAlertPrefs, recipientIds?: string[]) {
     setPrefs(next);
     setStatus('saving');
     try {
-      const r = await api.saveSessionAlertPrefs(next);
+      const r = await api.saveSessionAlertPrefs(next, recipientIds);
       setPrefs(r.prefs);
+      setPeople(r.recipients);
       setStatus('saved');
       window.setTimeout(() => setStatus((s) => (s === 'saved' ? 'idle' : s)), 1800);
     } catch {
       setStatus('error');
     }
+  }
+
+  function toggleRecipient(id: string) {
+    if (!prefs) return;
+    const next = people.map((p) => (p.id === id ? { ...p, on: !p.on } : p));
+    setPeople(next);
+    void persist(prefs, next.filter((p) => p.on).map((p) => p.id));
   }
 
   if (!prefs) return null;
@@ -125,6 +142,50 @@ export function SessionAlertSettings() {
             on={prefs.notifyClose}
             onChange={(v) => persist({ ...prefs, notifyClose: v })}
           />
+
+          {/* WHO GETS THEM. Your own sessions always alert you — you are the
+              baseline rather than an entry — so this list is only ever "who
+              else", which is what stops unticking everybody meaning "silence my
+              own sessions". */}
+          {people.length > 0 && (
+            <div style={{ borderTop: `1px solid ${BORDER}`, paddingTop: 10, marginTop: 4 }}>
+              <div style={{ fontSize: 12.5, color: TEXT, fontWeight: 600, marginBottom: 2 }}>
+                Also send these to
+              </div>
+              <div style={{ fontSize: 11.5, color: MUTED, marginBottom: 8, lineHeight: 1.5 }}>
+                You always get your own. Everyone in your group is listed here.
+              </div>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                {people.map((p) => (
+                  <button
+                    key={p.id}
+                    onClick={() => toggleRecipient(p.id)}
+                    // Somebody who has switched group notifications off is shown
+                    // and still selectable — it is their own setting to undo,
+                    // and hiding them would make "why does Dale never get these"
+                    // unanswerable from this screen.
+                    title={p.optedOut ? 'They have group notifications switched off, so this will not reach them.' : undefined}
+                    style={{
+                      fontSize: 12,
+                      fontWeight: 600,
+                      color: p.on ? GREEN : MUTED,
+                      background: p.on ? 'rgba(53,196,123,.12)' : 'rgba(0,0,0,.18)',
+                      border: `1px solid ${p.on ? 'rgba(53,196,123,.4)' : BORDER}`,
+                      padding: '7px 11px',
+                      borderRadius: 999,
+                      cursor: 'pointer',
+                      opacity: p.optedOut ? 0.6 : 1,
+                    }}
+                  >
+                    {p.on ? '✓ ' : ''}
+                    {p.name}
+                    {p.optedOut ? ' · off' : ''}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
           <div style={{ fontSize: 11, color: status === 'error' ? '#ffb4ab' : FAINT, marginTop: 6, minHeight: 14 }}>
             {status === 'saving' ? 'Saving…' : status === 'saved' ? 'Saved' : status === 'error' ? 'Could not save — try again.' : ''}
           </div>
@@ -174,14 +235,19 @@ function ToggleRow({ label, on, onChange }: { label: ReactNode; on: boolean; onC
 // two copies of a control with one route behind it drift within a month, and
 // whichever one somebody happens to open is the one that looks broken.
 //
-// Nothing here picks weekdays, deliberately. The first two alerts only fire when
-// a funded position is actually open, so a flat day — or a weekend — is silent
-// on its own. A day picker would be a second switch for a job one gate already
-// does.
+// Nothing here picks weekdays, deliberately. An alert set to need a trade open
+// is silent on a flat day — or a weekend — on its own, so a day picker would be
+// a second switch for a job that gate already does.
+//
+// **The gate is two questions and they are asked separately**: which kinds of
+// open trade count (once, for the whole plan) and whether each event needs one
+// (per event). The defaults are exactly what was hard-coded before either was a
+// setting — funded trades only, evaluate and close gated, the recheck not — so
+// a plan that predates this reads and behaves identically.
 const ROLLOVER_ROWS: { key: RolloverEvent; label: string; note: string }[] = [
-  { key: 'evaluate', label: 'Evaluate', note: 'While something is still open' },
-  { key: 'close', label: 'Close', note: 'While something is still open' },
-  { key: 'recheck', label: 'Back in?', note: 'After a funded trade closed today' },
+  { key: 'evaluate', label: 'Evaluate', note: 'Decide what comes off' },
+  { key: 'close', label: 'Close', note: 'Close it before rollover' },
+  { key: 'recheck', label: 'Back in?', note: 'Rollover has passed' },
 ];
 
 export function RolloverAlertSettings() {
@@ -243,8 +309,54 @@ export function RolloverAlertSettings() {
             onChange={(v) => void persist({ ...plan, enabled: v }, { enabled: v })}
           />
           <p style={{ fontSize: 11.5, color: MUTED, margin: '8px 0 4px', lineHeight: 1.5 }}>
-            {'Evaluate and Close only fire while a funded position is open. Back in? fires when one was closed today.'}
+            {'An alert marked “only while open” stays quiet on a day you are flat. Back in? also fires when a funded trade closed today.'}
           </p>
+
+          {/* WHICH TRADES COUNT. One answer for the whole plan rather than one
+              per event: "what am I asking about" is a single question, and
+              three copies of it would be three things to keep in step.
+
+              The last kind cannot be unticked — an empty list would mean no
+              trade could ever satisfy the gate, which is a routine that reads as
+              switched on and never fires. The server refuses it too. */}
+          {plan.enabled && (
+            <div style={{ borderTop: `1px solid ${BORDER}`, paddingTop: 10, marginTop: 6 }}>
+              <div style={{ fontSize: 12.5, color: TEXT, fontWeight: 600, marginBottom: 6 }}>
+                Which open trades count
+              </div>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                {OPEN_KINDS.map((k) => {
+                  const on = plan.openKinds.includes(k);
+                  const last = on && plan.openKinds.length === 1;
+                  return (
+                    <button
+                      key={k}
+                      onClick={() => {
+                        if (last) return;
+                        const next = on ? plan.openKinds.filter((x) => x !== k) : [...plan.openKinds, k];
+                        void persist({ ...plan, openKinds: next }, { openKinds: next });
+                      }}
+                      title={last ? 'Keep at least one — otherwise nothing could ever set these alerts off.' : undefined}
+                      style={{
+                        fontSize: 12,
+                        fontWeight: 600,
+                        color: on ? GOLD : MUTED,
+                        background: on ? 'rgba(235,203,116,.1)' : 'rgba(0,0,0,.18)',
+                        border: `1px solid ${on ? 'rgba(235,203,116,.35)' : BORDER}`,
+                        padding: '7px 11px',
+                        borderRadius: 999,
+                        cursor: last ? 'default' : 'pointer',
+                        opacity: last ? 0.8 : 1,
+                      }}
+                    >
+                      {on ? '✓ ' : ''}
+                      {OPEN_KIND_LABELS[k]}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
 
           {plan.enabled &&
             ROLLOVER_ROWS.map((row) => {
@@ -277,6 +389,28 @@ export function RolloverAlertSettings() {
                       </button>
                     </div>
                   </div>
+                  {/* WHETHER THIS EVENT NEEDS A TRADE OPEN. Off makes it a
+                      plain reminder at its time — the ask this switch exists
+                      for — and on is what keeps a flat day silent. */}
+                  {ev.on && (
+                    <button
+                      onClick={() => patchEvent(row.key, { requireOpen: !ev.requireOpen })}
+                      style={{
+                        marginTop: 6,
+                        marginLeft: 46,
+                        fontSize: 11,
+                        fontWeight: 600,
+                        color: ev.requireOpen ? GREEN : FAINT,
+                        background: ev.requireOpen ? 'rgba(53,196,123,.1)' : 'rgba(0,0,0,.18)',
+                        border: `1px solid ${ev.requireOpen ? 'rgba(53,196,123,.3)' : BORDER}`,
+                        padding: '5px 9px',
+                        borderRadius: 999,
+                        cursor: 'pointer',
+                      }}
+                    >
+                      {ev.requireOpen ? '✓ Only while a trade is open' : 'Fires whether or not anything is open'}
+                    </button>
+                  )}
                   {openLevel === row.key && ev.on && (
                     <LevelPicker value={ev.level} onChange={(v) => patchEvent(row.key, { level: v })} />
                   )}

@@ -1358,14 +1358,30 @@ export interface MarketHoursResult {
 // is an Eastern event, not a per-reader one.
 export type RolloverEvent = 'evaluate' | 'close' | 'recheck';
 
+// Which kinds of open trade the plan asks about — the three ways a position can
+// exist on this desk. Mirrors the server's OPEN_KINDS.
+export const OPEN_KINDS = ['funded', 'broker', 'manual'] as const;
+export type OpenKind = (typeof OPEN_KINDS)[number];
+
+export const OPEN_KIND_LABELS: Record<OpenKind, string> = {
+  funded: 'Funded trades',
+  broker: 'Broker positions',
+  manual: 'Manual trades',
+};
+
 export interface RolloverEventPlan {
   on: boolean;
   at: string;
   level: NotifLevel;
+  // Whether the event needs a trade of a listed kind to be open before it
+  // fires. On, the routine is silent on a flat day; off, it is a plain
+  // reminder at its time.
+  requireOpen: boolean;
 }
 
 export interface RolloverPlan {
   enabled: boolean;
+  openKinds: OpenKind[];
   evaluate: RolloverEventPlan;
   close: RolloverEventPlan;
   recheck: RolloverEventPlan;
@@ -1373,6 +1389,7 @@ export interface RolloverPlan {
 
 export interface RolloverPlanInput {
   enabled?: boolean;
+  openKinds?: OpenKind[];
   evaluate?: Partial<RolloverEventPlan>;
   close?: Partial<RolloverEventPlan>;
   recheck?: Partial<RolloverEventPlan>;
@@ -1427,6 +1444,74 @@ export interface SessionAlertPrefs {
   notifyClose: boolean;
   notifyPreOpen: boolean;
   preOpenLeadMin: number;
+}
+
+// Somebody in the owner's private group who may be copied in on their session
+// alerts. The whole group is returned, each flagged with whether they are
+// currently on the list — a picker needs everybody, not just the chosen ones.
+export interface SessionAlertRecipient {
+  id: string;
+  name: string;
+  on: boolean;
+  // They have group notifications switched off, so nothing reaches them
+  // whatever the list says. Shown rather than hidden: it is their own decision
+  // to undo, and an owner who could not see it would file it as a bug.
+  optedOut: boolean;
+}
+
+// ---- Alert channels ----------------------------------------------------
+// Which channels carry which kind of alert. Mirrors the server's channels.ts.
+//
+// The account switches say whether you want to be notified at all; this says by
+// what. A missing choice is app push on, Pushover on, text off — what the
+// terminal did before any of this was a setting.
+export const ALERT_CHANNELS = ['push', 'sms', 'pushover'] as const;
+export type AlertChannel = (typeof ALERT_CHANNELS)[number];
+
+export const ALERT_CATEGORIES = [
+  'trade',
+  'alert',
+  'session',
+  'rollover',
+  'price',
+  'note',
+  'founder',
+  'group',
+  'system',
+] as const;
+export type AlertCategory = (typeof ALERT_CATEGORIES)[number];
+
+export type ChannelChoice = Record<AlertChannel, boolean>;
+
+export const ALERT_CHANNEL_LABELS: Record<AlertChannel, string> = {
+  push: 'App',
+  sms: 'Text',
+  pushover: 'Pushover',
+};
+
+export const ALERT_CATEGORY_LABELS: Record<AlertCategory, string> = {
+  trade: 'Trades opening, closing and changing',
+  alert: 'TradingView alerts',
+  session: 'Strategy sessions',
+  rollover: 'Rollover close',
+  price: 'Price alerts',
+  note: 'Trading notes settling',
+  founder: 'Trade invitations',
+  group: 'Someone in your group nudging you',
+  system: 'Support replies and channels going live',
+};
+
+// ---- Text alerts (SMS) -------------------------------------------------
+export interface SmsStatus {
+  // Whether the server has an SMS provider at all. With none, every text
+  // control says so rather than silently doing nothing.
+  configured: boolean;
+  // Masked — never the whole number. This panel may be on a shared screen, and
+  // the last four digits are all anybody needs to confirm it is the right phone.
+  phone: string | null;
+  verified: boolean;
+  // A code has been sent and has not expired, so the panel shows the code box.
+  awaitingCode: boolean;
 }
 
 // ---- Trading — Live Wall boards (mirror of apps/api/src/trading/boards.ts) ----
@@ -2674,6 +2759,7 @@ export const PREMIUM_FEATURES = [
   // FEATURE_TIER: anything somebody pastes a key of their own into is top tier.
   'brokerConnections',
   'pushover',
+  'textAlerts',
   'funded',
   'studyExplain',
   'studyCreation',

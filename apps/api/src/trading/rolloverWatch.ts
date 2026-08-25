@@ -5,9 +5,10 @@ import { config } from '../config.js';
 import { isDemoUser } from '../demo/identity.js';
 import { pushConfigured, sendToUsers } from '../notifications/push.js';
 import { pushoverConfigured, sendPushoverToUsers } from '../notifications/pushover.js';
+import { smsConfigured, sendSmsToUsers } from '../notifications/sms.js';
 import { LEVEL_PRIORITY } from '../notifications/prefs.js';
 import { etDayStamp, etNow } from './etTime.js';
-import { activeRolloverPlans, fundedActivityFor } from './rollover.js';
+import { activeRolloverPlans, openActivityFor } from './rollover.js';
 import { dueForPlan, type PendingRollover } from './rolloverMath.js';
 
 // Background watch that fires a trader's OWN rollover-close alerts. Personal
@@ -47,7 +48,7 @@ export async function tickRolloverWatch(now: Date = new Date()): Promise<void> {
   const realUserIds = userRows.filter((u) => !isDemoUser({ username: u.username })).map((u) => u.id);
   if (realUserIds.length === 0) return;
 
-  const activity = await fundedActivityFor(realUserIds, now);
+  const activity = await openActivityFor(realUserIds, now);
 
   const pending: PendingRollover[] = [];
   for (const userId of realUserIds) {
@@ -66,14 +67,29 @@ export async function tickRolloverWatch(now: Date = new Date()): Promise<void> {
   await Promise.all(
     pending.map(async (n) => {
       const url = n.event === 'recheck' ? '/?screen=prop' : '/?screen=live';
-      await sendToUsers([n.userId], { title: n.title, body: n.body, url, tag: n.tag }).catch(() => {});
-      await sendPushoverToUsers([n.userId], {
-        title: n.title,
-        message: n.body,
-        priority: LEVEL_PRIORITY[n.level],
-        url,
-        urlTitle: 'Open the desk',
-      }).catch(() => {});
+      await sendToUsers(
+        [n.userId],
+        { title: n.title, body: n.body, url, tag: n.tag },
+        { category: 'rollover' },
+      ).catch(() => {});
+      await sendPushoverToUsers(
+        [n.userId],
+        {
+          title: n.title,
+          message: n.body,
+          priority: LEVEL_PRIORITY[n.level],
+          url,
+          urlTitle: 'Open the desk',
+        },
+        'rollover',
+        { category: 'rollover' },
+      ).catch(() => {});
+      // A text as well, for whoever routed rollover alerts there. It carries no
+      // level — an SMS is an SMS — so a `repeating` close alert still sends one
+      // message rather than becoming a per-retry bill.
+      await sendSmsToUsers([n.userId], { title: n.title, body: n.body }, { category: 'rollover' }).catch(
+        () => {},
+      );
     }),
   );
 }
@@ -86,7 +102,7 @@ const ROLLOVER_WATCH_MS = Math.max(10, Number(process.env.SESSION_WATCH_SECONDS)
 // Start the background rollover watch. Production-only and only when a delivery
 // channel is configured (no point polling otherwise).
 export function startRolloverWatch(): void {
-  if (!config.isProd || (!pushConfigured() && !pushoverConfigured())) return;
+  if (!config.isProd || (!pushConfigured() && !pushoverConfigured() && !smsConfigured())) return;
   const tick = () => {
     void tickRolloverWatch().catch((err) => console.error('Rollover watch error:', err));
   };

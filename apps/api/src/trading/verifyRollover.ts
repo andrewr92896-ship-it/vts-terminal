@@ -1,5 +1,11 @@
 import { commissionFor, decomposeReentry } from './reentryMath.js';
-import { dueForPlan, DEFAULT_ROLLOVER_PLAN, type RolloverPlan } from './rolloverMath.js';
+import {
+  dueForPlan,
+  emptyActivity,
+  DEFAULT_ROLLOVER_PLAN,
+  type OpenActivity,
+  type RolloverPlan,
+} from './rolloverMath.js';
 import { etTimeLabel, parseHHMM } from './etTime.js';
 
 // Every import above is a PURE module — no database, no network. That is the
@@ -98,11 +104,18 @@ const round = (n: number, dp = 6) => Number(n.toFixed(dp));
   // The dedup set is the caller's, which is what lets this exercise "fires once
   // per ET day" without reaching into the watch's module state.
   const fired = new Set<string>();
-  const due = (user: string, p: RolloverPlan, act: { open: string[]; closedToday: number }, hhmm: string, day: string) =>
+  const due = (user: string, p: RolloverPlan, act: OpenActivity, hhmm: string, day: string) =>
     dueForPlan(user, p, act, at(hhmm), day, fired);
-  const holding = { open: ['EUR/USD'], closedToday: 0 };
-  const flat = { open: [], closedToday: 0 };
-  const closedForRollover = { open: [], closedToday: 1 };
+  // Helpers so a fixture states only the kind it is about; every other kind is
+  // empty, which is the case each gate has to distinguish.
+  const withOpen = (kind: 'funded' | 'broker' | 'manual', ...instruments: string[]): OpenActivity => {
+    const a = emptyActivity();
+    a.open[kind] = instruments;
+    return a;
+  };
+  const holding = withOpen('funded', 'EUR/USD');
+  const flat = emptyActivity();
+  const closedForRollover: OpenActivity = { ...emptyActivity(), closedToday: 1 };
 
   // Evaluate and close only fire while something is open — the gate that makes
   // a flat day silent without a weekday picker anywhere.
@@ -162,6 +175,100 @@ const round = (n: number, dp = 6) => Number(n.toFixed(dp));
   const body = due('u10', plan, holding, '16:30', 'd3')[0]?.body ?? '';
   check('the evaluate alert names the close time', String(body.includes('4:45 PM ET')), 'true');
   check('the evaluate alert names what is open', String(body.includes('EUR/USD')), 'true');
+}
+
+// ---- the open gate: whether an event needs a trade, and of which kind -------
+//
+// Both were hard-coded and are now the trader's to set, so the defaults have to
+// be pinned: a stored plan must go on meaning exactly what it meant before any
+// of this was configurable. The rest of the block covers what the switches buy.
+{
+  console.log('\n-- rollover open gate --');
+
+  const at = (hhmm: string) => ({ min: parseHHMM(hhmm)! });
+  const fired = new Set<string>();
+  const due = (user: string, p: RolloverPlan, act: OpenActivity, hhmm: string, day: string) =>
+    dueForPlan(user, p, act, at(hhmm), day, fired);
+  const withOpen = (kind: 'funded' | 'broker' | 'manual', ...instruments: string[]): OpenActivity => {
+    const a = emptyActivity();
+    a.open[kind] = instruments;
+    return a;
+  };
+  const on: RolloverPlan = { ...DEFAULT_ROLLOVER_PLAN, enabled: true };
+
+  // The defaults ARE the old behaviour. If any of these three move, every plan
+  // stored before this feature existed has silently changed meaning.
+  check('default kinds are funded alone', on.openKinds.join(','), 'funded');
+  check('evaluate is gated by default', String(on.evaluate.requireOpen), 'true');
+  check('close is gated by default', String(on.close.requireOpen), 'true');
+  check('recheck is not gated by default', String(on.recheck.requireOpen), 'false');
+
+  // A funded-only plan ignores a broker position, which is the whole point of
+  // the kinds being a choice rather than "anything open".
+  check(
+    'a funded plan ignores an open broker position',
+    String(due('g1', on, withOpen('broker', 'EUR/USD'), '16:30', 'd1').length),
+    '0',
+  );
+  check(
+    'naming broker makes that position count',
+    due('g2', { ...on, openKinds: ['broker'] }, withOpen('broker', 'EUR/USD'), '16:30', 'd1')
+      .map((n) => n.event)
+      .join(','),
+    'evaluate',
+  );
+  check(
+    'several kinds fire on any of them',
+    due('g3', { ...on, openKinds: ['funded', 'manual'] }, withOpen('manual', 'GBP/USD'), '16:30', 'd1')
+      .map((n) => n.event)
+      .join(','),
+    'evaluate',
+  );
+
+  // Ungating an event makes it a plain reminder — the ask this switch exists
+  // for — and it still has to say something true when nothing is open.
+  const ungated: RolloverPlan = {
+    ...on,
+    evaluate: { ...on.evaluate, requireOpen: false },
+  };
+  const flatFire = due('g4', ungated, emptyActivity(), '16:30', 'd1');
+  check('an ungated event fires while flat', String(flatFire.length), '1');
+  check('and says nothing is open', String(flatFire[0]?.body.includes('Nothing open')), 'true');
+
+  // GATING the recheck is the other direction: it then behaves like the two
+  // above and needs something still open, so a trade merely closed today is no
+  // longer enough.
+  const gatedRecheck: RolloverPlan = { ...on, recheck: { ...on.recheck, requireOpen: true } };
+  check(
+    'a gated recheck ignores a trade closed today',
+    String(due('g5', gatedRecheck, { ...emptyActivity(), closedToday: 1 }, '17:15', 'd1').length),
+    '0',
+  );
+  check(
+    'a gated recheck still fires while holding',
+    String(due('g6', gatedRecheck, withOpen('funded', 'EUR/USD'), '17:15', 'd1').length),
+    '1',
+  );
+
+  // An empty kinds list must never mean "nothing can satisfy the gate" — a
+  // routine that reads as switched on and never fires. The decision falls back
+  // to the default the same way the storage layer does.
+  check(
+    'an empty kinds list falls back rather than silencing',
+    due('g7', { ...on, openKinds: [] }, withOpen('funded', 'EUR/USD'), '16:30', 'd1')
+      .map((n) => n.event)
+      .join(','),
+    'evaluate',
+  );
+
+  // The wording follows the kinds: one kind names itself, several read as a
+  // plain "position" rather than listing them on a lock screen.
+  const fundedBody = due('g8', on, withOpen('funded', 'EUR/USD'), '16:45', 'd1')[0]?.body ?? '';
+  check('a funded-only plan says "funded position"', String(fundedBody.includes('funded position')), 'true');
+  const mixedBody =
+    due('g9', { ...on, openKinds: ['funded', 'broker'] }, withOpen('broker', 'EUR/USD'), '16:45', 'd1')[0]
+      ?.body ?? '';
+  check('a mixed plan says plain "position"', String(mixedBody.includes('1 position')), 'true');
 }
 
 // ---- the ET time label ----------------------------------------------------

@@ -19,6 +19,7 @@ import {
 import { isFounder, parseRoles } from '../auth/rbac.js';
 import { sendToUsers } from '../notifications/push.js';
 import { sendPushoverToUsers } from '../notifications/pushover.js';
+import { sendSmsToUsers } from '../notifications/sms.js';
 import { featuresForUser } from '../features/service.js';
 import { isDemoUser } from '../demo/identity.js';
 import { LEVEL_PRIORITY, NOTIF_LEVELS, type NotifLevel } from '../notifications/prefs.js';
@@ -670,12 +671,18 @@ async function notifyInviterOfResponse(
     const dir = invite.side === 'long' ? 'BUY' : 'SELL';
     const title = `${invite.isTest ? 'TEST · ' : ''}${name} ${what}`;
     const body = `${invite.instrument} ${dir}`;
-    await sendToUsers([invite.inviterUserId], { title, body, url: '/?screen=tradedesk' }).catch(() => {});
+    await sendToUsers(
+      [invite.inviterUserId],
+      { title, body, url: '/?screen=tradedesk' },
+      { category: 'founder' },
+    ).catch(() => {});
     await sendPushoverToUsers(
       [invite.inviterUserId],
       { title, message: body, priority: LEVEL_PRIORITY[prefs.responseLevel] },
       'founder_trade_response',
+      { category: 'founder' },
     ).catch(() => {});
+    await sendSmsToUsers([invite.inviterUserId], { title, body }, { category: 'founder' }).catch(() => {});
   } catch (err) {
     // A note about a decision must never be what stops the decision being
     // recorded.

@@ -3,12 +3,14 @@ import { useAuth } from '../../auth/AuthContext';
 import { canAccessWorkspace, hasEntitlement } from '../../auth/access';
 import { UpgradeNotice } from '../../components/UpgradeNotice';
 import {
+  AlertRoutingSection,
   GroupAlertSender,
   PerUserNotificationsSection,
   PhoneNotificationsSection,
   PushoverSection,
   RepeatTimingSection,
   SendTestSection,
+  TextAlertsSection,
   sectionLabel,
   hintStyle,
 } from '../../components/NotificationSettings';
@@ -54,6 +56,13 @@ export function AlertSettings() {
   const push = usePushNotifications();
   const [pushoverReady, setPushoverReady] = useState(false);
   const onPushoverChange = useCallback((connected: boolean) => setPushoverReady(connected), []);
+  // Same rule for text alerts as for Pushover: the SCREEN owns whether the
+  // channel is usable and hands it down, because the routing table and the test
+  // buttons both need it. Two components asking separately would not see each
+  // other — verifying a number in one would leave the other still reading "not
+  // set up", with its control greyed for no visible reason.
+  const [smsReady, setSmsReady] = useState(false);
+  const onSmsChange = useCallback((verified: boolean) => setSmsReady(verified), []);
 
   const sound = useAlertSound();
 
@@ -107,6 +116,26 @@ export function AlertSettings() {
           </>
         )}
 
+        {/* Text alerts — Max, like Pushover, because it runs on a number the
+            user hands over. Marked rather than hidden, so a free account can see
+            what the tier buys. */}
+        {!isDemo && (
+          <>
+            <Divider />
+            <TextAlertsSection accent={accent} accentText={accentText} onVerifiedChange={onSmsChange} />
+          </>
+        )}
+
+        {/* Which channels carry which kind of alert. Deliberately OUTSIDE the
+            paid block, with the two free panels: turning an alert off must never
+            require a membership, and it covers the free app channel too. */}
+        {!isDemo && (
+          <>
+            <Divider />
+            <AlertRoutingSection smsReady={smsReady} pushoverReady={pushoverReady} />
+          </>
+        )}
+
         {/* ---- Premium ---- */}
         {!isDemo && (
           <>
@@ -117,6 +146,7 @@ export function AlertSettings() {
                 accentText={accentText}
                 push={push}
                 pushoverReady={pushoverReady}
+                smsReady={smsReady}
               />
             ) : (
               <section>

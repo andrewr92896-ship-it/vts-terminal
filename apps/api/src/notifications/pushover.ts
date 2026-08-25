@@ -6,6 +6,7 @@ import { isDemoUser } from '../demo/identity.js';
 import { config } from '../config.js';
 import { recipientLevelsForEvent, LEVEL_PRIORITY, type NotifEvent } from './prefs.js';
 import { filterAccountAlerts, getRepeatPrefs } from './alertPrefs.js';
+import { channelRecipients, type AlertCategory } from './channels.js';
 import { liveReceiptRows, markResolved, newCallbackToken, recordReceipt } from './pushoverReceipts.js';
 import { entitledUserIds } from '../memberships/service.js';
 
@@ -241,19 +242,34 @@ async function deliver(
   return result.status;
 }
 
+// What a send needs beyond the message. `category` is REQUIRED for the same
+// reason it is on the web-push side: it is what the recipient's channel routing
+// is read against, so an optional one would be the thing you get by forgetting
+// to pass anything, and a new notification would quietly ignore everybody's
+// choice with nothing to catch it.
+export interface PushoverSendOpts {
+  category: AlertCategory;
+  // The test button alone — a test that silently does nothing is
+  // indistinguishable from a broken setup.
+  ignoreAccountSwitch?: boolean;
+  ignoreChannelChoice?: boolean;
+}
+
 // Send to a set of users (by id), looking up each one's stored key. Prunes keys
 // Pushover rejects.
 export async function sendPushoverToUsers(
   userIds: string[],
   msg: PushoverMessage,
   kind = 'alert',
-  opts: { ignoreAccountSwitch?: boolean } = {},
+  opts: PushoverSendOpts,
 ): Promise<void> {
   if (!pushoverConfigured() || userIds.length === 0) return;
-  // The account-level master switch, applied at the one place every Pushover
-  // message leaves the server so a caller cannot forget it. The exception is
-  // the test button — see sendPushoverTest.
-  const ids = opts.ignoreAccountSwitch ? userIds : await filterAccountAlerts(userIds);
+  // Two filters, both applied at the one place every Pushover message leaves
+  // the server so a caller cannot forget either: the account-level master
+  // switch, and whether this recipient wants THIS KIND of alert on Pushover at
+  // all. The exception is the test button — see sendPushoverTest.
+  let ids = opts.ignoreAccountSwitch ? userIds : await filterAccountAlerts(userIds);
+  if (!opts.ignoreChannelChoice) ids = await channelRecipients(ids, opts.category, 'pushover');
   if (ids.length === 0) return;
   const rows = await db
     .select()
@@ -264,6 +280,8 @@ export async function sendPushoverToUsers(
 
 // Options mirror the Web Push `sendToTradingDesk` — see DeskSendOpts there.
 export interface PushoverDeskOpts {
+  // Which kind of alert this is, for the recipient's channel routing.
+  category: AlertCategory;
   excludeUserId?: string;
   scopeIds?: Set<string>;
   ownerId?: string;
@@ -273,9 +291,9 @@ export interface PushoverDeskOpts {
 // Send to every trading-desk user who has connected Pushover (excludes the
 // demo). The trader who caused the event can be excluded if desired, and a
 // per-trader trade event is filtered by each recipient's notification prefs.
-export async function sendPushoverToDesk(msg: PushoverMessage, opts: PushoverDeskOpts = {}): Promise<void> {
+export async function sendPushoverToDesk(msg: PushoverMessage, opts: PushoverDeskOpts): Promise<void> {
   if (!pushoverConfigured()) return;
-  const { excludeUserId, scopeIds, ownerId, event } = opts;
+  const { excludeUserId, scopeIds, ownerId, event, category } = opts;
   const rows = await db
     .select({ id: users.id, roles: users.roles, username: users.username })
     .from(pushoverUsers)
@@ -303,9 +321,10 @@ export async function sendPushoverToDesk(msg: PushoverMessage, opts: PushoverDes
     const levels = await recipientLevelsForEvent(recipients, ownerId, event);
     if (levels.size === 0) return;
     // This branch calls `deliver` directly rather than going through
-    // sendPushoverToUsers (each recipient gets a different priority), so the
-    // account master switch has to be applied here too.
-    const allowed = await filterAccountAlerts([...levels.keys()]);
+    // sendPushoverToUsers (each recipient gets a different priority), so BOTH
+    // filters have to be applied here too.
+    const onSwitch = await filterAccountAlerts([...levels.keys()]);
+    const allowed = await channelRecipients(onSwitch, category, 'pushover');
     if (allowed.length === 0) return;
     const keys = await db
       .select()
@@ -323,7 +342,7 @@ export async function sendPushoverToDesk(msg: PushoverMessage, opts: PushoverDes
     );
     return;
   }
-  await sendPushoverToUsers(recipients, msg);
+  await sendPushoverToUsers(recipients, msg, 'alert', { category });
 }
 
 // The two ways a test can be sent. `standard` is exactly what a real trade or
@@ -341,10 +360,27 @@ export type PushoverTestKind = 'standard' | 'repeating';
 // at 3am reads the first line on a lock screen and nothing more — if that line
 // is indistinguishable from a real fill they will act on it, and a notification
 // system that cries wolf is worse than one that stays quiet.
-export async function sendPushoverTest(userId: string, kind: PushoverTestKind = 'standard'): Promise<boolean> {
+//
+// `message` is the sender's own wording. **The TITLE is not theirs to write** —
+// it stays 'TEST · VTS Terminal' — because the first line is what a lock screen
+// shows, and a test that could be titled like a real fill is one somebody acts
+// on. What a custom message changes is the body underneath, which is where
+// seeing your own wording actually helps.
+export async function sendPushoverTest(
+  userId: string,
+  kind: PushoverTestKind = 'standard',
+  message?: string,
+): Promise<boolean> {
   const key = await getPushoverKey(userId);
   if (!key) return false;
   const repeating = kind === 'repeating';
+  const body =
+    message?.trim() ||
+    (repeating
+      ? 'This is a TEST repeating alert. Nothing has happened on your desk. It keeps repeating until you acknowledge it — in the Pushover app, or by opening the terminal.'
+      : // Also the message sent right after connecting a key, so it has to read
+        // correctly both as a confirmation and as a test fired on demand.
+        'This is a TEST alert — nothing has happened on your desk. Real trade and alert notifications will arrive here.');
   // Goes through `deliver` like every other send, so a repeating TEST uses the
   // user's own repeat timing and is recorded as a cancellable receipt. A test
   // you cannot acknowledge from the terminal would not be testing the thing the
@@ -352,15 +388,7 @@ export async function sendPushoverTest(userId: string, kind: PushoverTestKind = 
   const status = await deliver(
     userId,
     key,
-    {
-      title: 'TEST · VTS Terminal',
-      message: repeating
-        ? 'This is a TEST repeating alert. Nothing has happened on your desk. It keeps repeating until you acknowledge it — in the Pushover app, or by opening the terminal.'
-        // Also the message sent right after connecting a key, so it has to read
-        // correctly both as a confirmation and as a test fired on demand.
-        : 'This is a TEST alert — nothing has happened on your desk. Real trade and alert notifications will arrive here.',
-      priority: repeating ? PUSHOVER_EMERGENCY : 1,
-    },
+    { title: 'TEST · VTS Terminal', message: body, priority: repeating ? PUSHOVER_EMERGENCY : 1 },
     'test',
   );
   return status === 'ok';

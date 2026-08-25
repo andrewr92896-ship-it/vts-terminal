@@ -8,6 +8,9 @@ import { users } from '../db/schema.js';
 import * as S from './prefs.js';
 import * as A from './alertPrefs.js';
 import * as R from './pushoverReceipts.js';
+import * as C from './channels.js';
+import * as SMS from './sms.js';
+import * as SA from '../trading/sessionAlertPrefs.js';
 
 let failures = 0;
 function check(name: string, cond: boolean, detail?: unknown) {
@@ -230,6 +233,118 @@ try {
   selfRefused = e instanceof G.GroupAlertError;
 }
 check('picking yourself reaches nobody', selfRefused);
+
+// ---------------------------------------------------------------------------
+console.log('\nChannel routing');
+
+// THE DEFAULT IS WHAT THE TERMINAL DID BEFORE THIS EXISTED. If any of these
+// three move, every account silently changes what it receives on deploy — and
+// the text one would start billing for messages nobody asked for.
+check('app push is on by default', C.DEFAULT_CHANNELS.push === true);
+check('Pushover is on by default', C.DEFAULT_CHANNELS.pushover === true);
+check('TEXT IS OFF BY DEFAULT', C.DEFAULT_CHANNELS.sms === false);
+
+const untouched = await C.getChannelChoices(me);
+check('every category starts on the defaults', C.ALERT_CATEGORIES.every((c) => untouched[c].sms === false && untouched[c].push));
+
+// A recipient with no stored row is INCLUDED — the filter only ever removes
+// somebody who made an explicit choice.
+check(
+  'nobody is filtered out before they choose',
+  (await C.channelRecipients([me, trader], 'trade', 'push')).length === 2,
+);
+check(
+  'and text reaches nobody until they ask for it',
+  (await C.channelRecipients([me, trader], 'trade', 'sms')).length === 0,
+);
+
+await C.setChannelChoice(me, 'trade', { push: false, sms: true, pushover: true });
+check('turning a channel off removes that recipient', (await C.channelRecipients([me, trader], 'trade', 'push')).join() === trader);
+check('and turning text on adds them', (await C.channelRecipients([me, trader], 'trade', 'sms')).join() === me);
+
+// PER CATEGORY, not per account: routing trades to text must not route price
+// alerts there too.
+check(
+  'a choice applies to its own category only',
+  (await C.channelRecipients([me], 'price', 'sms')).length === 0 &&
+    (await C.channelRecipients([me], 'price', 'push')).length === 1,
+);
+
+// One row per (user, category), however many times it is saved.
+await C.setChannelChoice(me, 'trade', { push: true, sms: false, pushover: false });
+const resaved = await C.getChannelChoices(me);
+check('re-saving updates in place', resaved.trade.push === true && resaved.trade.sms === false);
+check("and does not touch anybody else's", (await C.getChannelChoices(trader)).trade.sms === false);
+
+// ---------------------------------------------------------------------------
+console.log('\nText numbers');
+
+// The normalizer is where a wrong number becomes a stranger's phone, so what it
+// REFUSES matters more than what it accepts.
+check('10 digits are read as US/Canada', SMS.normalizePhone('(585) 555-0147') === '+15855550147');
+check('a leading 1 is not doubled', SMS.normalizePhone('1-585-555-0147') === '+15855550147');
+check('an explicit country code is kept', SMS.normalizePhone('+44 20 7946 0958') === '+442079460958');
+check('a too-short number is refused', SMS.normalizePhone('5550147') === null);
+check('a 9-digit number is refused rather than guessed', SMS.normalizePhone('585555014') === null);
+check('letters are refused', SMS.normalizePhone('call me') === null);
+// Never the whole number on screen — this panel may be shared.
+check('the mask shows only the last four', SMS.maskPhone('+15855550147').endsWith('0147') && !SMS.maskPhone('+15855550147').includes('5855'));
+
+// A text is one block of plain characters, and every segment costs money.
+const long = SMS.composeSms('Trade opened · EURUSD', 'x'.repeat(400));
+check('a long message is capped', long.length <= SMS.SMS_MAX_LENGTH);
+check('and says it was cut rather than ending mid-word', long.endsWith('…'));
+check('title and body are composed into one line', SMS.composeSms('A', 'B') === 'A: B');
+
+// NOTHING IS TEXTED TO AN UNVERIFIED NUMBER. This is the property the whole
+// code flow exists for: a wrong number reaches a real stranger, repeatedly.
+check('an account with no number has none to send to', (await SMS.verifiedNumber(me)) === null);
+check('a test refuses without a verified number', (await SMS.sendSmsTest(me)) === false);
+
+// ---------------------------------------------------------------------------
+console.log('\nSession alert recipients');
+
+// `carol` is on team-x with group alerts OFF (set above); `trader` is on it and
+// accepting; `outsider` is on no team.
+const candidates = await SA.sessionAlertCandidates(me, 'team-x');
+check('the picker lists the group', candidates.length === 2, candidates.map((c) => c.name));
+check('the owner is never listed as their own recipient', !candidates.some((c) => c.id === me));
+check('somebody off the group is not listed', !candidates.some((c) => c.id === outsider));
+// SHOWN and marked, not hidden — it is their own setting to undo, and an owner
+// who could not see it would file it as a bug.
+check('an opted-out member is shown, marked', candidates.find((c) => c.id === carol)?.optedOut === true);
+check('an accepting member is not marked', candidates.find((c) => c.id === trader)?.optedOut === false);
+
+// AN EMPTY LIST IS THE OWNER ALONE. This is the property that stops "remove
+// everyone" quietly meaning "silence my own sessions".
+const alone = await SA.sessionAlertAudience([me]);
+check('with nobody copied in, the alert goes to the owner', alone.get(me)?.join() === me);
+
+// A saved id outside the group is DROPPED rather than stored — the picker
+// cannot become a way to send an arbitrary account session alerts.
+await SA.setSessionAlertRecipients(me, 'team-x', [trader, outsider]);
+const audience = await SA.sessionAlertAudience([me]);
+check('a copied-in teammate is added', audience.get(me)?.includes(trader) === true);
+check('the owner is still in it', audience.get(me)?.includes(me) === true);
+check('somebody off the group never reaches the audience', audience.get(me)?.includes(outsider) === false);
+
+// CONSENT IS RE-CHECKED ON EVERY FIRE, not trusted from the row: an opted-out
+// person can be on the list and still receive nothing.
+await SA.setSessionAlertRecipients(me, 'team-x', [trader, carol]);
+const withOptOut = await SA.sessionAlertAudience([me]);
+check('an opted-out recipient receives nothing', withOptOut.get(me)?.includes(carol) === false);
+check('and the others still do', withOptOut.get(me)?.includes(trader) === true);
+
+// Leaving the group stops it with nobody editing a row.
+await db.update(users).set({ teamId: null }).where(eq(users.id, trader));
+const afterLeaving = await SA.sessionAlertAudience([me]);
+check('somebody who left the group drops out', afterLeaving.get(me)?.includes(trader) === false);
+check('and the owner still gets their own', afterLeaving.get(me)?.join() === me);
+await db.update(users).set({ teamId: 'team-x' }).where(eq(users.id, trader));
+
+// Somebody on no group has nobody to add, which is an empty list rather than
+// an error — the panel simply draws no picker.
+check('an owner on no group has no candidates', (await SA.sessionAlertCandidates(outsider, null)).length === 0);
 
 console.log(failures === 0 ? '\nAll checks passed.' : `\n${failures} check(s) FAILED.`);
 process.exit(failures === 0 ? 0 : 1);

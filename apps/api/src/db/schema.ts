@@ -1014,6 +1014,42 @@ export const pushoverUsers = sqliteTable('pushover_users', {
 });
 export type PushoverUserRow = typeof pushoverUsers.$inferSelect;
 
+// ---- Text messages (per user) ----
+// One row per user who has given the terminal a mobile number for text alerts.
+//
+// **ONLY A VERIFIED NUMBER IS EVER TEXTED, and that is the whole reason this
+// table carries a code flow rather than a bare phone column.** A Pushover user
+// key that is wrong reaches nobody; a phone number that is wrong reaches a real
+// stranger, repeatedly, with somebody else's trading alerts — and they have no
+// way to make it stop except to reply STOP to a service they never signed up
+// for. So the number is proved before a single alert goes to it.
+//
+// `phone` is the number CURRENTLY claimed, verified or not. Changing it clears
+// `verifiedAt`, so an edit can never inherit the previous number's proof.
+//
+// The code itself is stored only as a SHA-256, is single-use (cleared the
+// moment it succeeds), expires, and caps its own wrong guesses — the same shape
+// the Employee Portal's sign-in codes already use, for the same reasons.
+export const smsNumbers = sqliteTable('sms_numbers', {
+  userId: text('user_id')
+    .primaryKey()
+    .references(() => users.id, { onDelete: 'cascade' }),
+  // E.164, e.g. '+15855550147'. Normalized before it is stored, so the column
+  // holds one spelling of a number rather than whatever was typed.
+  phone: text('phone').notNull(),
+  verifiedAt: integer('verified_at', { mode: 'timestamp_ms' }),
+  codeHash: text('code_hash'),
+  codeExpiresAt: integer('code_expires_at', { mode: 'timestamp_ms' }),
+  codeAttempts: integer('code_attempts').notNull().default(0),
+  // Throttles code sends per ACCOUNT, not per request. A per-request throttle
+  // is no throttle at all — the flood is made by asking again, not by asking
+  // twice in one call.
+  lastSentAt: integer('last_sent_at', { mode: 'timestamp_ms' }),
+  createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+  updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
+});
+export type SmsNumberRow = typeof smsNumbers.$inferSelect;
+
 // ---- Per-user notification preferences ----
 // One row per (recipient, watched-trader) pair. Lets a trader pick which
 // teammate they want trade notifications about and, per teammate, which trade
@@ -1085,6 +1121,43 @@ export const alertPrefs = sqliteTable('alert_prefs', {
 });
 export type AlertPrefRow = typeof alertPrefs.$inferSelect;
 
+// ---- Which CHANNELS carry which kind of alert (one row per user+category) ----
+// The account switches above answer "do I want to be notified at all"; this
+// answers "by what". Three channels — the app's own push notification, a text
+// message, and Pushover — chosen independently per kind of alert, because they
+// are genuinely different tools: a text reaches a phone with nothing installed
+// on it, Pushover is the only one that can sound through silent mode, and the
+// app push is the free one that costs nobody anything.
+//
+// **A MISSING ROW IS THE DEFAULT, AND THE DEFAULT IS EXACTLY WHAT THE TERMINAL
+// DID BEFORE THIS TABLE EXISTED**: app push on, Pushover on, text OFF. That is
+// what makes the whole thing invisible on deploy — nobody's alerts changed, and
+// nobody was signed up to be texted by a feature they had not asked for. Do not
+// make `sms` default true; every text costs money and arrives on a phone whether
+// or not the terminal is installed on it.
+//
+// `category` is plain TEXT rather than a constrained enum, matching the
+// convention `notification_prefs` follows for its levels: a value the code does
+// not recognise falls back in code instead of failing a constraint, and adding
+// a category needs no migration.
+export const alertChannels = sqliteTable(
+  'alert_channels',
+  {
+    id: text('id').primaryKey(),
+    userId: text('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    category: text('category').notNull(),
+    channelPush: integer('channel_push', { mode: 'boolean' }).notNull().default(true),
+    channelPushover: integer('channel_pushover', { mode: 'boolean' }).notNull().default(true),
+    channelSms: integer('channel_sms', { mode: 'boolean' }).notNull().default(false),
+    createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+    updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
+  },
+  (t) => ({ perCategory: unique('alert_channels_user_category').on(t.userId, t.category) }),
+);
+export type AlertChannelRow = typeof alertChannels.$inferSelect;
+
 // ---- Live repeating alerts ----
 // Pushover returns a receipt id for every priority-2 message, and that receipt
 // is the ONLY way to stop the repeats from this side — so it is stored, or the
@@ -1144,6 +1217,38 @@ export const sessionAlertPrefs = sqliteTable('session_alert_prefs', {
 });
 export type SessionAlertPrefRow = typeof sessionAlertPrefs.$inferSelect;
 
+// ---- Who else gets a trader's Strategy Session alerts ----
+// A session belongs to the trader who built it, and its open/close/pre-open
+// alerts went to that one person. This table is how somebody else gets them too:
+// one row per (owner, recipient).
+//
+// **AN EMPTY LIST MEANS THE OWNER ALONE**, which is what the feature did before
+// this table existed, so nobody's alerts changed on deploy. The owner is never
+// stored as a recipient of their own sessions — they are the baseline, not an
+// entry — which is what stops "remove everyone" quietly meaning "silence my own
+// sessions".
+//
+// Who may be added is decided at request time against the owner's PRIVATE GROUP
+// and each recipient's own `alert_prefs.group_alerts` switch, never from this
+// table: a row is a request, and consent belongs to the person being texted.
+// So a recipient who leaves the group, or switches group notifications off,
+// stops receiving them without anybody editing a row.
+export const sessionAlertRecipients = sqliteTable(
+  'session_alert_recipients',
+  {
+    id: text('id').primaryKey(),
+    ownerUserId: text('owner_user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    recipientUserId: text('recipient_user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+  },
+  (t) => ({ pair: unique('session_alert_recipients_pair').on(t.ownerUserId, t.recipientUserId) }),
+);
+export type SessionAlertRecipientRow = typeof sessionAlertRecipients.$inferSelect;
+
 // Rollover close — the three timed alerts around the 5pm ET rollover, for a
 // trader who cannot hold a funded position through it. One row per user: a desk
 // has one rollover routine, and two rows would be two answers to the same
@@ -1163,15 +1268,40 @@ export const rolloverPlans = sqliteTable('rollover_plans', {
   // The master switch. Kept separate from the three per-event switches so the
   // whole routine can be paused for a week without losing the times.
   enabled: integer('enabled', { mode: 'boolean' }).notNull().default(false),
+  // WHICH KINDS OF OPEN TRADE COUNT (migration 0139). A comma-separated subset
+  // of 'funded', 'broker', 'manual' — the three ways a position can exist on
+  // this desk. Defaults to 'funded' alone, which is exactly what the gate did
+  // when it was hard-coded, so nobody's plan changed meaning on deploy.
+  //
+  // Stored as TEXT rather than three booleans because it is one answer to one
+  // question ("what am I asking about?"), and because a fourth kind then costs
+  // no migration. An empty or unrecognised value falls back to 'funded' in code.
+  openKinds: text('open_kinds').notNull().default('funded'),
   evaluateOn: integer('evaluate_on', { mode: 'boolean' }).notNull().default(true),
   evaluateAt: text('evaluate_at').notNull().default('16:30'),
   evaluateLevel: text('evaluate_level').notNull().default('normal'),
+  // WHETHER THE EVENT NEEDS SOMETHING OPEN TO FIRE (migration 0139). Was
+  // hard-coded per event: evaluate and close required an open position, the
+  // recheck did not. Both defaults below reproduce that exactly.
+  //
+  // Off means the alert fires at its time whatever the book looks like — a
+  // plain daily reminder. On means it only fires while a trade of a kind named
+  // in `openKinds` is actually open, which is what makes the routine silent on
+  // a flat day and is why the plan carries no weekday picker.
+  evaluateRequireOpen: integer('evaluate_require_open', { mode: 'boolean' }).notNull().default(true),
   closeOn: integer('close_on', { mode: 'boolean' }).notNull().default(true),
   closeAt: text('close_at').notNull().default('16:45'),
   closeLevel: text('close_level').notNull().default('alert'),
+  closeRequireOpen: integer('close_require_open', { mode: 'boolean' }).notNull().default(true),
   recheckOn: integer('recheck_on', { mode: 'boolean' }).notNull().default(true),
   recheckAt: text('recheck_at').notNull().default('17:15'),
   recheckLevel: text('recheck_level').notNull().default('normal'),
+  // The recheck's gate is deliberately the loose one and defaults OFF here for
+  // the reason it always did: by the time it is due the position it is about
+  // has usually been closed, so requiring one still open would silence it in
+  // precisely the case it exists for. It still needs SOMETHING to have happened
+  // — open now, or closed today — which is not a setting.
+  recheckRequireOpen: integer('recheck_require_open', { mode: 'boolean' }).notNull().default(false),
   createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
   updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
 });

@@ -54,8 +54,13 @@ import {
   importFundedTrades,
 } from '../trading/funded.js';
 import { addSession, listSessions, removeSession, updateSession } from '../trading/sessions.js';
-import { getSessionAlertPrefs, setSessionAlertPrefs } from '../trading/sessionAlertPrefs.js';
-import { getRolloverPlan, setRolloverPlan } from '../trading/rollover.js';
+import {
+  getSessionAlertPrefs,
+  sessionAlertCandidates,
+  setSessionAlertPrefs,
+  setSessionAlertRecipients,
+} from '../trading/sessionAlertPrefs.js';
+import { OPEN_KINDS, getRolloverPlan, setRolloverPlan } from '../trading/rollover.js';
 import { NOTIF_LEVELS } from '../notifications/prefs.js';
 import { getReentryChecks } from '../trading/reentry.js';
 import {
@@ -629,15 +634,36 @@ export async function tradingRoutes(app: FastifyInstance) {
     }
   });
 
-  // ---- Strategy Session notification preferences (owner's own sessions) ----
-  app.get('/api/trading/session-alert-prefs', read, async (request) => ({
-    prefs: await getSessionAlertPrefs(request.currentUser!.id),
-  }));
+  // ---- Strategy Session notification preferences ----
+  //
+  // The prefs are the OWNER'S — what fires, when, and how far ahead. The
+  // recipients are who else is copied in, and they ride the same payload so the
+  // panel reads and saves one thing.
+  //
+  // `candidates` is resolved from the caller's private group at request time
+  // rather than from the stored rows, so somebody who has left the group simply
+  // stops appearing with nothing to clean up. A caller on no group gets an
+  // empty list, which the panel reports as "nobody to add" rather than an error.
+  app.get('/api/trading/session-alert-prefs', read, async (request) => {
+    const me = request.currentUser!;
+    return {
+      prefs: await getSessionAlertPrefs(me.id),
+      recipients: await sessionAlertCandidates(me.id, me.teamId ?? null),
+    };
+  });
   app.put('/api/trading/session-alert-prefs', write, async (request, reply) => {
+    const me = request.currentUser!;
     const parsed = sessionAlertPrefsSchema.safeParse(request.body);
     if (!parsed.success) return reply.code(400).send({ error: 'Invalid notification preferences' });
-    const prefs = await setSessionAlertPrefs(request.currentUser!.id, parsed.data);
-    return { prefs };
+    const { recipientIds, ...prefs } = parsed.data;
+    const saved = await setSessionAlertPrefs(me.id, prefs);
+    // An absent list leaves the stored recipients alone — a cached bundle that
+    // predates the picker must not silently un-copy everybody. Sending an empty
+    // ARRAY is the explicit "just me" and does clear them.
+    const recipients = recipientIds
+      ? await setSessionAlertRecipients(me.id, me.teamId ?? null, recipientIds)
+      : await sessionAlertCandidates(me.id, me.teamId ?? null);
+    return { prefs: saved, recipients };
   });
 
   // ---- Rollover close (the timed alerts around the 5pm ET rollover) ----
@@ -1727,10 +1753,18 @@ const rolloverEventSchema = z
     on: z.boolean().optional(),
     at: z.string().trim().regex(/^\d{1,2}:\d{2}$/).optional(),
     level: z.enum(NOTIF_LEVELS).optional(),
+    // Whether the event needs a trade open to fire. Optional like everything
+    // else here, so a cached bundle that does not know about it leaves the
+    // stored value alone rather than ungating somebody's alert by omission.
+    requireOpen: z.boolean().optional(),
   })
   .optional();
 const rolloverPlanSchema = z.object({
   enabled: z.boolean().optional(),
+  // Which kinds of open trade count. An empty array is accepted by the schema
+  // and read as "not supplied" by the service — storing it would be a gate no
+  // trade could satisfy, which is a routine that reads as on and never fires.
+  openKinds: z.array(z.enum(OPEN_KINDS)).max(OPEN_KINDS.length).optional(),
   evaluate: rolloverEventSchema,
   close: rolloverEventSchema,
   recheck: rolloverEventSchema,
@@ -1866,6 +1900,12 @@ const sessionAlertPrefsSchema = z.object({
   notifyClose: z.boolean(),
   notifyPreOpen: z.boolean(),
   preOpenLeadMin: z.number().int().min(1).max(240),
+  // Who else is copied in. OPTIONAL, and absent means "leave them as they are"
+  // — a browser on a cached bundle that predates the picker must not un-copy
+  // everybody by omission. An empty array is the explicit "just me". The ids
+  // are checked against the caller's real group in the service, which is the
+  // actual enforcement; the cap here only bounds the input.
+  recipientIds: z.array(z.string().min(1).max(64)).max(50).optional(),
 });
 
 // Live Wall board layouts. The layout is a bounded grid of tiles; every field
