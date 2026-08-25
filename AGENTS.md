@@ -159,6 +159,18 @@ Agreed **lowest-liability** shape for that public launch (research done 2026-07)
   (potential RIA/CFTC-CTA exposure). Consider E&O/tech/cyber **insurance** to
   transfer residual liability. (None of this is legal advice.)
 
+## Public/private deployment boundary
+
+The product is being separated into three deployments:
+
+- `apps/marketing` → `vitalistradingsystems.com`
+- `apps/public-terminal` → `app.vitalistradingsystems.com`
+- `apps/web` + `apps/api` → the private portal at `portal.vitalistradingsystems.com`
+
+The public builds must never import or contain private portal, partner/team, administration, broker execution, private signal, or trade-distribution code. `npm run verify:boundaries` enforces the initial source/artifact boundary. The existing web/API application is private. Treat its trading, team, founder, admin and employee modules as **INTERNAL ONLY — PENDING LEGAL AND COMPLIANCE REVIEW**.
+
+The code scaffolds separate deployments, private admission, cookies and configuration, but physical Railway services, public authentication, public/private databases, DNS, TLS and private MFA remain manual deployment blockers. Read `docs/architecture/public-private-separation.md` and `docs/implementation/public-private-migration-status.md` before changing this boundary. Never weaken it with a runtime feature flag or role-based redirect between applications.
+
 ## Architecture
 
 Monorepo, **npm workspaces**:
