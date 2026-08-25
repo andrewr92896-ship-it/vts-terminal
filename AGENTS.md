@@ -404,6 +404,14 @@ workspaces list** (see `theme/nav.ts` order).
       result screenshot is read. A **Kraken margin** row is neither and stays
       watch-only, which is what the desk's own `close`/`amend` refusals already
       say.
+    - **THE DESK BOOK MAY NOT SET THE PAGE HEIGHT.** On desktop and narrow
+      desktop, `Desk right now` keeps its heading fixed and scrolls the full
+      position list inside a viewport-bounded, keyboard-focusable region. On
+      tablet and phone it avoids a nested vertical scroller: the first three
+      positions stay in page flow with an explicit Show all / Show fewer
+      control. This keeps Holdings, Working orders, Sent orders and the later
+      Founder settings reachable however many current or sample positions the
+      feed returns, without dropping any row detail or action.
     - **`trading/sizing.ts` IS THE CANONICAL SIZING MATH, AND IT EXISTS TWICE ON
       PURPOSE** (`apps/api/src/trading/sizing.ts` and
       `apps/web/src/workspaces/trading/sizing.ts`, identical below their

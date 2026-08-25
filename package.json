@@ -37,6 +37,7 @@
     "verify:study-packages": "npm --workspace @vts/api run verify:study-packages",
     "verify:study-categories": "npm --workspace @vts/web run verify:study-categories",
     "verify:sizing": "npm --workspace @vts/web run verify:sizing",
+    "verify:desk-layout": "npm --workspace @vts/web run verify:desk-layout",
     "build:private": "npm --workspace @vts/api run build && npm --workspace @vts/web run build",
     "build:marketing": "node scripts/build-static-app.mjs apps/marketing",
     "build:public": "node scripts/build-static-app.mjs apps/public-terminal",
