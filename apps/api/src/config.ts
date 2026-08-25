@@ -29,6 +29,7 @@ const envSchema = z.object({
   PRIVATE_SESSION_SECRET: blankAsUnset,
   PRIVATE_SESSION_COOKIE: blankAsUnset,
   PRIVATE_ACCESS_USER_IDS: blankAsUnset,
+  PRIVATE_BOOTSTRAP_ADMIN_ID: blankAsUnset.pipe(z.string().uuid().optional()),
   SESSION_SECRET: z.string().min(16, 'SESSION_SECRET must be at least 16 characters'),
   SESSION_TTL_DAYS: z.coerce.number().int().positive().default(14),
   COOKIE_SECURE: z
@@ -204,6 +205,16 @@ if (!parsed.success) {
 if (parsed.data.NODE_ENV === 'production' && !parsed.data.PRIVATE_ACCESS_USER_IDS) {
   console.error('[config] PRIVATE_ACCESS_USER_IDS is required for the private portal in production.');
   process.exit(1);
+}
+
+if (parsed.data.NODE_ENV === 'production' && parsed.data.PRIVATE_BOOTSTRAP_ADMIN_ID) {
+  const admittedIds = new Set(
+    parsed.data.PRIVATE_ACCESS_USER_IDS!.split(',').map((value) => value.trim()).filter(Boolean),
+  );
+  if (!admittedIds.has(parsed.data.PRIVATE_BOOTSTRAP_ADMIN_ID)) {
+    console.error('[config] PRIVATE_BOOTSTRAP_ADMIN_ID must also appear in PRIVATE_ACCESS_USER_IDS.');
+    process.exit(1);
+  }
 }
 
 // ---- broker credential key: checked at boot, not at first use ----
