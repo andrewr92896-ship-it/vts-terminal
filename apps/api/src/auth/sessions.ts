@@ -1,5 +1,5 @@
 import crypto from 'node:crypto';
-import { eq } from 'drizzle-orm';
+import { and, eq, ne } from 'drizzle-orm';
 import { db } from '../db/index.js';
 import { sessions, users } from '../db/schema.js';
 import { config } from '../config.js';
@@ -95,4 +95,16 @@ export async function destroySession(token: string | undefined): Promise<void> {
 // password or deactivates an account, so existing logins stop working.
 export async function destroyUserSessions(userId: string): Promise<void> {
   await db.delete(sessions).where(eq(sessions.userId, userId));
+}
+
+// Revoke every other login while preserving the request that just changed its
+// password. Deleting the current row would make the successful response arrive
+// in a browser that has already been signed out.
+export async function destroyOtherUserSessions(
+  userId: string,
+  keepSessionId: string,
+): Promise<void> {
+  await db
+    .delete(sessions)
+    .where(and(eq(sessions.userId, userId), ne(sessions.id, keepSessionId)));
 }

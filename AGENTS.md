@@ -5323,12 +5323,24 @@ hardcoded" below.)
 - Login `POST /api/auth/login` by email (or username fallback), generic 401,
   constant-time-ish (always runs a verify) to resist enumeration. One-click demo
   via `POST /api/auth/demo`.
+- Password recovery `POST /api/auth/forgot-password` always returns the same
+  generic 202, including for malformed/missing/inactive/disallowed accounts,
+  throttling, absent mail configuration, and delivery failure. It creates a
+  separate 15-minute (configurable via `PASSWORD_RESET_TTL_MINUTES`) Argon2id
+  credential only for an active, private-admitted, non-demo account. The
+  plaintext exists only long enough to send through the shared employee mailer;
+  recovery must call `mailConfigured()` first because that mailer's development
+  fallback logs bodies. A successful temporary-password login atomically
+  promotes the hash, consumes the pending row, forces Change Password, and
+  revokes older sessions. The one-process IP/mailbox limiter is intentionally
+  suitable only while Railway runs one API replica.
 - Session cookie **`vts_session`**: random token, stored server-side in
   `sessions` (SHA-256 of the token; raw token only in the cookie), Fastify-signed
   with `SESSION_SECRET`, `httpOnly`, `sameSite: 'lax'`, `secure` per
   `COOKIE_SECURE`, TTL `SESSION_TTL_DAYS` (default 14). Admin password reset /
   deactivate revokes all of a user's sessions.
-- **No** login rate-limit, account lockout, or CSRF token — CSRF posture rests on
+- **No** login rate-limit, account lockout, or CSRF token — password recovery's
+  isolated anti-flood limiter is the exception. CSRF posture rests on
   `sameSite: 'lax'` + signed httpOnly cookie. AI usage cap and the broker poll
   throttle are the only rate limits. (The **Employee Portal** has all of these —
   lockout, CSRF token, idle timeout, emailed-code 2FA — on its own separate session; see its

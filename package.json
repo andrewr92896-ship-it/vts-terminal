@@ -29,6 +29,7 @@
     "db:check-rollover": "npm --workspace @vts/api run db:check-rollover",
     "db:check-founder-trades": "npm --workspace @vts/api run db:check-founder-trades",
     "db:check-ai-usage": "npm --workspace @vts/api run db:check-ai-usage",
+    "db:check-password-reset": "npm --workspace @vts/api run db:check-password-reset",
     "verify:market-macro": "npm --workspace @vts/api run verify:market-macro",
     "verify:rollover": "npm --workspace @vts/api run verify:rollover",
     "verify:investments": "npm --workspace @vts/api run verify:investments",

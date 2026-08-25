@@ -946,6 +946,13 @@
       "when": 1783813736908,
       "tag": "0135_account_pct_sizing",
       "breakpoints": true
+    },
+    {
+      "idx": 135,
+      "version": "6",
+      "when": 1783900136908,
+      "tag": "0136_password_reset_credentials",
+      "breakpoints": true
     }
   ]
 }

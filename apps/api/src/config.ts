@@ -36,6 +36,11 @@ const envSchema = z.object({
     .enum(['true', 'false'])
     .default('false')
     .transform((v) => v === 'true'),
+  // Self-service recovery credentials. Fifteen minutes is deliberately short:
+  // the plaintext travels through email and is only a bridge into the forced
+  // Change Password screen. Values outside 5–30 minutes are configuration
+  // errors rather than a silent weakening of the recovery window.
+  PASSWORD_RESET_TTL_MINUTES: z.coerce.number().int().min(5).max(30).default(15),
   // Claude / Anthropic. The key is optional — when absent, AI features report
   // "not configured" instead of failing. The site default is Sonnet; trade
   // screenshot analysis uses a separate vision model (see below).
@@ -110,10 +115,12 @@ const envSchema = z.object({
   // banner. Falls back to WEB_ORIGIN when that is a real public address —
   // localhost is skipped rather than sent, since Pushover cannot reach it.
   PUSHOVER_CALLBACK_ORIGIN: z.string().optional(),
-  // Outbound email (SMTP) — currently only used to deliver the Employee
-  // Portal's sign-in codes. Optional: when unset, a code is printed to the
+  // Outbound email (SMTP) — used by Employee Portal sign-in codes and main
+  // terminal password recovery. Optional: when unset, an employee code is printed to the
   // server log instead of emailed (same "printed once to logs" fallback as an
   // unset ADMIN_PASSWORD), so a misconfigured deploy cannot lock everyone out.
+  // Password recovery NEVER uses that fallback: its route requires a configured
+  // transport before it creates or sends a temporary credential.
   //
   // Every one of these treats a BLANK value as "not set". That is not
   // decoration: a hosting dashboard makes it very easy to create a variable and

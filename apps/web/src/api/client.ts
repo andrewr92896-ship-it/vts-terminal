@@ -299,6 +299,12 @@ export const api = {
       body: JSON.stringify({ email, password }),
     });
   },
+  forgotPassword(email: string): Promise<{ ok: true; message: string }> {
+    return request('/api/auth/forgot-password', {
+      method: 'POST',
+      body: JSON.stringify({ email }),
+    });
+  },
   logout(): Promise<{ ok: boolean }> {
     return request('/api/auth/logout', { method: 'POST' });
   },

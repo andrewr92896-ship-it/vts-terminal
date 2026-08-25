@@ -2,13 +2,15 @@ import type { FastifyInstance } from 'fastify';
 import { and, eq, ne } from 'drizzle-orm';
 import { z } from 'zod';
 import { db } from '../db/index.js';
-import { users } from '../db/schema.js';
-import { hashPassword, verifyPassword } from '../auth/passwords.js';
+import { passwordResetCredentials, users } from '../db/schema.js';
+import { DUMMY_PASSWORD_HASH, hashPassword, verifyPassword } from '../auth/passwords.js';
 import {
   SESSION_COOKIE,
   cookieOptions,
   createSession,
+  destroyOtherUserSessions,
   destroySession,
+  sessionIdForToken,
 } from '../auth/sessions.js';
 import { isUsableTimezone, toPublicUser, type PublicUser } from '../auth/rbac.js';
 import { LEGAL_VERSION } from '../legal/version.js';
@@ -19,6 +21,17 @@ import { getTeamName } from '../teams/service.js';
 import { featuresForUser } from '../features/service.js';
 import { assertDisplayNameFree } from '../admin/service.js';
 import { getMembershipView } from '../memberships/service.js';
+import {
+  defaultPasswordResetDelivery,
+  normalizePasswordResetEmail,
+  promotePasswordResetCredential,
+  requestPasswordReset,
+  type PasswordResetDelivery,
+} from '../auth/passwordReset.js';
+import {
+  passwordResetRateLimiter,
+  type PasswordResetRateLimiter,
+} from '../auth/passwordResetRateLimit.js';
 
 // Build the browser-safe user: the trading-team name from the user's teamId, the
 // optional features they have turned on (which decides the workspaces the
@@ -52,6 +65,21 @@ const changePasswordSchema = z.object({
   currentPassword: z.string().min(1).max(256),
   newPassword: z.string().min(8).max(256),
 });
+
+const forgotPasswordSchema = z.object({
+  email: z.string().trim().max(255),
+});
+
+export const FORGOT_PASSWORD_RESPONSE = {
+  ok: true,
+  message:
+    'If an eligible account exists and email delivery is available, a temporary password will be sent shortly.',
+} as const;
+
+export interface AuthRouteOptions {
+  passwordResetDelivery?: PasswordResetDelivery;
+  passwordResetLimiter?: PasswordResetRateLimiter;
+}
 
 const profileSchema = z
   .object({
@@ -101,7 +129,35 @@ const profileSchema = z
     { message: 'Nothing to update' },
   );
 
-export async function authRoutes(app: FastifyInstance) {
+export async function authRoutes(app: FastifyInstance, options: AuthRouteOptions = {}) {
+  const resetDelivery = options.passwordResetDelivery ?? defaultPasswordResetDelivery;
+  const resetLimiter = options.passwordResetLimiter ?? passwordResetRateLimiter;
+
+  app.post('/api/auth/forgot-password', async (request, reply) => {
+    const parsed = forgotPasswordSchema.safeParse(request.body);
+    const email = parsed.success ? normalizePasswordResetEmail(parsed.data.email) : null;
+    const allowed = resetLimiter.take(request.ip ?? '', email ?? 'invalid');
+
+    // The mailer deliberately has a log-body fallback for employee codes. This
+    // route must never call it unless a real provider exists; checking here also
+    // avoids even scheduling account work on an unconfigured deployment.
+    if (allowed && email && resetDelivery.configured()) {
+      void requestPasswordReset(email, resetDelivery)
+        .then((result) => {
+          // Auditable without retaining the address or ever touching the
+          // plaintext. Public callers receive none of this internal outcome.
+          app.log.info({ event: 'auth.password_reset', result });
+        })
+        .catch((error: unknown) => {
+          app.log.error({ event: 'auth.password_reset', error }, 'Password reset task failed');
+        });
+    }
+
+    // Malformed input, missing/inactive/disallowed account, no provider,
+    // throttling, and delivery failure all converge here exactly.
+    return reply.code(202).send(FORGOT_PASSWORD_RESPONSE);
+  });
+
   app.post('/api/auth/login', async (request, reply) => {
     const parsed = loginSchema.safeParse(request.body);
     if (!parsed.success) {
@@ -124,13 +180,29 @@ export async function authRoutes(app: FastifyInstance) {
       user = rows[0];
     }
 
-    // Same generic error and a verify call even when the user is missing,
+    // Same generic error and a real Argon2 verify even when the user is missing,
     // so timing and messaging do not reveal which accounts exist.
-    const credentialsValid =
-      !!user &&
-      user.active &&
-      (await verifyPassword(user.passwordHash, password));
+    const permanentPasswordValid = await verifyPassword(
+      user?.passwordHash ?? DUMMY_PASSWORD_HASH,
+      password,
+    );
     const admitted = !!user && isPrivateUserAllowed(user.id);
+    let credentialsValid = !!user && user.active && permanentPasswordValid;
+
+    // A reset credential is checked only after the normal password fails. On a
+    // match its Argon2 hash becomes the account password, the row is consumed,
+    // must-change is set, and every older session is revoked atomically.
+    if (!credentialsValid && user?.active && admitted) {
+      const promoted = await promotePasswordResetCredential(user, password);
+      if (promoted) {
+        user = promoted;
+        credentialsValid = true;
+      }
+    } else if (!credentialsValid) {
+      // Match the reset-verification work done for an eligible account so an
+      // invalid login cannot time whether the identifier is active/admitted.
+      await verifyPassword(DUMMY_PASSWORD_HASH, password);
+    }
 
     if (!credentialsValid || !admitted || !user) {
       return reply.code(401).send({ error: 'Invalid email or password' });
@@ -177,14 +249,28 @@ export async function authRoutes(app: FastifyInstance) {
       if (!ok) {
         return reply.code(400).send({ error: 'Current password is incorrect' });
       }
-      await db
-        .update(users)
-        .set({
-          passwordHash: await hashPassword(parsed.data.newPassword),
-          mustChangePassword: false,
-          updatedAt: new Date(),
-        })
-        .where(eq(users.id, me.id));
+      const nextHash = await hashPassword(parsed.data.newPassword);
+      await db.transaction(async (tx) => {
+        await tx
+          .update(users)
+          .set({
+            passwordHash: nextHash,
+            mustChangePassword: false,
+            updatedAt: new Date(),
+          })
+          .where(eq(users.id, me.id));
+        // Any unused recovery email must stop working once the account holder
+        // has chosen a password through an authenticated session.
+        await tx
+          .delete(passwordResetCredentials)
+          .where(eq(passwordResetCredentials.userId, me.id));
+      });
+
+      const raw = request.cookies[SESSION_COOKIE];
+      const unsigned = raw ? request.unsignCookie(raw) : null;
+      if (unsigned?.valid && unsigned.value) {
+        await destroyOtherUserSessions(me.id, sessionIdForToken(unsigned.value));
+      }
 
       const fresh = (await db.select().from(users).where(eq(users.id, me.id)).limit(1))[0];
       return { user: await publicUser(fresh) };
@@ -273,6 +359,13 @@ export async function authRoutes(app: FastifyInstance) {
     }
 
     await db.update(users).set(patch).where(eq(users.id, me.id));
+    if (patch.email != null) {
+      // A credential delivered to the former mailbox must not remain live after
+      // the account moves to a new address.
+      await db
+        .delete(passwordResetCredentials)
+        .where(eq(passwordResetCredentials.userId, me.id));
+    }
     const fresh = (await db.select().from(users).where(eq(users.id, me.id)).limit(1))[0];
     return { user: await publicUser(fresh) };
   });

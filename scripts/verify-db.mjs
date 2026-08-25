@@ -30,6 +30,10 @@ import { pathToFileURL } from 'node:url';
 
 const CHECKS = [
   { script: 'db:check-ai-usage', env: { AI_MONTHLY_LIMIT: '3', AI_RATE_PER_MIN: '15' } },
+  {
+    script: 'db:check-password-reset',
+    env: { PRIVATE_ACCESS_USER_IDS: '11111111-1111-4111-8111-111111111111' },
+  },
   { script: 'db:check-sharing' },
   { script: 'db:check-alerts' },
   { script: 'db:check-package-add' },

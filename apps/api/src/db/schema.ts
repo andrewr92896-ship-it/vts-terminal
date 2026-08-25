@@ -114,6 +114,26 @@ export const sessions = sqliteTable('sessions', {
 export type UserRow = typeof users.$inferSelect;
 export type SessionRow = typeof sessions.$inferSelect;
 
+// One pending self-service password credential per account. The plaintext is
+// emailed once and never stored; only the Argon2 hash lives here. Keeping it
+// separate from users.password_hash means requesting recovery cannot change or
+// invalidate the current password. A later request replaces this row.
+export const passwordResetCredentials = sqliteTable(
+  'password_reset_credentials',
+  {
+    id: text('id').primaryKey(),
+    userId: text('user_id')
+      .notNull()
+      .unique()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    passwordHash: text('password_hash').notNull(),
+    createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+    expiresAt: integer('expires_at', { mode: 'timestamp_ms' }).notNull(),
+  },
+  (table) => [index('password_reset_expiry_idx').on(table.expiresAt)],
+);
+export type PasswordResetCredentialRow = typeof passwordResetCredentials.$inferSelect;
+
 // Per-user, revocable bearer tokens for the read-only mobile/home-screen widget
 // (`GET /api/widget/positions`). The terminal's own API is otherwise httpOnly
 // cookie-only, which a native iOS widget extension / Scriptable can't present.
