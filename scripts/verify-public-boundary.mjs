@@ -15,6 +15,12 @@ const FORBIDDEN = [
   /place[ -]?order/i,
   /close[ -]?position/i,
   /private[ -]?signal/i,
+  /PRIVATE_[A-Z0-9_]+/,
+  /vts_portal_session/i,
+  /CREDENTIALS_KEY/,
+  /KRAKEN_API_(KEY|SECRET)/,
+  /OANDA_(API_TOKEN|ACCOUNT_ID)/,
+  /\/api\//,
 ];
 let failures = 0;
 const fail = (message) => { failures += 1; console.error(`FAIL ${message}`); };
@@ -47,6 +53,22 @@ if (!marketing.includes('https://app.vitalistradingsystems.com')) {
 if (!existsSync('apps/web/public/robots.txt') ||
     !readFileSync('apps/web/public/robots.txt', 'utf8').includes('Disallow: /')) {
   fail('private portal robots.txt is not deny-all');
+}
+const authRoutes = readFileSync('apps/api/src/routes/auth.ts', 'utf8');
+if (authRoutes.includes("app.post('/api/auth/demo'")) {
+  fail('private portal still registers credential-free demo login');
+}
+const earlyAccess = readFileSync('apps/api/src/routes/earlyAccess.ts', 'utf8');
+if (earlyAccess.includes("app.post('/api/early-access'")) {
+  fail('private portal still registers public early-access admission');
+}
+const sessions = readFileSync('apps/api/src/auth/sessions.ts', 'utf8');
+if (!sessions.includes('config.PRIVATE_SESSION_COOKIE')) {
+  fail('private sessions do not use the private cookie configuration');
+}
+const server = readFileSync('apps/api/src/server.ts', 'utf8');
+if (!server.includes("X-Robots-Tag', 'noindex, nofollow")) {
+  fail('private portal does not set X-Robots-Tag');
 }
 if (failures) process.exit(1);
 console.log('Public/private build boundary checks passed.');

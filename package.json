@@ -40,7 +40,7 @@
     "build:marketing": "node scripts/build-static-app.mjs apps/marketing",
     "build:public": "node scripts/build-static-app.mjs apps/public-terminal",
     "start:private": "npm --workspace @vts/api run start",
-    "verify:boundaries": "node scripts/verify-public-boundary.mjs"
+    "verify:boundaries": "node scripts/verify-public-boundary.mjs && node scripts/verify-private-access.mjs"
   },
   "devDependencies": {
     "npm-run-all": "^4.1.5"
