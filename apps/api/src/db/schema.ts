@@ -865,9 +865,10 @@ export const supportRequestMessages = sqliteTable('support_request_messages', {
 });
 export type SupportRequestMessageRow = typeof supportRequestMessages.$inferSelect;
 
-// ---- AI usage (per-user guardrails) ----
-// One row per Claude call, used to enforce a monthly cap. `kind` records which
-// feature made the call (ask, analyze, news_brief, todo_command, ...).
+// ---- AI usage (per-user guardrails and metering) ----
+// One row per Claude call. Text rows enforce the monthly allowance; vision rows
+// remain metered without becoming a screenshot-to-trade product cap. `kind`
+// records which feature made the call (ask, analyze, news_brief, todo_command, ...).
 export const aiUsage = sqliteTable('ai_usage', {
   id: text('id').primaryKey(),
   // NULL = the terminal spent this on its own schedule, with no user behind it

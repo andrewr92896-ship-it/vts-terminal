@@ -102,7 +102,7 @@ function neededForTutor(body: z.infer<typeof tutorSchema>): PremiumFeature {
 }
 
 export async function aiRoutes(app: FastifyInstance) {
-  // Current user's AI usage against the two monthly caps (for the UI to show).
+  // Current user's monthly text budget plus metered vision usage (for the UI to show).
   //
   // An admin additionally gets `system` — what the terminal spent on its own
   // schedule tagging news and explaining calendar releases. That spend used to

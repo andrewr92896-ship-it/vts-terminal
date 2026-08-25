@@ -4721,29 +4721,28 @@ control — the server is still the enforcer.
     so reverting is a host variable change and a restart, never a redeploy.
 - **Availability:** `aiConfigured()` = `!!ANTHROPIC_API_KEY`. When unset, AI
   endpoints return **503**.
-- **Usage caps: TWO monthly budgets, not one** (`ai/usage.ts`), both per-user,
-  both metered in `ai_usage`, both resetting at the start of each **Eastern-Time**
-  month, plus one in-memory burst limit `AI_RATE_PER_MIN` (default **15**, resets
-  on restart, shared across both). Over limit → **429**. `enforceAiLimit(userId,
-  kind)` runs before every call and picks the budget from the kind.
-  - `AI_MONTHLY_LIMIT` (default **1000**) — **text**: `ask`, `market_hours`,
-    `todo_command` and the eleven `studies_*` kinds. Name unchanged on purpose so
-    existing deployments are unaffected.
-  - `AI_VISION_MONTHLY_LIMIT` (default **40**) — the four **vision** kinds
-    (`analyze`, `position_screenshot`, `funded_screenshot`, `account_screenshot`),
-    listed in `VISION_KINDS`. A kind not in that list counts as text, which is
-    the safe default both ways: a new text kind needs no edit, and a forgotten
-    new vision kind is merely metered against the larger budget rather than
-    escaping metering.
-  - **Why they are separate:** a text question costs roughly 1.5–2¢ and a
-    screenshot read 5–10¢, so one counter did not bound the worst case usefully —
-    somebody spending their whole allowance on screenshots cost several times
-    somebody spending it on questions, and nothing could tell the difference.
-  - **The 429 names which budget was hit.** "AI limit reached" leaves a user who
-    has used forty screenshot imports believing every AI feature is gone when
-    asking a question would have worked. `getAiUsage` returns both budgets (and
-    the flat `used`/`limit`/`remaining` still mirror **text**, so the existing
-    counter keeps working).
+- **Usage controls: one monthly text budget, metered vision without a monthly
+  product cap** (`ai/usage.ts`), plus one in-memory burst limit
+  `AI_RATE_PER_MIN` (default **15**, resets on restart, shared across both).
+  Over a retained limit → **429**.
+  - `AI_MONTHLY_LIMIT` (default **1000**) — **text**: `ask`,
+    `market_hours`, `todo_command` and the eleven `studies_*` kinds.
+  - The four **vision** kinds (`analyze`, `position_screenshot`,
+    `funded_screenshot`, `account_screenshot`) are recorded in `ai_usage`
+    for cost visibility but have **no monthly product quota**. Screenshot trade
+    logging is an input workflow; a trader must not be locked out later in the
+    month merely because they kept logging legitimate trades.
+  - The shared per-minute burst limit remains the request/provider-pressure
+    boundary. Every screenshot route also retains its **12 MB request body**,
+    accepted image MIME list, authentication, workspace permissions and
+    parse/validation failures.
+  - A kind not in the vision list counts as text. That is the safe default: new
+    AI behavior stays monthly-capped until it is explicitly reviewed as a vision
+    input workflow.
+  - `getAiUsage` returns the text budget plus the current month's vision
+    **used** count. Vision has no `limit` or `remaining`, because presenting a
+    synthetic infinity as an allowance would imply a product cap that does not
+    exist.
   - Deliberately **not per-tier**: there is no billing yet, and an allowance that
     varies by what somebody paid belongs with the thing that takes the payment.
 - **Background AI is recorded, never capped** (`recordSystemAiUse`). The two
@@ -5501,9 +5500,9 @@ defaults; the app runs locally with almost nothing set.
 - **AI:** `ANTHROPIC_API_KEY` (absent = AI off), `ANTHROPIC_MODEL_DEFAULT`,
   `ANTHROPIC_MODEL_ANALYSIS` (**`claude-sonnet-5`** — moved off Opus for cost;
   set it back to `claude-opus-4-8` to revert, which is a host variable change and
-  a restart, not a redeploy), `AI_MONTHLY_LIMIT` (1000, **text only**),
-  `AI_VISION_MONTHLY_LIMIT` (40, the four screenshot flows), `AI_RATE_PER_MIN`
-  (15, shared burst limit). See the AI section for why the budgets are split.
+  a restart, not a redeploy), `AI_MONTHLY_LIMIT` (1000, **text only**), and
+  `AI_RATE_PER_MIN` (15, shared burst limit across text and vision). Vision
+  calls are metered but have no monthly product quota; see the AI section.
 - **Webhooks:** `TRADINGVIEW_WEBHOOK_SECRET`, `TV_WEBHOOK_SECRET` (each unset =
   that webhook rejects everything).
 - **Brokers** (env-config path; also seedable per-user in the UI): `OANDA_API_TOKEN`,

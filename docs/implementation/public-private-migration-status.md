@@ -19,12 +19,20 @@ Updated: 2026-08-25.
 - Added private crawler exclusion and response hardening headers.
 - Added GitHub Actions validation for `codex/**` branches.
 - Added architecture, feature, deployment and access documentation.
+- Removed the private terminal's monthly screenshot-to-trade quota while retaining
+  vision usage metering, the shared per-minute burst limiter, 12 MB request
+  bodies, accepted image MIME validation and existing route permissions.
 
 ## Partially completed
 
 - `PRIVATE_DATABASE_URL` is supported, but the physical existing database has not been moved or renamed.
 - `PRIVATE_SESSION_SECRET` is supported, but the existing Railway service must be configured before merge/deploy.
 - The public terminal is a safe isolated shell, not a customer product.
+- Screenshot-to-trade remains private because the public terminal has no
+  authentication, API, database or AI provider path. The central policy now
+  represents vision as metered-without-a-monthly-quota, so a future public
+  implementation can reuse that contract only after public-specific
+  infrastructure and product/legal review; this change does not build it.
 - Public/private deployment configs exist, but Railway services and domains do not.
 - Private admission is allowlist-based, but MFA and dedicated auth audit logging are not implemented.
 
@@ -45,7 +53,7 @@ Updated: 2026-08-25.
 
 Baseline before editing: `npm ci` and `npm run verify` passed on `main` at `444f709`.
 
-This branch is validated by GitHub Actions with `npm ci` and `npm run verify`. The new boundary suite builds the marketing/public artifacts, scans source and output, verifies the marketing destination and verifies private crawler exclusion.
+This branch is validated by GitHub Actions with `npm ci` and `npm run verify`. The boundary suite builds the marketing/public artifacts, scans source and output, verifies the marketing destination and verifies private crawler exclusion. The AI usage check submits 44 metered vision calls across every screenshot kind (past the former cap of 40), confirms the retained burst limiter still rejects an excessive burst, and confirms the monthly text budget still blocks at its configured limit.
 
 No live broker, production database, DNS, deployment, customer, billing or authentication-provider action is part of the test.
 
