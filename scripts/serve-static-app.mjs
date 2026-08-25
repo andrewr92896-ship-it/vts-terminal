@@ -30,7 +30,14 @@ createServer((request, response) => {
     response.end();
     return;
   }
-  const urlPath = decodeURIComponent((request.url || '/').split('?')[0]);
+  let urlPath;
+  try {
+    urlPath = decodeURIComponent((request.url || '/').split('?')[0]);
+  } catch {
+    response.writeHead(400, { 'Content-Type': 'text/plain; charset=utf-8' });
+    response.end('Bad request');
+    return;
+  }
   const candidate = path.resolve(root, '.' + (urlPath === '/' ? '/index.html' : urlPath));
   if (!candidate.startsWith(root + path.sep) || !existsSync(candidate) || !statSync(candidate).isFile()) {
     response.writeHead(404, {
@@ -45,6 +52,7 @@ createServer((request, response) => {
     'X-Content-Type-Options': 'nosniff',
     'Referrer-Policy': 'strict-origin-when-cross-origin',
     'Permissions-Policy': 'camera=(), microphone=(), geolocation=()',
+    'Content-Security-Policy': "default-src 'self'; style-src 'self'; img-src 'self' data:; base-uri 'none'; frame-ancestors 'none'; form-action 'self'",
   });
   createReadStream(candidate).pipe(response);
 }).listen(port, '0.0.0.0', () => {

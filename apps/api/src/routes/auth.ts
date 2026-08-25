@@ -126,13 +126,13 @@ export async function authRoutes(app: FastifyInstance) {
 
     // Same generic error and a verify call even when the user is missing,
     // so timing and messaging do not reveal which accounts exist.
-    const ok =
+    const credentialsValid =
       !!user &&
       user.active &&
-      isPrivateUserAllowed(user.id) &&
       (await verifyPassword(user.passwordHash, password));
+    const admitted = !!user && isPrivateUserAllowed(user.id);
 
-    if (!ok || !user) {
+    if (!credentialsValid || !admitted || !user) {
       return reply.code(401).send({ error: 'Invalid email or password' });
     }
 
