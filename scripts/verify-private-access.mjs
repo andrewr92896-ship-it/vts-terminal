@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { randomBytes } from 'node:crypto';
+import { randomBytes, randomUUID } from 'node:crypto';
 import { spawnSync } from 'node:child_process';
 
 const key = () => randomBytes(32).toString('base64');
@@ -31,6 +31,33 @@ if (admitted.status !== 0) {
   console.error('FAIL private production config rejected an explicit allowlist');
   console.error(admitted.stderr);
   process.exit(admitted.status ?? 1);
+}
+
+const bootstrapId = randomUUID();
+const bootstrap = run({
+  ...base,
+  PRIVATE_ACCESS_USER_IDS: bootstrapId,
+  PRIVATE_BOOTSTRAP_ADMIN_ID: bootstrapId,
+});
+if (bootstrap.status !== 0) {
+  console.error('FAIL private production config rejected an allowlisted bootstrap admin ID');
+  console.error(bootstrap.stderr);
+  process.exit(bootstrap.status ?? 1);
+}
+
+const mismatchedBootstrap = run({
+  ...base,
+  PRIVATE_ACCESS_USER_IDS: randomUUID(),
+  PRIVATE_BOOTSTRAP_ADMIN_ID: bootstrapId,
+});
+if (
+  mismatchedBootstrap.status === 0 ||
+  !`${mismatchedBootstrap.stderr}${mismatchedBootstrap.stdout}`.includes(
+    'PRIVATE_BOOTSTRAP_ADMIN_ID',
+  )
+) {
+  console.error('FAIL private production config accepted a bootstrap admin outside the allowlist');
+  process.exit(1);
 }
 
 console.log('Private admission configuration checks passed.');
