@@ -32,6 +32,7 @@ import { randomBytes } from 'node:crypto';
 const STEPS = [
   ['typecheck', 'typecheck'],
   ['migrations', 'verify:migrations'],
+  ['offline migration safety', 'verify:offline-migration'],
   ['credential encryption', 'verify:secretbox'],
   ['market data macro', 'verify:market-macro'],
   ['investments math', 'verify:investments'],
