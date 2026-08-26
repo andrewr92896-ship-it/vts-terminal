@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
-import net from 'node:net';
 import dgram from 'node:dgram';
+import fs from 'node:fs';
+import net from 'node:net';
 import {
   assertControlledSyntheticRuntime,
   controlledSyntheticTestEnv,
@@ -47,6 +48,18 @@ expectRefusal('main branch', controlledSyntheticTestEnv({
   RAILWAY_GIT_BRANCH: 'main',
   VTS_SYNTHETIC_EXPECTED_BRANCH: 'main',
 }));
+
+const railwayConfig = JSON.parse(
+  fs.readFileSync(new URL('../../../railway.json', import.meta.url), 'utf8'),
+) as { deploy?: Record<string, unknown> };
+assert.deepEqual(railwayConfig.deploy, {
+  startCommand:
+    'node --require ./scripts/synthetic-egress-deny.cjs ./apps/api/dist/syntheticRuntimeHandoff.js',
+  healthcheckPath: null,
+  healthcheckTimeout: null,
+  restartPolicyType: 'NEVER',
+  restartPolicyMaxRetries: null,
+});
 
 const socket = new net.Socket();
 assert.throws(
