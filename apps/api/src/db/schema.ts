@@ -154,7 +154,7 @@ export const loginChallenges = sqliteTable(
     expiresAt: integer('expires_at', { mode: 'timestamp_ms' }).notNull(),
   },
   (table) => [
-    index('login_challenges_user_idx').on(table.userId),
+    unique('login_challenges_user_unique').on(table.userId),
     index('login_challenges_expiry_idx').on(table.expiresAt),
   ],
 );
@@ -181,6 +181,26 @@ export const terminalTrustedDevices = sqliteTable(
   ],
 );
 export type TerminalTrustedDeviceRow = typeof terminalTrustedDevices.$inferSelect;
+
+
+// Durable, privacy-preserving account/IP budgets for terminal password and
+// emailed-code attempts. IDs are keyed hashes, so raw identifiers and addresses
+// are not retained in this abuse-control table.
+export const terminalAuthLimits = sqliteTable(
+  'terminal_auth_limits',
+  {
+    id: text('id').primaryKey(),
+    sendCount: integer('send_count').notNull().default(0),
+    sendWindowStartedAt: integer('send_window_started_at', { mode: 'timestamp_ms' }).notNull(),
+    lastSentAt: integer('last_sent_at', { mode: 'timestamp_ms' }),
+    failureCount: integer('failure_count').notNull().default(0),
+    failureWindowStartedAt: integer('failure_window_started_at', { mode: 'timestamp_ms' }).notNull(),
+    lockedUntil: integer('locked_until', { mode: 'timestamp_ms' }),
+    updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
+  },
+  (table) => [index('terminal_auth_limits_updated_idx').on(table.updatedAt)],
+);
+export type TerminalAuthLimitRow = typeof terminalAuthLimits.$inferSelect;
 
 // Per-user, revocable bearer tokens for the read-only mobile/home-screen widget
 // (`GET /api/widget/positions`). The terminal's own API is otherwise httpOnly
