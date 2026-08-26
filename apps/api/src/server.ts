@@ -251,7 +251,7 @@ async function bootstrapDatabase(): Promise<void> {
   await seedDevBlog();
 }
 
-async function main() {
+export async function main() {
   if (config.isProd) {
     try {
       await bootstrapDatabase();
@@ -302,4 +302,3 @@ async function main() {
   }
 }
 
-main();
