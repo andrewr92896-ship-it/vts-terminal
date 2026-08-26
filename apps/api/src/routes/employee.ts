@@ -233,8 +233,9 @@ async function issueOtp(
   const address = otpAddress(user);
   if (!address) return { delivered: false, sentTo: null };
   const code = generateOtpCode();
-  await setSessionOtp(sessionId, hashOtpCode(code), new Date(Date.now() + otpTtlMs()));
+  await setSessionOtp(sessionId, hashOtpCode(sessionId, code), new Date(Date.now() + otpTtlMs()));
   const delivered = await sendOtpEmail(address, code, { name: user.displayName, ip });
+  if (!delivered) await clearSessionOtp(sessionId);
   return { delivered, sentTo: maskEmail(address) };
 }
 
@@ -409,11 +410,18 @@ export async function employeeRoutes(app: FastifyInstance) {
         ...meta,
         ok: delivered,
       });
+      if (!delivered) {
+        await destroyEmployeeSessionById(created.sessionId, user.id);
+        reply.clearCookie(EMPLOYEE_COOKIE, employeeCookieOptions());
+        return reply.code(503).send({
+          error: 'A sign-in code could not be emailed. Please try again shortly.',
+        });
+      }
       return {
         status: 'code_sent',
         csrfToken: created.csrfToken,
         sentTo,
-        delivered,
+        delivered: true,
         rememberDays: config.EMPLOYEE_REMEMBER_DEVICE_DAYS,
       };
     }
@@ -453,9 +461,13 @@ export async function employeeRoutes(app: FastifyInstance) {
 
   app.post('/api/employee/logout', async (request, reply) => {
     const token = employeeCookieToken(request);
+    const deviceToken = deviceCookieToken(request);
+    const deviceId = trustedDeviceId(deviceToken);
     const loaded = await loadEmployeeContext(request);
     await destroyEmployeeSession(token);
+    if (loaded && deviceId) await forgetDevice(deviceId, loaded.ctx.user.id);
     reply.clearCookie(EMPLOYEE_COOKIE, employeeCookieOptions());
+    reply.clearCookie(EMPLOYEE_DEVICE_COOKIE, deviceCookieOptions());
     if (loaded) {
       await audit({
         action: 'logout',
@@ -509,7 +521,7 @@ export async function employeeRoutes(app: FastifyInstance) {
       return reply.code(400).send({ error: 'That code has expired. Request a new one.', need: 'code' });
     }
 
-    if (!otpMatches(session.otpCodeHash, parsed.data.code)) {
+    if (!otpMatches(session.otpCodeHash, parsed.data.code, ctx.sessionId)) {
       // Both counters move: the per-code ceiling burns this code quickly, and
       // the account/address ladder — which nothing on the sign-in path clears
       // any more until a code actually succeeds — is what stops someone asking
@@ -535,9 +547,15 @@ export async function employeeRoutes(app: FastifyInstance) {
     }
 
     // ---- Accepted ----
+    // Promotion is conditional on the exact still-pending code row, so concurrent
+    // submissions cannot both turn one code into active sessions.
+    const promoted = await promoteEmployeeSession(
+      ctx.sessionId,
+      session.otpCodeHash,
+      MAX_OTP_ATTEMPTS,
+    );
+    if (!promoted) return reply.code(400).send({ error: 'Start signing in again' });
     await clearFailures([ipKey(meta.ip), userKey(ctx.user.id)]);
-    // Promoting clears the stored code with it, so it cannot be presented twice.
-    await promoteEmployeeSession(ctx.sessionId);
 
     if (parsed.data.remember) {
       void purgeExpiredTrustedDevices();
@@ -606,7 +624,10 @@ export async function employeeRoutes(app: FastifyInstance) {
       ...meta,
       ok: delivered,
     });
-    return { sentTo, delivered };
+    if (!delivered) {
+      return reply.code(503).send({ error: 'A new code could not be emailed. Try again shortly.' });
+    }
+    return { sentTo, delivered: true };
   });
 
   // ---- Everything below requires a fully authenticated employee ----

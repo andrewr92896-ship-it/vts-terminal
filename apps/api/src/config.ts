@@ -39,7 +39,7 @@ const envSchema = z.object({
     .default('false')
     .transform((v) => v === 'true'),
   AUTH_2FA_CODE_TTL_MINUTES: z.coerce.number().int().min(5).max(30).default(10),
-  AUTH_2FA_REMEMBER_DAYS: z.coerce.number().int().min(1).max(90).default(30),
+  AUTH_2FA_REMEMBER_DAYS: z.coerce.number().int().min(1).max(30).default(30),
   COOKIE_SECURE: z
     .enum(['true', 'false'])
     .default('false')
@@ -181,7 +181,7 @@ const envSchema = z.object({
   // "Remember this device" — how long a device that confirmed a code may skip
   // the next one. Opt-in at sign-in time; the browser holds a separate,
   // longer-lived trust cookie for it.
-  EMPLOYEE_REMEMBER_DEVICE_DAYS: z.coerce.number().int().positive().max(90).default(30),
+  EMPLOYEE_REMEMBER_DEVICE_DAYS: z.coerce.number().int().positive().max(30).default(30),
   // The company email domain. Reaching the employee portal requires a sign-in
   // email on this domain — an outside collaborator with a personal address can
   // never enter it, whatever roles they hold. Checked at sign-in AND on every

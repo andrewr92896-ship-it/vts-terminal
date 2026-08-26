@@ -95,6 +95,7 @@ import { hashPassword } from '../auth/passwords.js';
 import { destroyUserSessions } from '../auth/sessions.js';
 import { forgetTerminalAuthForUser } from '../auth/twoFactor.js';
 import { forgetAllDevices as forgetEmployeeDevices } from '../employee/trustedDevices.js';
+import { destroyEmployeeSessionsForUser } from '../employee/sessions.js';
 import { isAdmin, isFounder, isRoleKey, parseRoles, parseBadges, type RoleKey } from '../auth/rbac.js';
 import { teamExists } from '../teams/service.js';
 import { assignableBadgeKeys } from '../badges/service.js';
@@ -451,7 +452,7 @@ export async function updateUser(
   if (input.active === false) revoke = true;
 
   await db.update(users).set(patch).where(eq(users.id, targetId));
-  if (input.password != null || input.active === false || input.email != null) {
+  if (input.password != null || input.active === false || input.email != null || input.roles != null) {
     // An admin-set password, deactivation, or mailbox change supersedes both
     // recovery credentials and every browser remembered under the old state.
     await Promise.all([
@@ -460,6 +461,7 @@ export async function updateUser(
         .where(eq(passwordResetCredentials.userId, targetId)),
       forgetTerminalAuthForUser(targetId),
       forgetEmployeeDevices(targetId),
+      destroyEmployeeSessionsForUser(targetId),
     ]);
   }
   if (revoke) await destroyUserSessions(targetId);

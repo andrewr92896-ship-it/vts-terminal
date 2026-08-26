@@ -17,6 +17,8 @@ import { isUsableTimezone, toPublicUser, type PublicUser } from '../auth/rbac.js
 import { LEGAL_VERSION } from '../legal/version.js';
 import { requireAuth } from '../auth/middleware.js';
 import { DEMO_USERNAME } from '../demo/identity.js';
+import { destroyEmployeeSessionsForUser } from '../employee/sessions.js';
+import { forgetAllDevices as forgetEmployeeDevices } from '../employee/trustedDevices.js';
 import { isPrivateUserAllowed } from '../auth/privateAccess.js';
 import { getTeamName } from '../teams/service.js';
 import { featuresForUser } from '../features/service.js';
@@ -473,7 +475,11 @@ export async function authRoutes(app: FastifyInstance, options: AuthRouteOptions
       if (raw) {
         await destroyOtherUserSessions(me.id, sessionIdForToken(raw));
       }
-      await forgetTerminalAuthForUser(me.id);
+      await Promise.all([
+        forgetTerminalAuthForUser(me.id),
+        destroyEmployeeSessionsForUser(me.id),
+        forgetEmployeeDevices(me.id),
+      ]);
       reply.clearCookie(TERMINAL_DEVICE_COOKIE, terminalDeviceCookieOptions());
 
       const fresh = (await db.select().from(users).where(eq(users.id, me.id)).limit(1))[0];
@@ -571,6 +577,8 @@ export async function authRoutes(app: FastifyInstance, options: AuthRouteOptions
           .delete(passwordResetCredentials)
           .where(eq(passwordResetCredentials.userId, me.id)),
         forgetTerminalAuthForUser(me.id),
+        destroyEmployeeSessionsForUser(me.id),
+        forgetEmployeeDevices(me.id),
       ]);
       reply.clearCookie(TERMINAL_DEVICE_COOKIE, terminalDeviceCookieOptions());
     }

@@ -1,5 +1,5 @@
 import crypto from 'node:crypto';
-import { and, eq, lt, sql } from 'drizzle-orm';
+import { and, eq, gt, lt, sql } from 'drizzle-orm';
 import { db } from '../db/index.js';
 import {
   employeeSessions,
@@ -27,7 +27,7 @@ import { config } from '../config.js';
 
 // `__Host-` is only legal on a Secure cookie, so the dev name (plain HTTP) drops
 // the prefix. Everything else about the cookie is identical.
-export const EMPLOYEE_COOKIE = config.COOKIE_SECURE ? '__Host-vts_employee' : 'vts_employee';
+export const EMPLOYEE_COOKIE = config.isProd || config.COOKIE_SECURE ? '__Host-vts_employee' : 'vts_employee';
 
 // The header the browser must echo the CSRF token back in.
 export const EMPLOYEE_CSRF_HEADER = 'x-vts-employee-csrf';
@@ -46,7 +46,7 @@ export function employeeCookieOptions(maxAgeSeconds?: number) {
     path: '/',
     httpOnly: true,
     sameSite: 'strict' as const,
-    secure: config.COOKIE_SECURE,
+    secure: config.isProd || config.COOKIE_SECURE,
     signed: true,
     ...(maxAgeSeconds != null ? { maxAge: maxAgeSeconds } : {}),
   };
@@ -155,11 +155,26 @@ export async function touchEmployeeSession(id: string): Promise<void> {
 
 // Promote a verified session and clear the sign-in code with it — the code has
 // done its job and must not survive to be replayed.
-export async function promoteEmployeeSession(id: string): Promise<void> {
-  await db
+export async function promoteEmployeeSession(
+  id: string,
+  expectedCodeHash: string,
+  maxAttempts: number,
+  now = new Date(),
+): Promise<boolean> {
+  const promoted = await db
     .update(employeeSessions)
     .set({ stage: 'active', otpCodeHash: null, otpExpiresAt: null, otpAttempts: 0, otpSentAt: null })
-    .where(eq(employeeSessions.id, id));
+    .where(
+      and(
+        eq(employeeSessions.id, id),
+        eq(employeeSessions.stage, 'pending_2fa'),
+        eq(employeeSessions.otpCodeHash, expectedCodeHash),
+        gt(employeeSessions.otpExpiresAt, now),
+        lt(employeeSessions.otpAttempts, maxAttempts),
+      ),
+    )
+    .returning({ id: employeeSessions.id });
+  return promoted.length === 1;
 }
 
 // Attach a freshly sent sign-in code to a pending session. Storing it here
