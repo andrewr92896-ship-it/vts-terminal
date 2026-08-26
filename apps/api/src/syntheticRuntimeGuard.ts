@@ -2,15 +2,15 @@ import path from 'node:path';
 
 export const SYNTHETIC_RUNTIME_BOUNDARY = 'controlled-synthetic-runtime-handoff-v1';
 export const SYNTHETIC_ASSERTION = 'disposable-only-no-real-data-v1';
-export const SYNTHETIC_PROJECT_ID = 'c189b759-0501-4011-9403-0de87242c7e6';
-export const SYNTHETIC_ENVIRONMENT_ID = 'dda589ea-dace-47e7-93fa-23e29cbcb0a6';
-export const SYNTHETIC_SERVICE_ID = '99a64dd0-ad64-47e5-ad86-bb61d32a10eb';
-export const SYNTHETIC_SERVICE_INSTANCE_ID = 'f72ae2bc-00d1-4fc8-8290-581048481197';
-export const SYNTHETIC_VOLUME_ID = 'c4225198-53d2-4687-b93a-ecb099f5afbd';
-export const SYNTHETIC_VOLUME_INSTANCE_ID = 'b5d23483-ff6b-43a3-ab9d-553186a5f338';
+export const SYNTHETIC_PROJECT_ID = '96a2b238-7ea0-47fc-8dc6-cd76639a15af';
+export const SYNTHETIC_ENVIRONMENT_ID = '5d336031-9fda-47db-988c-4c6983a4b13a';
+export const SYNTHETIC_SERVICE_ID = '11fb95c5-4e42-4181-91f8-0d7f32cb244b';
+export const SYNTHETIC_SERVICE_INSTANCE_ID = 'ae8e2050-dc59-4114-8e20-f1e5641dc780';
+export const SYNTHETIC_VOLUME_ID = 'd93c6198-8aba-4cf7-9d52-cad68fea7321';
+export const SYNTHETIC_VOLUME_INSTANCE_ID = 'be5c2bd6-c802-47ac-beac-d19f7b420e3d';
 export const SYNTHETIC_MOUNT_PATH =
-  '/railway-synthetic-candidate/final-20260826t174608';
-export const SYNTHETIC_BRANCH = 'codex/private-staging-runtime-cross-service-pinned';
+  '/railway-synthetic-isolated/v1';
+export const SYNTHETIC_BRANCH = 'codex/synthetic-runtime-project-isolated-pinned-v1';
 
 export const SYNTHETIC_RUNTIME_RULES = {
   MISSING_REQUIRED: 'G001_MISSING_REQUIRED',
