@@ -34,6 +34,7 @@ const STEPS = [
   ['migrations', 'verify:migrations'],
   ['offline migration safety', 'verify:offline-migration'],
   ['offline broker credential re-key', 'verify:offline-rekey'],
+  ['controlled synthetic handoff guard', 'verify:synthetic-handoff'],
   ['credential encryption', 'verify:secretbox'],
   ['market data macro', 'verify:market-macro'],
   ['investments math', 'verify:investments'],

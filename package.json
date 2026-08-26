@@ -49,7 +49,9 @@
     "db:migrate-only": "npm --workspace @vts/api run db:migrate-only --",
     "verify:offline-migration": "npm --workspace @vts/api run db:check-offline-migration",
     "db:rekey-offline": "npm --workspace @vts/api run db:rekey-offline --",
-    "verify:offline-rekey": "npm --workspace @vts/api run db:check-offline-rekey"
+    "verify:offline-rekey": "npm --workspace @vts/api run db:check-offline-rekey",
+    "verify:synthetic-handoff": "VTS_RUNTIME_BOUNDARY=controlled-synthetic-runtime-handoff-v1 node --require ./scripts/synthetic-egress-deny.cjs --import tsx ./apps/api/src/syntheticRuntimeGuardCheck.ts",
+    "start:synthetic-handoff": "npm --workspace @vts/api run synthetic:handoff"
   },
   "devDependencies": {
     "npm-run-all": "^4.1.5"

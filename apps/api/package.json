@@ -34,7 +34,8 @@
     "db:migrate-only": "tsx src/db/offlinePrepare.ts migrate-only",
     "db:check-offline-migration": "tsx src/db/checkOfflineMigration.ts",
     "db:rekey-offline": "tsx src/db/offlineRekeyCli.ts",
-    "db:check-offline-rekey": "tsx src/db/checkOfflineRekey.ts"
+    "db:check-offline-rekey": "tsx src/db/checkOfflineRekey.ts",
+    "synthetic:handoff": "node --require ../../scripts/synthetic-egress-deny.cjs dist/syntheticRuntimeHandoff.js"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.105.0",
