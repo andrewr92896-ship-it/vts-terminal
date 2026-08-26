@@ -12,10 +12,29 @@ export const SYNTHETIC_MOUNT_PATH =
   '/railway-synthetic-candidate/pinned-20260826-105251';
 export const SYNTHETIC_BRANCH = 'codex/private-staging-runtime-handoff-pinned';
 
+export const SYNTHETIC_RUNTIME_RULES = {
+  MISSING_REQUIRED: 'G001_MISSING_REQUIRED',
+  EXACT_MARKER_MISMATCH: 'G002_EXACT_MARKER_MISMATCH',
+  NONCE_FORMAT_INVALID: 'G003_NONCE_FORMAT_INVALID',
+  COMMIT_FORMAT_INVALID: 'G004_COMMIT_FORMAT_INVALID',
+  PROTECTED_RESOURCE: 'G005_PROTECTED_RESOURCE',
+  PUBLIC_EXPOSURE: 'G006_PUBLIC_EXPOSURE',
+  ORIGIN_URL_INVALID: 'G007_ORIGIN_URL_INVALID',
+  ORIGIN_NON_LOOPBACK: 'G008_ORIGIN_NON_LOOPBACK',
+  EXTERNAL_INTEGRATION: 'G009_EXTERNAL_INTEGRATION',
+  PROTECTED_VALUE_SIGNAL: 'G010_PROTECTED_VALUE_SIGNAL',
+  DATABASE_NOT_LOCAL_FILE: 'G011_DATABASE_NOT_LOCAL_FILE',
+  DATABASE_OUTSIDE_MOUNT: 'G012_DATABASE_OUTSIDE_MOUNT',
+  DISPOSABLE_KEYS_MISSING: 'G013_DISPOSABLE_KEYS_MISSING',
+  DISPOSABLE_KEYS_REUSED: 'G014_DISPOSABLE_KEYS_REUSED',
+} as const;
+
+export type SyntheticRuntimeRuleCode =
+  (typeof SYNTHETIC_RUNTIME_RULES)[keyof typeof SYNTHETIC_RUNTIME_RULES];
+
 const PROTECTED_IDS = new Set([
   'cc2e7946-384f-4d79-abc6-b61964cee327',
   '784e4de9-66c5-4723-91bb-9ee00113383d',
-  '784e4de9-66c-4723-91bb-9ee00113383d',
 ]);
 const FORBIDDEN_SIGNAL =
   /portal\.vitalistradingsystems\.com|vts-private-staging-data|\/data\/vts\.db|retained|real-candidate/i;
@@ -33,13 +52,75 @@ const INTEGRATION_KEYS = [
   'TRADINGVIEW_WEBHOOK_SECRET',
 ] as const;
 
-export class SyntheticRuntimeGuardError extends Error {}
+// These names are public platform/application contract names. Anything not on
+// this list is omitted from diagnostics, even when the value matched a rule.
+const SAFE_DIAGNOSTIC_VARIABLE_NAMES = new Set([
+  'VTS_RUNTIME_BOUNDARY',
+  'VTS_SYNTHETIC_HANDOFF_ASSERTION',
+  'VTS_SYNTHETIC_HANDOFF_NONCE',
+  'VTS_SYNTHETIC_SERVICE_ID',
+  'VTS_SYNTHETIC_SERVICE_INSTANCE_ID',
+  'VTS_SYNTHETIC_VOLUME_ID',
+  'VTS_SYNTHETIC_VOLUME_INSTANCE_ID',
+  'VTS_SYNTHETIC_EXPECTED_BRANCH',
+  'VTS_SYNTHETIC_EXPECTED_COMMIT',
+  'NODE_ENV',
+  'RAILWAY_PUBLIC_DOMAIN',
+  'RAILWAY_PRIVATE_DOMAIN',
+  'RAILWAY_TCP_PROXY_DOMAIN',
+  'RAILWAY_TCP_PROXY_PORT',
+  'RAILWAY_TCP_APPLICATION_PORT',
+  'RAILWAY_PROJECT_NAME',
+  'RAILWAY_PROJECT_ID',
+  'RAILWAY_ENVIRONMENT_NAME',
+  'RAILWAY_ENVIRONMENT_ID',
+  'RAILWAY_SERVICE_NAME',
+  'RAILWAY_SERVICE_ID',
+  'RAILWAY_REPLICA_ID',
+  'RAILWAY_REPLICA_REGION',
+  'RAILWAY_DEPLOYMENT_ID',
+  'RAILWAY_SNAPSHOT_ID',
+  'RAILWAY_VOLUME_NAME',
+  'RAILWAY_VOLUME_ID',
+  'RAILWAY_VOLUME_MOUNT_PATH',
+  'RAILWAY_GIT_COMMIT_SHA',
+  'RAILWAY_GIT_AUTHOR',
+  'RAILWAY_GIT_BRANCH',
+  'RAILWAY_GIT_REPO_NAME',
+  'RAILWAY_GIT_REPO_OWNER',
+  'RAILWAY_GIT_COMMIT_MESSAGE',
+  'RAILWAY_STATIC_URL',
+  'PRIVATE_DATABASE_URL',
+  'DATABASE_URL',
+  'PRIVATE_PORTAL_ORIGIN',
+  'WEB_ORIGIN',
+]);
+
+export class SyntheticRuntimeGuardError extends Error {
+  readonly rule: SyntheticRuntimeRuleCode;
+  readonly variableName?: string;
+
+  constructor(rule: SyntheticRuntimeRuleCode, key?: string) {
+    const variableName = key && SAFE_DIAGNOSTIC_VARIABLE_NAMES.has(key) ? key : undefined;
+    super(
+      'Synthetic handoff refused [' + rule + ']' +
+        (variableName ? ' variable=' + variableName : ''),
+    );
+    this.name = 'SyntheticRuntimeGuardError';
+    this.rule = rule;
+    this.variableName = variableName;
+  }
+}
+
+function refuse(rule: SyntheticRuntimeRuleCode, key?: string): never {
+  throw new SyntheticRuntimeGuardError(rule, key);
+}
 
 function required(env: NodeJS.ProcessEnv, key: string, expected?: string): string {
   const value = env[key]?.trim();
-  if (!value) throw new SyntheticRuntimeGuardError('Synthetic handoff refused: missing ' + key);
+  if (!value) refuse(SYNTHETIC_RUNTIME_RULES.MISSING_REQUIRED, key);
   if (expected != null && value !== expected) {
-    throw new SyntheticRuntimeGuardError('Synthetic handoff refused: ' + key + ' did not match');
+    refuse(SYNTHETIC_RUNTIME_RULES.EXACT_MARKER_MISMATCH, key);
   }
   return value;
 }
@@ -49,15 +130,13 @@ function assertLoopbackOrigin(value: string, key: string): void {
   try {
     parsed = new URL(value);
   } catch {
-    throw new SyntheticRuntimeGuardError('Synthetic handoff refused: ' + key + ' is not a URL');
+    refuse(SYNTHETIC_RUNTIME_RULES.ORIGIN_URL_INVALID, key);
   }
   if (
     parsed.protocol !== 'http:' ||
     !['127.0.0.1', 'localhost', '::1', '[::1]'].includes(parsed.hostname)
   ) {
-    throw new SyntheticRuntimeGuardError(
-      'Synthetic handoff refused: ' + key + ' must be a loopback HTTP origin',
-    );
+    refuse(SYNTHETIC_RUNTIME_RULES.ORIGIN_NON_LOOPBACK, key);
   }
 }
 
@@ -74,7 +153,7 @@ export function assertControlledSyntheticRuntime(
   required(env, 'VTS_SYNTHETIC_HANDOFF_ASSERTION', SYNTHETIC_ASSERTION);
   const nonce = required(env, 'VTS_SYNTHETIC_HANDOFF_NONCE');
   if (!/^[0-9a-f]{32,128}$/i.test(nonce)) {
-    throw new SyntheticRuntimeGuardError('Synthetic handoff refused: nonce format was invalid');
+    refuse(SYNTHETIC_RUNTIME_RULES.NONCE_FORMAT_INVALID, 'VTS_SYNTHETIC_HANDOFF_NONCE');
   }
 
   required(env, 'NODE_ENV', 'production');
@@ -93,7 +172,7 @@ export function assertControlledSyntheticRuntime(
   const expectedCommit = required(env, 'VTS_SYNTHETIC_EXPECTED_COMMIT');
   required(env, 'RAILWAY_GIT_COMMIT_SHA', expectedCommit);
   if (!/^[0-9a-f]{40}$/i.test(expectedCommit)) {
-    throw new SyntheticRuntimeGuardError('Synthetic handoff refused: commit marker was invalid');
+    refuse(SYNTHETIC_RUNTIME_RULES.COMMIT_FORMAT_INVALID, 'VTS_SYNTHETIC_EXPECTED_COMMIT');
   }
 
   for (const id of PROTECTED_IDS) {
@@ -103,12 +182,15 @@ export function assertControlledSyntheticRuntime(
       env.VTS_SYNTHETIC_SERVICE_ID === id ||
       env.VTS_SYNTHETIC_VOLUME_ID === id
     ) {
-      throw new SyntheticRuntimeGuardError('Synthetic handoff refused: protected resource');
+      refuse(SYNTHETIC_RUNTIME_RULES.PROTECTED_RESOURCE);
     }
   }
 
   if (env.RAILWAY_PUBLIC_DOMAIN?.trim() || env.RAILWAY_STATIC_URL?.trim()) {
-    throw new SyntheticRuntimeGuardError('Synthetic handoff refused: public exposure is configured');
+    refuse(
+      SYNTHETIC_RUNTIME_RULES.PUBLIC_EXPOSURE,
+      env.RAILWAY_PUBLIC_DOMAIN?.trim() ? 'RAILWAY_PUBLIC_DOMAIN' : 'RAILWAY_STATIC_URL',
+    );
   }
   for (const key of ['PRIVATE_PORTAL_ORIGIN', 'WEB_ORIGIN'] as const) {
     const value = env[key]?.trim();
@@ -116,42 +198,32 @@ export function assertControlledSyntheticRuntime(
   }
   for (const key of INTEGRATION_KEYS) {
     if (env[key]?.trim()) {
-      throw new SyntheticRuntimeGuardError(
-        'Synthetic handoff refused: external integration variable ' + key + ' is set',
-      );
+      refuse(SYNTHETIC_RUNTIME_RULES.EXTERNAL_INTEGRATION, key);
     }
   }
 
   for (const [key, value] of Object.entries(env)) {
     if (!value) continue;
     if (FORBIDDEN_SIGNAL.test(value)) {
-      throw new SyntheticRuntimeGuardError(
-        'Synthetic handoff refused: forbidden protected/real-data signal in ' + key,
-      );
+      refuse(SYNTHETIC_RUNTIME_RULES.PROTECTED_VALUE_SIGNAL, key);
     }
   }
 
   const databaseUrl = required(env, 'PRIVATE_DATABASE_URL');
   if (!databaseUrl.startsWith('file:')) {
-    throw new SyntheticRuntimeGuardError('Synthetic handoff refused: database must be a local file');
+    refuse(SYNTHETIC_RUNTIME_RULES.DATABASE_NOT_LOCAL_FILE, 'PRIVATE_DATABASE_URL');
   }
   const databaseFile = path.resolve(databaseUrl.slice('file:'.length));
   const expectedDatabase = path.join(SYNTHETIC_MOUNT_PATH, 'synthetic-handoff.db');
   if (databaseFile !== expectedDatabase) {
-    throw new SyntheticRuntimeGuardError(
-      'Synthetic handoff refused: database is outside the exact disposable mount',
-    );
+    refuse(SYNTHETIC_RUNTIME_RULES.DATABASE_OUTSIDE_MOUNT, 'PRIVATE_DATABASE_URL');
   }
   required(env, 'DATABASE_URL', databaseUrl);
   if (!env.CREDENTIALS_KEY?.trim() || !env.PRIVATE_SESSION_SECRET?.trim()) {
-    throw new SyntheticRuntimeGuardError(
-      'Synthetic handoff refused: disposable encryption/session keys are missing',
-    );
+    refuse(SYNTHETIC_RUNTIME_RULES.DISPOSABLE_KEYS_MISSING);
   }
   if (env.CREDENTIALS_KEY === env.PRIVATE_SESSION_SECRET) {
-    throw new SyntheticRuntimeGuardError(
-      'Synthetic handoff refused: disposable keys must be independent',
-    );
+    refuse(SYNTHETIC_RUNTIME_RULES.DISPOSABLE_KEYS_REUSED);
   }
 
   return { databaseFile, expectedCommit, nonce };
