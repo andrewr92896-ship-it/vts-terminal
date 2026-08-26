@@ -32,6 +32,22 @@ export const SYNTHETIC_RUNTIME_RULES = {
 export type SyntheticRuntimeRuleCode =
   (typeof SYNTHETIC_RUNTIME_RULES)[keyof typeof SYNTHETIC_RUNTIME_RULES];
 
+export const SYNTHETIC_RUNTIME_DECISIONS = {
+  RAILWAY_PRIVATE_CROSS_SERVICE_METADATA:
+    'D010_RAILWAY_PRIVATE_CROSS_SERVICE_METADATA_ALLOWED',
+} as const;
+
+export type SyntheticRuntimeDecisionCode =
+  (typeof SYNTHETIC_RUNTIME_DECISIONS)[keyof typeof SYNTHETIC_RUNTIME_DECISIONS];
+
+// Railway's own CLI identifies this deprecated injected family by the exact
+// RAILWAY_SERVICE_ prefix and _URL suffix. Keep the interior stricter than a
+// wildcard so user/unknown names and malformed generated names fail closed.
+const RAILWAY_CROSS_SERVICE_URL_NAME =
+  /^RAILWAY_SERVICE_[A-Z0-9]+(?:_[A-Z0-9]+)*_URL$/;
+const RAILWAY_PRIVATE_HOST =
+  /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.railway\.internal$/;
+
 const PROTECTED_IDS = new Set([
   'cc2e7946-384f-4d79-abc6-b61964cee327',
   '784e4de9-66c5-4723-91bb-9ee00113383d',
@@ -140,8 +156,32 @@ function assertLoopbackOrigin(value: string, key: string): void {
   }
 }
 
+function isRailwayPrivateNetworkReference(value: string): boolean {
+  if (!value || value !== value.trim()) return false;
+  if (RAILWAY_PRIVATE_HOST.test(value)) return true;
+
+  let parsed: URL;
+  try {
+    parsed = new URL(value);
+  } catch {
+    return false;
+  }
+  const port = parsed.port ? Number(parsed.port) : undefined;
+  return (
+    parsed.protocol === 'http:' &&
+    !parsed.username &&
+    !parsed.password &&
+    RAILWAY_PRIVATE_HOST.test(parsed.hostname) &&
+    (port == null || (Number.isInteger(port) && port >= 1 && port <= 65535)) &&
+    (parsed.pathname === '' || parsed.pathname === '/') &&
+    !parsed.search &&
+    !parsed.hash
+  );
+}
+
 export interface ControlledSyntheticRuntime {
   databaseFile: string;
+  decisions: SyntheticRuntimeDecisionCode[];
   expectedCommit: string;
   nonce: string;
 }
@@ -149,6 +189,7 @@ export interface ControlledSyntheticRuntime {
 export function assertControlledSyntheticRuntime(
   env: NodeJS.ProcessEnv = process.env,
 ): ControlledSyntheticRuntime {
+  const decisions = new Set<SyntheticRuntimeDecisionCode>();
   required(env, 'VTS_RUNTIME_BOUNDARY', SYNTHETIC_RUNTIME_BOUNDARY);
   required(env, 'VTS_SYNTHETIC_HANDOFF_ASSERTION', SYNTHETIC_ASSERTION);
   const nonce = required(env, 'VTS_SYNTHETIC_HANDOFF_NONCE');
@@ -206,7 +247,19 @@ export function assertControlledSyntheticRuntime(
   }
 
   for (const [key, value] of Object.entries(env)) {
-    if (!value) continue;
+    if (!value?.trim()) continue;
+    if (RAILWAY_CROSS_SERVICE_URL_NAME.test(key)) {
+      if (!isRailwayPrivateNetworkReference(value)) {
+        refuse(SYNTHETIC_RUNTIME_RULES.PROTECTED_VALUE_SIGNAL, key);
+      }
+      decisions.add(SYNTHETIC_RUNTIME_DECISIONS.RAILWAY_PRIVATE_CROSS_SERVICE_METADATA);
+      continue;
+    }
+    // The same private reference under a user, integration, database, or
+    // otherwise unknown name is operational configuration, not inert metadata.
+    if (key !== 'RAILWAY_PRIVATE_DOMAIN' && isRailwayPrivateNetworkReference(value)) {
+      refuse(SYNTHETIC_RUNTIME_RULES.PROTECTED_VALUE_SIGNAL, key);
+    }
     if (FORBIDDEN_SIGNAL.test(value)) {
       refuse(SYNTHETIC_RUNTIME_RULES.PROTECTED_VALUE_SIGNAL, key);
     }
@@ -229,7 +282,7 @@ export function assertControlledSyntheticRuntime(
     refuse(SYNTHETIC_RUNTIME_RULES.DISPOSABLE_KEYS_REUSED);
   }
 
-  return { databaseFile, expectedCommit, nonce };
+  return { databaseFile, decisions: [...decisions], expectedCommit, nonce };
 }
 
 export function controlledSyntheticTestEnv(

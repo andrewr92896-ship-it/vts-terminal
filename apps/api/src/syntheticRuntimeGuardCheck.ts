@@ -1,10 +1,13 @@
 import assert from 'node:assert/strict';
+import { spawnSync } from 'node:child_process';
 import dgram from 'node:dgram';
 import fs from 'node:fs';
 import net from 'node:net';
+import { fileURLToPath } from 'node:url';
 import {
   assertControlledSyntheticRuntime,
   controlledSyntheticTestEnv,
+  SYNTHETIC_RUNTIME_DECISIONS,
   SYNTHETIC_RUNTIME_RULES,
   SYNTHETIC_SERVICE_ID,
   SyntheticRuntimeGuardError,
@@ -42,7 +45,8 @@ function expectRefusal(
   }
 }
 
-assert.doesNotThrow(() => assertControlledSyntheticRuntime(controlledSyntheticTestEnv()));
+const baselineResult = assertControlledSyntheticRuntime(controlledSyntheticTestEnv());
+assert.deepEqual(baselineResult.decisions, []);
 
 // Railway's documented standard metadata is allowed when it describes the
 // exact disposable IDs/branch/mount already required above. Public exposure is
@@ -70,6 +74,89 @@ const documentedRailwayMetadata: NodeJS.ProcessEnv = {
 };
 assert.doesNotThrow(() =>
   assertControlledSyntheticRuntime(controlledSyntheticTestEnv(documentedRailwayMetadata)),
+);
+
+
+const privateCrossServiceName = 'RAILWAY_SERVICE_RUNTIME_HELPER_URL';
+const privateCrossServiceValue = 'http://retained-helper.railway.internal:3000';
+const privateMetadataResult = assertControlledSyntheticRuntime(
+  controlledSyntheticTestEnv({ [privateCrossServiceName]: privateCrossServiceValue }),
+);
+assert.deepEqual(privateMetadataResult.decisions, [
+  SYNTHETIC_RUNTIME_DECISIONS.RAILWAY_PRIVATE_CROSS_SERVICE_METADATA,
+]);
+const barePrivateMetadataResult = assertControlledSyntheticRuntime(
+  controlledSyntheticTestEnv({
+    RAILWAY_SERVICE_RUNTIME_HELPER_HOST_URL: 'retained-helper.railway.internal',
+  }),
+);
+assert.deepEqual(barePrivateMetadataResult.decisions, [
+  SYNTHETIC_RUNTIME_DECISIONS.RAILWAY_PRIVATE_CROSS_SERVICE_METADATA,
+]);
+
+expectRefusal(
+  'private metadata after exact markers only',
+  controlledSyntheticTestEnv({
+    RAILWAY_PROJECT_ID: '00000000-0000-4000-8000-000000000799',
+    [privateCrossServiceName]: privateCrossServiceValue,
+  }),
+  SYNTHETIC_RUNTIME_RULES.EXACT_MARKER_MISMATCH,
+  'RAILWAY_PROJECT_ID',
+  [privateCrossServiceValue],
+);
+for (const key of ['UNRECOGNIZED_RUNTIME_URL', 'DATABASE_URL'] as const) {
+  expectRefusal(
+    'private metadata under non-platform name ' + key,
+    controlledSyntheticTestEnv({ [key]: privateCrossServiceValue }),
+    SYNTHETIC_RUNTIME_RULES.PROTECTED_VALUE_SIGNAL,
+    key === 'DATABASE_URL' ? 'DATABASE_URL' : undefined,
+    [key, privateCrossServiceValue],
+  );
+}
+expectRefusal(
+  'private metadata under integration name',
+  controlledSyntheticTestEnv({ SMTP_HOST: privateCrossServiceValue }),
+  SYNTHETIC_RUNTIME_RULES.EXTERNAL_INTEGRATION,
+  undefined,
+  ['SMTP_HOST', privateCrossServiceValue],
+);
+expectRefusal(
+  'private metadata under application-consumed origin',
+  controlledSyntheticTestEnv({ PRIVATE_PORTAL_ORIGIN: privateCrossServiceValue }),
+  SYNTHETIC_RUNTIME_RULES.ORIGIN_NON_LOOPBACK,
+  'PRIVATE_PORTAL_ORIGIN',
+  [privateCrossServiceValue],
+);
+
+for (const [label, value] of [
+  ['public Railway domain', 'https://runtime-helper.up.railway.app'],
+  ['custom domain', 'https://synthetic.example.invalid'],
+  ['TCP proxy', 'roundhouse.proxy.rlwy.net:11105'],
+  ['credentialed URL', 'http://user:pass@retained-helper.railway.internal:3000'],
+  ['query', 'http://retained-helper.railway.internal:3000/?token=test'],
+  ['fragment', 'http://retained-helper.railway.internal:3000/#test'],
+  ['database URL', 'postgres://retained-helper.railway.internal:5432/runtime'],
+  ['protected path', 'file:/data/vts.db'],
+  ['protected ID', 'cc2e7946-384f-4d79-abc6-b61964cee327'],
+  ['filesystem path', '/railway-synthetic-candidate/retained-helper'],
+  ['malformed reference', 'not a private Railway reference'],
+] as const) {
+  expectRefusal(
+    'invalid platform cross-service metadata ' + label,
+    controlledSyntheticTestEnv({ [privateCrossServiceName]: value }),
+    SYNTHETIC_RUNTIME_RULES.PROTECTED_VALUE_SIGNAL,
+    undefined,
+    [privateCrossServiceName, value],
+  );
+}
+expectRefusal(
+  'wildcard platform metadata name',
+  controlledSyntheticTestEnv({
+    'RAILWAY_SERVICE_*_URL': privateCrossServiceValue,
+  }),
+  SYNTHETIC_RUNTIME_RULES.PROTECTED_VALUE_SIGNAL,
+  undefined,
+  ['RAILWAY_SERVICE_*_URL', privateCrossServiceValue],
 );
 
 for (const [key, value] of [
@@ -315,6 +402,42 @@ assert.equal(
   rootPackage.scripts?.['verify:synthetic-handoff'],
   'VTS_RUNTIME_BOUNDARY=controlled-synthetic-runtime-handoff-v1 node --require ./scripts/synthetic-egress-deny.cjs --import tsx ./apps/api/src/syntheticRuntimeGuardCheck.ts',
 );
+
+const preloadPath = fileURLToPath(
+  new URL('../../../scripts/synthetic-egress-deny.cjs', import.meta.url),
+);
+const guardModuleUrl = new URL('./syntheticRuntimeGuard.ts', import.meta.url).href;
+const orderProbeSource = [
+  "import { assertControlledSyntheticRuntime, controlledSyntheticTestEnv } from " +
+    JSON.stringify(guardModuleUrl) +
+    ';',
+  "try { assertControlledSyntheticRuntime(controlledSyntheticTestEnv({ UNRECOGNIZED_RUNTIME_URL: 'http://retained-helper.railway.internal:3000' })); } " +
+    "catch (error) { process.stderr.write((error instanceof Error ? error.message : String(error)) + '\\n'); }",
+].join('\n');
+const preloadOrderProbe = spawnSync(
+  process.execPath,
+  ['--require', preloadPath, '--import', 'tsx', '--input-type=module', '--eval', orderProbeSource],
+  {
+    cwd: fileURLToPath(new URL('../../../', import.meta.url)),
+    encoding: 'utf8',
+    env: {
+      ...process.env,
+      VTS_RUNTIME_BOUNDARY: 'controlled-synthetic-runtime-handoff-v1',
+    },
+  },
+);
+assert.equal(preloadOrderProbe.status, 0, preloadOrderProbe.stderr);
+const activeMarker = '[synthetic-egress] active';
+const guardDiagnostic =
+  'Synthetic handoff refused [' + SYNTHETIC_RUNTIME_RULES.PROTECTED_VALUE_SIGNAL + ']';
+assert.ok(preloadOrderProbe.stderr.indexOf(activeMarker) >= 0);
+assert.ok(
+  preloadOrderProbe.stderr.indexOf(activeMarker) <
+    preloadOrderProbe.stderr.indexOf(guardDiagnostic),
+);
+assert.ok(!preloadOrderProbe.stderr.includes('retained-helper'));
+assert.ok(!preloadOrderProbe.stderr.includes('railway.internal'));
+
 const verifyWorkflow = fs.readFileSync(
   new URL('../../../.github/workflows/verify.yml', import.meta.url),
   'utf8',

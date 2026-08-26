@@ -4,6 +4,7 @@ const BOUNDARY = 'controlled-synthetic-runtime-handoff-v1';
 if (process.env.VTS_RUNTIME_BOUNDARY !== BOUNDARY) {
   throw new Error('[synthetic-egress] preload refused outside the controlled boundary');
 }
+process.stderr.write('[synthetic-egress] active\n');
 
 const net = require('node:net');
 const dgram = require('node:dgram');
