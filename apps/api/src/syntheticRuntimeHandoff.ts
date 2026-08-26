@@ -6,6 +6,8 @@ import { assertNormalServerBoundary } from './runtimeBoundary.js';
 import {
   assertControlledSyntheticRuntime,
   assertExpectedSyntheticMigrationJournal,
+  type SyntheticHandoffCleanupState,
+  withSyntheticHandoffCleanup,
 } from './syntheticRuntimeGuard.js';
 import { claimFreshSyntheticVolume } from './syntheticVolumeFreshness.js';
 
@@ -113,9 +115,9 @@ async function main(): Promise<void> {
       nonceHash: crypto.createHash('sha256').update(controlled.nonce).digest('hex').slice(0, 12),
     }),
   });
-  let clientForCleanup: { close(): void | Promise<void> } | undefined;
+  const cleanup: SyntheticHandoffCleanupState = { volume };
 
-  try {
+  await withSyntheticHandoffCleanup(cleanup, async () => {
     // These internal values are generated only after the fixed configured path
     // and fresh descriptor-pinned namespace have both been proven.
     process.env.PRIVATE_DATABASE_URL = volume.databaseUrl;
@@ -162,7 +164,7 @@ async function main(): Promise<void> {
   ]);
 
   const { db, client, waitForDatabase } = databaseModule;
-  clientForCleanup = client;
+  cleanup.client = client;
   assert.equal(config.databaseUrl, volume.databaseUrl);
   await waitForDatabase();
   await runMigrations();
@@ -203,7 +205,7 @@ async function main(): Promise<void> {
   const foreignKeyFailures = await client.execute('PRAGMA foreign_key_check');
   assert.equal(foreignKeyFailures.rows.length, 0);
 
-  const ownerId = '00000000-0000-4000-8000-000000000101';
+  const ownerId = controlled.syntheticUserId;
   const memberId = '00000000-0000-4000-8000-000000000102';
   const deskId = '00000000-0000-4000-8000-000000000201';
   const userTeamId = '00000000-0000-4000-8000-000000000202';
@@ -460,6 +462,7 @@ async function main(): Promise<void> {
   let deliveredCode = '';
   let fakeDeliveryCount = 0;
   const app = Fastify({ logger: false });
+  cleanup.app = app;
   await app.register(cookie, { secret: config.SESSION_SECRET });
   app.decorateRequest('currentUser', null);
   app.addHook('onRequest', loadUser);
@@ -636,7 +639,6 @@ async function main(): Promise<void> {
   const finalForeignKeys = await client.execute('PRAGMA foreign_key_check');
   assert.equal(finalForeignKeys.rows.length, 0);
 
-  await app.close();
   const stats = egressStats();
   assert.equal(stats.blockedNonLoopback, 1);
   assert.equal(stats.fetchBlocked, 1);
@@ -690,17 +692,16 @@ async function main(): Promise<void> {
   };
   await client.execute('PRAGMA wal_checkpoint(TRUNCATE)');
   await client.execute('PRAGMA journal_mode=DELETE');
-  await client.close();
-  clientForCleanup = undefined;
   volume.writeReportAndValidate(JSON.stringify(report, null, 2));
   console.log('[synthetic-handoff] ' + JSON.stringify(report));
-  } finally {
-    try {
-      if (clientForCleanup) await clientForCleanup.close();
-    } finally {
-      volume.close();
-    }
-  }
+  }, (resource, error) => {
+    console.error(
+      '[synthetic-handoff] suppressed ' +
+        resource +
+        ' cleanup failure: ' +
+        redactedError(error),
+    );
+  });
 }
 
 main().catch((error) => {

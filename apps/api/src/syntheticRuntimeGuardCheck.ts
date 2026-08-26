@@ -6,6 +6,7 @@ import net from 'node:net';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import Fastify from 'fastify';
 import {
   assertControlledSyntheticRuntime,
   assertExpectedSyntheticMigrationJournal,
@@ -15,7 +16,9 @@ import {
   SYNTHETIC_RUNTIME_DECISIONS,
   SYNTHETIC_RUNTIME_RULES,
   SyntheticRuntimeGuardError,
+  type SyntheticHandoffCleanupResource,
   type SyntheticRuntimeRuleCode,
+  withSyntheticHandoffCleanup,
 } from './syntheticRuntimeGuard.js';
 import {
   claimFreshSyntheticVolume,
@@ -113,6 +116,41 @@ assert.equal(
   baselineResult.databaseFile,
   '/railway-synthetic-fresh/v1/vts-synthetic-handoff-v1/synthetic-handoff.db',
 );
+const freshSyntheticUserId = '77777777-7777-4777-8777-777777777777';
+const oldHardCodedSyntheticUserId = '00000000-0000-4000-8000-000000000101';
+assert.equal(baselineResult.syntheticUserId, freshSyntheticUserId);
+assert.notEqual(baselineResult.syntheticUserId, oldHardCodedSyntheticUserId);
+assert.equal(
+  assertControlledSyntheticRuntime(
+    controlledSyntheticTestEnv({
+      PRIVATE_ACCESS_USER_IDS: oldHardCodedSyntheticUserId,
+    }),
+  ).syntheticUserId,
+  oldHardCodedSyntheticUserId,
+);
+for (const [label, value, rule] of [
+  ['missing', undefined, SYNTHETIC_RUNTIME_RULES.MISSING_REQUIRED],
+  ['empty', '', SYNTHETIC_RUNTIME_RULES.MISSING_REQUIRED],
+  ['malformed', 'not-a-uuid', SYNTHETIC_RUNTIME_RULES.IDENTITY_FORMAT_INVALID],
+  [
+    'multiple',
+    freshSyntheticUserId + ',88888888-8888-4888-8888-888888888888',
+    SYNTHETIC_RUNTIME_RULES.ACCESS_ALLOWLIST_INVALID,
+  ],
+  [
+    'duplicate',
+    freshSyntheticUserId + ',' + freshSyntheticUserId,
+    SYNTHETIC_RUNTIME_RULES.ACCESS_ALLOWLIST_INVALID,
+  ],
+] as const) {
+  expectRefusal(
+    'synthetic access allowlist ' + label,
+    controlledSyntheticTestEnv({ PRIVATE_ACCESS_USER_IDS: value }),
+    rule,
+    'PRIVATE_ACCESS_USER_IDS',
+    value ? [value] : [],
+  );
+}
 
 // Railway's documented standard metadata is allowed when it describes the
 // exact disposable IDs/branch/mount already required above. Public exposure is
@@ -960,6 +998,121 @@ if (process.platform === 'linux') {
     fs.rmSync(libsqlRoot, { recursive: true, force: true });
   }
 }
+
+
+async function assertListenerClosed(port: number): Promise<void> {
+  await new Promise<void>((resolve, reject) => {
+    const socket = net.connect({ host: '127.0.0.1', port });
+    socket.once('connect', () => {
+      socket.destroy();
+      reject(new Error('Synthetic Fastify listener remained open'));
+    });
+    socket.once('error', () => resolve());
+  });
+}
+
+async function cleanupListeningApp(
+  mode: 'forced-401' | 'scenario-exception' | 'success',
+): Promise<void> {
+  const app = Fastify({ logger: false });
+  app.get('/probe', async (_request, reply) => reply.code(401).send({ error: 'forced' }));
+  await app.listen({ host: '127.0.0.1', port: 0 });
+  const address = app.server.address();
+  assert.ok(address && typeof address === 'object');
+  const order: string[] = [];
+  let appCloseCalls = 0;
+  const state = {
+    app: {
+      async close() {
+        appCloseCalls += 1;
+        order.push('app');
+        await app.close();
+      },
+    },
+    client: {
+      close() {
+        order.push('database');
+      },
+    },
+    volume: {
+      close() {
+        order.push('volume');
+      },
+    },
+  };
+
+  if (mode === 'success') {
+    assert.equal(
+      await withSyntheticHandoffCleanup(state, async () => 'complete'),
+      'complete',
+    );
+  } else if (mode === 'forced-401') {
+    await assert.rejects(
+      withSyntheticHandoffCleanup(state, async () => {
+        const response = await fetch('http://127.0.0.1:' + address.port + '/probe');
+        assert.equal(response.status, 200);
+      }),
+      { name: 'AssertionError' },
+    );
+  } else {
+    const scenarioFailure = new Error('forced synthetic scenario exception');
+    await assert.rejects(
+      withSyntheticHandoffCleanup(state, async () => {
+        throw scenarioFailure;
+      }),
+      (error) => error === scenarioFailure,
+    );
+  }
+
+  assert.equal(appCloseCalls, 1);
+  assert.deepEqual(order, ['app', 'database', 'volume']);
+  await assertListenerClosed(address.port);
+}
+
+await cleanupListeningApp('forced-401');
+await cleanupListeningApp('scenario-exception');
+await cleanupListeningApp('success');
+
+const primaryFailure = new Error('primary synthetic failure');
+const cleanupOrder: string[] = [];
+const suppressed: Array<{
+  resource: SyntheticHandoffCleanupResource;
+  error: unknown;
+}> = [];
+await assert.rejects(
+  withSyntheticHandoffCleanup(
+    {
+      app: {
+        close() {
+          cleanupOrder.push('app');
+          throw new Error('app cleanup failure');
+        },
+      },
+      client: {
+        close() {
+          cleanupOrder.push('database');
+          throw new Error('database cleanup failure');
+        },
+      },
+      volume: {
+        close() {
+          cleanupOrder.push('volume');
+          throw new Error('volume cleanup failure');
+        },
+      },
+    },
+    async () => {
+      throw primaryFailure;
+    },
+    (resource, error) => suppressed.push({ resource, error }),
+  ),
+  (error) => error === primaryFailure,
+);
+assert.deepEqual(cleanupOrder, ['app', 'database', 'volume']);
+assert.deepEqual(
+  suppressed.map(({ resource }) => resource),
+  ['app', 'database', 'volume'],
+);
 
 const railwayConfig = JSON.parse(
   fs.readFileSync(new URL('../../../railway.json', import.meta.url), 'utf8'),

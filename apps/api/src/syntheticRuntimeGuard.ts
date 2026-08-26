@@ -4,11 +4,11 @@ export const SYNTHETIC_RUNTIME_BOUNDARY = 'controlled-synthetic-runtime-handoff-
 export const SYNTHETIC_ASSERTION = 'disposable-only-no-real-data-v1';
 export const SYNTHETIC_PROJECT_ID = '96a2b238-7ea0-47fc-8dc6-cd76639a15af';
 export const SYNTHETIC_ENVIRONMENT_ID = '5d336031-9fda-47db-988c-4c6983a4b13a';
-export const SYNTHETIC_BRANCH = 'codex/portable-synthetic-resource-guard-v1';
+export const SYNTHETIC_BRANCH = 'codex/fix-synthetic-owner-cleanup-v1';
 export const SYNTHETIC_REPOSITORY_OWNER = 'andrewr92896-ship-it';
 export const SYNTHETIC_REPOSITORY_NAME = 'vts-terminal';
 
-const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 const PROTECTED_IDS = new Set([
   // Protected staging and production.
   'c189b759-0501-4011-9403-0de87242c7e6',
@@ -91,6 +91,7 @@ export const SYNTHETIC_RUNTIME_RULES = {
   DISPOSABLE_KEYS_REUSED: 'G014_DISPOSABLE_KEYS_REUSED',
   IDENTITY_FORMAT_INVALID: 'G015_IDENTITY_FORMAT_INVALID',
   MOUNT_PATH_INVALID: 'G016_MOUNT_PATH_INVALID',
+  ACCESS_ALLOWLIST_INVALID: 'G017_ACCESS_ALLOWLIST_INVALID',
 } as const;
 
 export type SyntheticRuntimeRuleCode =
@@ -141,6 +142,7 @@ const SAFE_DIAGNOSTIC_VARIABLE_NAMES = new Set([
   'VTS_SYNTHETIC_VOLUME_MOUNT_PATH',
   'VTS_SYNTHETIC_EXPECTED_BRANCH',
   'VTS_SYNTHETIC_EXPECTED_COMMIT',
+  'PRIVATE_ACCESS_USER_IDS',
   'NODE_ENV',
   'RAILWAY_PUBLIC_DOMAIN',
   'RAILWAY_PRIVATE_DOMAIN',
@@ -201,6 +203,19 @@ function required(env: NodeJS.ProcessEnv, key: string, expected?: string): strin
     refuse(SYNTHETIC_RUNTIME_RULES.EXACT_MARKER_MISMATCH, key);
   }
   return value;
+}
+
+function requiredSyntheticAccessUserId(env: NodeJS.ProcessEnv): string {
+  const key = 'PRIVATE_ACCESS_USER_IDS';
+  const value = required(env, key);
+  const entries = value.split(',');
+  if (entries.length !== 1) {
+    refuse(SYNTHETIC_RUNTIME_RULES.ACCESS_ALLOWLIST_INVALID, key);
+  }
+  if (!UUID.test(entries[0]!)) {
+    refuse(SYNTHETIC_RUNTIME_RULES.IDENTITY_FORMAT_INVALID, key);
+  }
+  return entries[0]!;
 }
 
 function requiredUuid(env: NodeJS.ProcessEnv, key: string): string {
@@ -300,6 +315,66 @@ export interface ControlledSyntheticRuntime {
   expectedCommit: string;
   mountPath: string;
   nonce: string;
+  syntheticUserId: string;
+}
+
+export type SyntheticHandoffCleanupResource = 'app' | 'database' | 'volume';
+
+export interface SyntheticHandoffCleanupState {
+  app?: { close(): void | Promise<void> };
+  client?: { close(): void | Promise<void> };
+  volume: { close(): void };
+}
+
+export async function withSyntheticHandoffCleanup<T>(
+  state: SyntheticHandoffCleanupState,
+  operation: () => Promise<T>,
+  reportSuppressedFailure: (
+    resource: SyntheticHandoffCleanupResource,
+    error: unknown,
+  ) => void = () => undefined,
+): Promise<T> {
+  let primaryFailure = false;
+  try {
+    return await operation();
+  } catch (error) {
+    primaryFailure = true;
+    throw error;
+  } finally {
+    const cleanupFailures: Array<{
+      resource: SyntheticHandoffCleanupResource;
+      error: unknown;
+    }> = [];
+    for (const [resource, close] of [
+      ['app', state.app && (() => state.app!.close())],
+      ['database', state.client && (() => state.client!.close())],
+      ['volume', () => state.volume.close()],
+    ] as const) {
+      if (!close) continue;
+      try {
+        await close();
+      } catch (error) {
+        cleanupFailures.push({ resource, error });
+      }
+    }
+    if (cleanupFailures.length > 0) {
+      if (primaryFailure) {
+        for (const failure of cleanupFailures) {
+          try {
+            reportSuppressedFailure(failure.resource, failure.error);
+          } catch {
+            // Reporting must never replace the primary scenario failure.
+          }
+        }
+      } else {
+        throw new AggregateError(
+          cleanupFailures.map((failure) => failure.error),
+          'Synthetic handoff cleanup failed: ' +
+            cleanupFailures.map((failure) => failure.resource).join(', '),
+        );
+      }
+    }
+  }
 }
 
 export function assertControlledSyntheticRuntime(
@@ -314,6 +389,7 @@ export function assertControlledSyntheticRuntime(
   }
 
   required(env, 'NODE_ENV', 'production');
+  const syntheticUserId = requiredSyntheticAccessUserId(env);
   const projectId = requiredUuid(env, 'RAILWAY_PROJECT_ID');
   if (projectId !== SYNTHETIC_PROJECT_ID) {
     refuse(SYNTHETIC_RUNTIME_RULES.EXACT_MARKER_MISMATCH, 'RAILWAY_PROJECT_ID');
@@ -398,7 +474,14 @@ export function assertControlledSyntheticRuntime(
     refuse(SYNTHETIC_RUNTIME_RULES.DISPOSABLE_KEYS_REUSED);
   }
 
-  return { databaseFile, decisions: [...decisions], expectedCommit, mountPath, nonce };
+  return {
+    databaseFile,
+    decisions: [...decisions],
+    expectedCommit,
+    mountPath,
+    nonce,
+    syntheticUserId,
+  };
 }
 
 export function controlledSyntheticTestEnv(
@@ -424,6 +507,7 @@ export function controlledSyntheticTestEnv(
     VTS_SYNTHETIC_VOLUME_MOUNT_PATH: mountPath,
     VTS_SYNTHETIC_EXPECTED_BRANCH: SYNTHETIC_BRANCH,
     VTS_SYNTHETIC_EXPECTED_COMMIT: '1111111111111111111111111111111111111111',
+    PRIVATE_ACCESS_USER_IDS: '77777777-7777-4777-8777-777777777777',
     NODE_ENV: 'production',
     RAILWAY_PROJECT_ID: SYNTHETIC_PROJECT_ID,
     RAILWAY_ENVIRONMENT_ID: SYNTHETIC_ENVIRONMENT_ID,
