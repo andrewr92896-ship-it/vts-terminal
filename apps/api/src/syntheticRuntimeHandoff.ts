@@ -464,7 +464,7 @@ async function main(): Promise<void> {
   await app.register(authRoutes, {
     twoFactorDelivery: {
       configured: () => true,
-      send: async (message) => {
+      send: async (message: { to: string; code: string }) => {
         assert.ok(message.to.endsWith('@synthetic.invalid'));
         deliveredCode = message.code;
         fakeDeliveryCount += 1;
@@ -562,10 +562,10 @@ async function main(): Promise<void> {
   assert.equal(nonAdminAll.status, 403);
 
   assert.deepEqual(await credentialDistribution(), { ready: 2, reconnect: 1 });
-  const beforeReplacement = await client.execute(
-    "SELECT credential_state, secret_enc FROM broker_connections WHERE id = ?",
-    [reconnectId],
-  );
+  const beforeReplacement = await client.execute({
+    sql: "SELECT credential_state, secret_enc FROM broker_connections WHERE id = ?",
+    args: [reconnectId],
+  });
   assert.equal((beforeReplacement.rows[0] as Record<string, unknown>).credential_state, 'reconnect_required');
   assert.equal((beforeReplacement.rows[0] as Record<string, unknown>).secret_enc, '');
 
@@ -575,10 +575,10 @@ async function main(): Promise<void> {
   });
   assert.equal(ownerReplace.status, 200);
   assert.doesNotMatch(ownerReplace.text, new RegExp(replacement.token));
-  const afterReplacement = await client.execute(
-    "SELECT credential_state, secret_enc, summary FROM broker_connections WHERE id = ?",
-    [reconnectId],
-  );
+  const afterReplacement = await client.execute({
+    sql: "SELECT credential_state, secret_enc, summary FROM broker_connections WHERE id = ?",
+    args: [reconnectId],
+  });
   const replaced = afterReplacement.rows[0] as Record<string, unknown>;
   assert.equal(replaced.credential_state, 'ready');
   assert.ok(String(replaced.secret_enc).startsWith('v2:'));
