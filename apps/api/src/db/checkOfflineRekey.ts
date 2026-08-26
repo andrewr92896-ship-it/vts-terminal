@@ -398,14 +398,25 @@ async function main(): Promise<void> {
       const target = createOfflineCredentialKey(targetInput);
       targetInput.fill(0);
       try {
-        rows.forEach((row, index) => {
+        const expectedByConnection: Record<string, string> = {
+          'connection-one': PLAINTEXTS[0],
+          'connection-two': PLAINTEXTS[1],
+          'connection-three': PLAINTEXTS[2],
+        };
+        rows.forEach((row) => {
           const opened = decryptOfflineCredential(
             String(row.secret_enc),
             { userId: String(row.user_id), connectionId: String(row.id) },
             target,
           );
-          assert.equal(opened.plaintext.toString('utf8'), PLAINTEXTS[index]);
-          opened.plaintext.fill(0);
+          const expected = Buffer.from(expectedByConnection[String(row.id)], 'utf8');
+          try {
+            assert.equal(opened.plaintext.length, expected.length);
+            assert.equal(crypto.timingSafeEqual(opened.plaintext, expected), true);
+          } finally {
+            opened.plaintext.fill(0);
+            expected.fill(0);
+          }
         });
       } finally {
         target.destroy();
