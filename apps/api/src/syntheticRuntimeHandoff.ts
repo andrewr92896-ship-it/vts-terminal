@@ -6,8 +6,6 @@ import { assertNormalServerBoundary } from './runtimeBoundary.js';
 import {
   assertControlledSyntheticRuntime,
   assertExpectedSyntheticMigrationJournal,
-  SYNTHETIC_DATABASE_FILE,
-  SYNTHETIC_MOUNT_PATH,
 } from './syntheticRuntimeGuard.js';
 import { claimFreshSyntheticVolume } from './syntheticVolumeFreshness.js';
 
@@ -108,8 +106,8 @@ async function request(
 async function main(): Promise<void> {
   const controlled = assertControlledSyntheticRuntime();
   const volume = claimFreshSyntheticVolume({
-    mountPath: SYNTHETIC_MOUNT_PATH,
-    configuredDatabaseFile: SYNTHETIC_DATABASE_FILE,
+    mountPath: controlled.mountPath,
+    configuredDatabaseFile: controlled.databaseFile,
     sentinelContents: JSON.stringify({
       format: 'vts-controlled-synthetic-handoff-v1',
       nonceHash: crypto.createHash('sha256').update(controlled.nonce).digest('hex').slice(0, 12),

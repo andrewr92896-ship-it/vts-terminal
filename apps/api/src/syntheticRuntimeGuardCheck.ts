@@ -14,7 +14,6 @@ import {
   SYNTHETIC_LAST_MIGRATION_TAG,
   SYNTHETIC_RUNTIME_DECISIONS,
   SYNTHETIC_RUNTIME_RULES,
-  SYNTHETIC_SERVICE_ID,
   SyntheticRuntimeGuardError,
   type SyntheticRuntimeRuleCode,
 } from './syntheticRuntimeGuard.js';
@@ -109,6 +108,11 @@ function expectRefusal(
 
 const baselineResult = assertControlledSyntheticRuntime(controlledSyntheticTestEnv());
 assert.deepEqual(baselineResult.decisions, []);
+assert.equal(baselineResult.mountPath, '/railway-synthetic-fresh/v1');
+assert.equal(
+  baselineResult.databaseFile,
+  '/railway-synthetic-fresh/v1/vts-synthetic-handoff-v1/synthetic-handoff.db',
+);
 
 // Railway's documented standard metadata is allowed when it describes the
 // exact disposable IDs/branch/mount already required above. Public exposure is
@@ -120,12 +124,9 @@ const documentedRailwayMetadata: NodeJS.ProcessEnv = {
   RAILWAY_SERVICE_NAME: 'vts-pinned-handoff',
   RAILWAY_REPLICA_ID: 'synthetic-replica',
   RAILWAY_REPLICA_REGION: 'us-east4',
-  RAILWAY_DEPLOYMENT_ID: '00000000-0000-4000-8000-000000000701',
   RAILWAY_SNAPSHOT_ID: '00000000-0000-4000-8000-000000000702',
   RAILWAY_VOLUME_NAME: 'vts-pinned-handoff-volume',
   RAILWAY_GIT_AUTHOR: 'synthetic-ci',
-  RAILWAY_GIT_REPO_NAME: 'vts-terminal',
-  RAILWAY_GIT_REPO_OWNER: 'synthetic-owner',
   RAILWAY_GIT_COMMIT_MESSAGE: 'Pin synthetic runtime handoff',
   RAILWAY_DEPLOYMENT_OVERLAP_SECONDS: '0',
   RAILWAY_DOCKERFILE_PATH: 'Dockerfile',
@@ -237,29 +238,85 @@ for (const [key, value] of [
   );
 }
 
+const protectedIdentityCases = [
+  ['project', 'RAILWAY_PROJECT_ID', 'c189b759-0501-4011-9403-0de87242c7e6'],
+  ['protected environment', 'RAILWAY_ENVIRONMENT_ID', 'dda589ea-dace-47e7-93fa-23e29cbcb0a6'],
+  ['production environment', 'RAILWAY_ENVIRONMENT_ID', 'c97ea6bc-d9f1-4ae0-9ef4-4a5d564d2243'],
+  ['protected service', 'VTS_SYNTHETIC_SERVICE_ID', 'cc2e7946-384f-4d79-abc6-b61964cee327'],
+  ['first candidate service', 'VTS_SYNTHETIC_SERVICE_ID', 'fefd4df7-64c7-434e-bbf0-13fcabb62eec'],
+  ['second candidate service', 'VTS_SYNTHETIC_SERVICE_ID', '278b27cc-0fa9-4132-8951-ef4394990362'],
+  ['old candidate service', 'VTS_SYNTHETIC_SERVICE_ID', '99a64dd0-ad64-47e5-ad86-bb61d32a10eb'],
+  ['claimed isolated service', 'VTS_SYNTHETIC_SERVICE_ID', '11fb95c5-4e42-4181-91f8-0d7f32cb244b'],
+  ['latest failed service', 'VTS_SYNTHETIC_SERVICE_ID', 'd82ce250-9358-49cb-9125-7e704f1171c7'],
+  ['first candidate service instance', 'VTS_SYNTHETIC_SERVICE_INSTANCE_ID', '910a3ac3-faef-459d-ab89-d2c13d137292'],
+  ['second candidate service instance', 'VTS_SYNTHETIC_SERVICE_INSTANCE_ID', '8ac48429-7b56-49c3-baea-f3c2c2c638fa'],
+  ['old candidate service instance', 'VTS_SYNTHETIC_SERVICE_INSTANCE_ID', 'f72ae2bc-00d1-4fc8-8290-581048481197'],
+  ['claimed service instance', 'VTS_SYNTHETIC_SERVICE_INSTANCE_ID', 'ae8e2050-dc59-4114-8e20-f1e5641dc780'],
+  ['latest failed service instance', 'VTS_SYNTHETIC_SERVICE_INSTANCE_ID', '473691a8-d99b-4677-87e0-fee916eca252'],
+  ['protected volume', 'VTS_SYNTHETIC_VOLUME_ID', '784e4de9-66c5-4723-91bb-9ee00113383d'],
+  ['production volume', 'VTS_SYNTHETIC_VOLUME_ID', '68d656a4-0ad7-45ee-adaa-ea7b719f14a1'],
+  ['first candidate volume', 'VTS_SYNTHETIC_VOLUME_ID', '9614285f-6810-49dd-b8a6-6f0a4676c7ac'],
+  ['second candidate volume', 'VTS_SYNTHETIC_VOLUME_ID', '4764542c-7343-4fd3-933d-367098f5d81b'],
+  ['old candidate volume', 'VTS_SYNTHETIC_VOLUME_ID', 'c4225198-53d2-4687-b93a-ecb099f5afbd'],
+  ['claimed isolated volume', 'VTS_SYNTHETIC_VOLUME_ID', 'd93c6198-8aba-4cf7-9d52-cad68fea7321'],
+  ['latest failed volume', 'VTS_SYNTHETIC_VOLUME_ID', '7a329d31-169e-46f2-9a6d-e6542b3f9bc5'],
+  ['protected volume instance', 'VTS_SYNTHETIC_VOLUME_INSTANCE_ID', '4e96a487-95b6-4b45-888e-5836f626c2da'],
+  ['production volume instance', 'VTS_SYNTHETIC_VOLUME_INSTANCE_ID', '97ce4869-8896-4365-ac05-dbb744a955c7'],
+  ['first candidate volume instance', 'VTS_SYNTHETIC_VOLUME_INSTANCE_ID', 'f4a403d6-a9e8-4180-8f8f-03639cb75edc'],
+  ['second candidate volume instance', 'VTS_SYNTHETIC_VOLUME_INSTANCE_ID', '3a2c92f0-34c5-4fa5-afe7-9b12dd7f0e1c'],
+  ['old candidate volume instance', 'VTS_SYNTHETIC_VOLUME_INSTANCE_ID', 'b5d23483-ff6b-43a3-ab9d-553186a5f338'],
+  ['claimed volume instance', 'VTS_SYNTHETIC_VOLUME_INSTANCE_ID', 'be5c2bd6-c802-47ac-beac-d19f7b420e3d'],
+  ['latest failed volume instance', 'VTS_SYNTHETIC_VOLUME_INSTANCE_ID', 'c2f9a095-9832-4bbc-812a-27560fdfc117'],
+  ['latest failed deployment', 'RAILWAY_DEPLOYMENT_ID', '65cada26-6b51-42b9-9985-54e2cbb2606c'],
+] as const;
+for (const [label, key, value] of protectedIdentityCases) {
+  const matchingInjected =
+    key === 'VTS_SYNTHETIC_SERVICE_ID'
+      ? { RAILWAY_SERVICE_ID: value }
+      : key === 'VTS_SYNTHETIC_VOLUME_ID'
+        ? { RAILWAY_VOLUME_ID: value }
+        : {};
+  expectRefusal(
+    label,
+    controlledSyntheticTestEnv({ [key]: value, ...matchingInjected }),
+    SYNTHETIC_RUNTIME_RULES.PROTECTED_RESOURCE,
+  );
+}
+
+for (const [label, injectedKey] of [
+  ['service', 'RAILWAY_SERVICE_ID'],
+  ['volume', 'RAILWAY_VOLUME_ID'],
+] as const) {
+  expectRefusal(
+    'mismatched injected ' + label,
+    controlledSyntheticTestEnv({
+      [injectedKey]: '66666666-6666-4666-8666-666666666666',
+    }),
+    SYNTHETIC_RUNTIME_RULES.EXACT_MARKER_MISMATCH,
+    injectedKey,
+  );
+}
 expectRefusal(
-  'protected service',
+  'mismatched injected mount',
   controlledSyntheticTestEnv({
-    RAILWAY_SERVICE_ID: 'cc2e7946-384f-4d79-abc6-b61964cee327',
-    VTS_SYNTHETIC_SERVICE_ID: 'cc2e7946-384f-4d79-abc6-b61964cee327',
+    RAILWAY_VOLUME_MOUNT_PATH: '/railway-synthetic-fresh/other',
   }),
   SYNTHETIC_RUNTIME_RULES.EXACT_MARKER_MISMATCH,
-  'RAILWAY_SERVICE_ID',
+  'RAILWAY_VOLUME_MOUNT_PATH',
 );
 expectRefusal(
-  'protected volume',
-  controlledSyntheticTestEnv({
-    RAILWAY_VOLUME_ID: '784e4de9-66c5-4723-91bb-9ee00113383d',
-    VTS_SYNTHETIC_VOLUME_ID: '784e4de9-66c5-4723-91bb-9ee00113383d',
-  }),
-  SYNTHETIC_RUNTIME_RULES.EXACT_MARKER_MISMATCH,
-  'RAILWAY_VOLUME_ID',
+  'malformed sealed identity',
+  controlledSyntheticTestEnv({ VTS_SYNTHETIC_SERVICE_INSTANCE_ID: 'not-a-uuid' }),
+  SYNTHETIC_RUNTIME_RULES.IDENTITY_FORMAT_INVALID,
+  'VTS_SYNTHETIC_SERVICE_INSTANCE_ID',
+  ['not-a-uuid'],
 );
 expectRefusal(
-  'wrong service marker',
-  controlledSyntheticTestEnv({ VTS_SYNTHETIC_SERVICE_ID: SYNTHETIC_SERVICE_ID.slice(1) }),
+  'wrong repository owner',
+  controlledSyntheticTestEnv({ RAILWAY_GIT_REPO_OWNER: 'wrong-owner' }),
   SYNTHETIC_RUNTIME_RULES.EXACT_MARKER_MISMATCH,
-  'VTS_SYNTHETIC_SERVICE_ID',
+  'RAILWAY_GIT_REPO_OWNER',
+  ['wrong-owner'],
 );
 expectRefusal(
   'main branch',
@@ -302,14 +359,20 @@ for (const key of [
   'RAILWAY_PROJECT_ID',
   'RAILWAY_ENVIRONMENT_ID',
   'RAILWAY_SERVICE_ID',
+  'VTS_SYNTHETIC_SERVICE_ID',
   'VTS_SYNTHETIC_SERVICE_INSTANCE_ID',
   'RAILWAY_VOLUME_ID',
+  'VTS_SYNTHETIC_VOLUME_ID',
   'VTS_SYNTHETIC_VOLUME_INSTANCE_ID',
+  'RAILWAY_DEPLOYMENT_ID',
   'RAILWAY_VOLUME_MOUNT_PATH',
+  'VTS_SYNTHETIC_VOLUME_MOUNT_PATH',
   'VTS_SYNTHETIC_EXPECTED_BRANCH',
   'RAILWAY_GIT_BRANCH',
   'VTS_SYNTHETIC_EXPECTED_COMMIT',
   'RAILWAY_GIT_COMMIT_SHA',
+  'RAILWAY_GIT_REPO_OWNER',
+  'RAILWAY_GIT_REPO_NAME',
   'PRIVATE_DATABASE_URL',
   'DATABASE_URL',
 ] as const) {
@@ -330,6 +393,42 @@ expectRefusal(
   SYNTHETIC_RUNTIME_RULES.PROTECTED_VALUE_SIGNAL,
   'PRIVATE_DATABASE_URL',
   ['file:/data/vts.db'],
+);
+for (const mountPath of [
+  '/data',
+  '/data/synthetic',
+  '/railway-synthetic-isolated/v1',
+  '/railway-synthetic-fixed/v1',
+] as const) {
+  expectRefusal(
+    'protected or claimed mount ' + mountPath,
+    controlledSyntheticTestEnv({
+      VTS_SYNTHETIC_VOLUME_MOUNT_PATH: mountPath,
+      RAILWAY_VOLUME_MOUNT_PATH: mountPath,
+    }),
+    SYNTHETIC_RUNTIME_RULES.PROTECTED_RESOURCE,
+    'VTS_SYNTHETIC_VOLUME_MOUNT_PATH',
+  );
+}
+expectRefusal(
+  'mount path escape',
+  controlledSyntheticTestEnv({
+    VTS_SYNTHETIC_VOLUME_MOUNT_PATH: '/railway-synthetic-fresh/../escape',
+    RAILWAY_VOLUME_MOUNT_PATH: '/railway-synthetic-fresh/../escape',
+  }),
+  SYNTHETIC_RUNTIME_RULES.MOUNT_PATH_INVALID,
+  'VTS_SYNTHETIC_VOLUME_MOUNT_PATH',
+);
+expectRefusal(
+  'database path escape',
+  controlledSyntheticTestEnv({
+    PRIVATE_DATABASE_URL:
+      'file:/railway-synthetic-fresh/v1/../vts-synthetic-handoff-v1/synthetic-handoff.db',
+    DATABASE_URL:
+      'file:/railway-synthetic-fresh/v1/../vts-synthetic-handoff-v1/synthetic-handoff.db',
+  }),
+  SYNTHETIC_RUNTIME_RULES.DATABASE_OUTSIDE_MOUNT,
+  'PRIVATE_DATABASE_URL',
 );
 expectRefusal(
   'remote database URL',
@@ -598,6 +697,17 @@ withScratch((root) => {
   expectVolumeRefusal('extra hidden root entry', SYNTHETIC_VOLUME_RULES.ROOT_NAMESPACE, () =>
     claimAt(root),
   );
+});
+
+withScratch((root) => {
+  const target = path.join(root, 'target');
+  const mount = path.join(root, 'mount');
+  fs.mkdirSync(target);
+  fs.symlinkSync(target, mount);
+  expectVolumeRefusal('mount root symlink', SYNTHETIC_VOLUME_RULES.ROOT_DESCRIPTOR, () =>
+    claimAt(mount),
+  );
+  assert.deepEqual(fs.readdirSync(target), []);
 });
 
 withScratch((root) => {
