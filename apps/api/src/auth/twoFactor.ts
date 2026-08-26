@@ -1,5 +1,5 @@
 import crypto from 'node:crypto';
-import { and, eq, lt, sql } from 'drizzle-orm';
+import { eq, lt, sql } from 'drizzle-orm';
 import { db } from '../db/index.js';
 import { loginChallenges, terminalTrustedDevices, users, type UserRow } from '../db/schema.js';
 import { config } from '../config.js';
@@ -94,6 +94,15 @@ export async function beginLoginChallenge(
   meta: { ip?: string | null; userAgent?: string | null },
 ): Promise<{ token: string; maxAgeSeconds: number; sentTo: string } | null> {
   if (!user.email || !mailConfigured()) return null;
+  const previous = (
+    await db.select().from(loginChallenges).where(eq(loginChallenges.userId, user.id)).limit(1)
+  )[0];
+  if (
+    previous &&
+    Date.now() - previous.sentAt.getTime() < LOGIN_OTP_RESEND_COOLDOWN_MS
+  ) {
+    return null;
+  }
   const token = crypto.randomBytes(32).toString('hex');
   const code = generateLoginOtp();
   const now = new Date();
