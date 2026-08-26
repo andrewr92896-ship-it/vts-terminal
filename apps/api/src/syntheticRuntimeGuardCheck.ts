@@ -110,7 +110,7 @@ for (const key of ['UNRECOGNIZED_RUNTIME_URL', 'DATABASE_URL'] as const) {
     controlledSyntheticTestEnv({ [key]: privateCrossServiceValue }),
     SYNTHETIC_RUNTIME_RULES.PROTECTED_VALUE_SIGNAL,
     key === 'DATABASE_URL' ? 'DATABASE_URL' : undefined,
-    [key, privateCrossServiceValue],
+    key === 'DATABASE_URL' ? [privateCrossServiceValue] : [key, privateCrossServiceValue],
   );
 }
 expectRefusal(
