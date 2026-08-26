@@ -1224,7 +1224,7 @@ export async function tradingRoutes(app: FastifyInstance) {
     const uid = request.currentUser!.id;
     const id = (request.params as { id: string }).id;
     try {
-      await updateConnection(uid, id, parsed.data);
+      await updateConnection(uid, id, parsed.data, auditActorFor(request));
     } catch (err) {
       return reply.code(400).send({ error: err instanceof Error ? err.message : 'Could not update connection' });
     }

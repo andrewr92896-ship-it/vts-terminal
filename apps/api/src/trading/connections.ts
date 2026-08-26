@@ -37,6 +37,7 @@ export interface BrokerConnection {
   // instead of silently defaulting a credential rotation back to practice.
   env: 'practice' | 'live' | null;
   active: boolean;
+  credentialState: 'active' | 'reconnect_required';
   lastStatus: ConnStatus;
   lastError: string | null;
   lastCheckedAt: number | null;
@@ -218,6 +219,7 @@ function toPublic(row: BrokerConnectionRow): BrokerConnection {
     // The summary encodes the environment ("Live · ..." / "Practice · ...").
     env: row.broker === 'oanda' ? (row.summary?.startsWith('Live') ? 'live' : 'practice') : null,
     active: row.active,
+    credentialState: row.credentialState,
     lastStatus: row.lastStatus,
     lastError: row.lastError,
     lastCheckedAt: row.lastCheckedAt ? row.lastCheckedAt.getTime() : null,
@@ -336,6 +338,19 @@ export interface CredentialUse {
   deferred?: boolean;
 }
 
+function noteBlocked(use: CredentialUse, conn: { id: string; userId: string; username?: string }): void {
+  if (use.only && use.only !== conn.id) return;
+  recordCredentialUse({
+    connectionId: conn.id,
+    ownerUserId: conn.userId,
+    ownerUsername: conn.username,
+    purpose: use.purpose,
+    actor: use.actor,
+    ok: false,
+    error: 'credential_reentry_required',
+  });
+}
+
 function noteUse(use: CredentialUse, conn: { id: string; userId: string; username?: string }): void {
   if (use.deferred) return;
   if (use.only && use.only !== conn.id) return;
@@ -358,6 +373,12 @@ export async function getActiveDecrypted(
     .where(and(eq(brokerConnections.userId, userId), eq(brokerConnections.active, true)));
   const out: DecryptedConnection[] = [];
   for (const r of rows) {
+    // This check is deliberately before the try/decrypt block. A quarantined
+    // row is not a broken credential to retry; it is an explicit refusal.
+    if (r.credentialState === 'reconnect_required') {
+      noteBlocked(use, r);
+      continue;
+    }
     try {
       out.push({
         id: r.id,
@@ -419,6 +440,10 @@ export async function getAllActiveDecrypted(
     // out of the demo, handled in the service).
     if (r.username === DEMO_USERNAME) continue;
     if (!canAccessWorkspace(parseRoles({ roles: r.roles }), 'trading')) continue;
+    if (r.conn.credentialState === 'reconnect_required') {
+      noteBlocked(use, { id: r.conn.id, userId: r.conn.userId, username: r.username });
+      continue;
+    }
     try {
       out.push({
         id: r.conn.id,
@@ -517,6 +542,7 @@ export async function updateConnection(
   userId: string,
   id: string,
   input: { label?: string; active?: boolean; creds?: Record<string, unknown>; historyStartAt?: number | null },
+  actor: AuditActor = { actorUserId: userId, sourceIp: null },
 ): Promise<void> {
   const row = (
     await db
@@ -550,11 +576,22 @@ export async function updateConnection(
     // New credentials → reset health until the next refresh proves them.
     patch.lastStatus = 'unknown';
     patch.lastError = null;
+    // The new envelope and the state transition are one UPDATE: there is no
+    // instant in which a quarantined row is usable with its old payload.
+    patch.credentialState = 'active';
   }
   await db
     .update(brokerConnections)
     .set(patch)
     .where(and(eq(brokerConnections.id, id), eq(brokerConnections.userId, userId)));
+  if (input.creds !== undefined) {
+    recordCredentialUse({
+      connectionId: id,
+      ownerUserId: userId,
+      purpose: 'credential_replace',
+      actor,
+    });
+  }
 }
 
 export async function removeConnection(userId: string, id: string): Promise<void> {

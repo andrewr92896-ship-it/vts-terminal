@@ -397,6 +397,8 @@ export type TradingPositionRow = typeof tradingPositions.$inferSelect;
 // and History are driven by the calling user's active connections.
 export const BROKER_CONNECTION_KINDS = ['oanda', 'kraken', 'manual'] as const;
 export type BrokerConnectionKind = (typeof BROKER_CONNECTION_KINDS)[number];
+export const BROKER_CREDENTIAL_STATES = ['active', 'reconnect_required'] as const;
+export type BrokerCredentialState = (typeof BROKER_CREDENTIAL_STATES)[number];
 
 export const brokerConnections = sqliteTable('broker_connections', {
   id: text('id').primaryKey(),
@@ -406,6 +408,11 @@ export const brokerConnections = sqliteTable('broker_connections', {
   broker: text('broker', { enum: BROKER_CONNECTION_KINDS }).notNull(),
   label: text('label').notNull(),
   secretEnc: text('secret_enc').notNull(), // encrypted JSON of the credentials
+  // A reconnect-required row retains its non-secret identity and historical
+  // enabled flag, but every runtime path refuses it before decryption.
+  credentialState: text('credential_state', { enum: BROKER_CREDENTIAL_STATES })
+    .notNull()
+    .default('active'),
   summary: text('summary'), // non-secret hint, e.g. "Practice · 001-…-001"
   active: integer('active', { mode: 'boolean' }).notNull().default(true),
   lastStatus: text('last_status', { enum: ['unknown', 'ok', 'error'] })
@@ -2962,6 +2969,8 @@ export const CREDENTIAL_AUDIT_PURPOSES = [
   // Reading the account's funding history to keep deposited/withdrawn capital
   // in step with the broker. A person asked for it, so it gets its own row.
   'funding',
+  // Owner-authorized replacement of a stored credential. No secret is logged.
+  'credential_replace',
 ] as const;
 export type CredentialAuditPurpose = (typeof CREDENTIAL_AUDIT_PURPOSES)[number];
 

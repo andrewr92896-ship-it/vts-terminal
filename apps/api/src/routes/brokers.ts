@@ -14,8 +14,10 @@ export async function brokerRoutes(app: FastifyInstance) {
       const conns = await listConnections(request.currentUser!.id);
       const brokers = conns.map((c) => {
         const meta = brokerMeta(c.broker);
-        const status = !c.active
-          ? ('unconfigured' as const)
+        const status = c.credentialState === 'reconnect_required'
+          ? ('reconnect_required' as const)
+          : !c.active
+            ? ('unconfigured' as const)
           : c.lastStatus === 'ok'
             ? ('live' as const)
             : c.lastStatus === 'error'
@@ -35,8 +37,10 @@ export async function brokerRoutes(app: FastifyInstance) {
       return {
         brokers,
         stage: 2,
-        note: brokers.length
-          ? 'Live broker connections.'
+        note: brokers.some((broker) => broker.status === 'reconnect_required')
+          ? 'One or more broker connections require reconnection.'
+          : brokers.length
+            ? 'Live broker connections.'
           : 'Add a broker connection to stream your positions.',
       };
     },
