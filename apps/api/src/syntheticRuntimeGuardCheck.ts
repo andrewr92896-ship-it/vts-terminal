@@ -8,7 +8,10 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
   assertControlledSyntheticRuntime,
+  assertExpectedSyntheticMigrationJournal,
   controlledSyntheticTestEnv,
+  SYNTHETIC_LAST_MIGRATION_INDEX,
+  SYNTHETIC_LAST_MIGRATION_TAG,
   SYNTHETIC_RUNTIME_DECISIONS,
   SYNTHETIC_RUNTIME_RULES,
   SYNTHETIC_SERVICE_ID,
@@ -31,6 +34,47 @@ import {
   type SyntheticVolumeOperations,
   type SyntheticVolumeRuleCode,
 } from './syntheticVolumeFreshness.js';
+
+const migrationJournal = JSON.parse(
+  fs.readFileSync(new URL('../migrations/meta/_journal.json', import.meta.url), 'utf8'),
+) as {
+  entries: Array<{ idx: number; when: number; tag: string }>;
+};
+assert.equal(
+  migrationJournal.entries.length,
+  SYNTHETIC_LAST_MIGRATION_INDEX + 1,
+);
+assert.equal(migrationJournal.entries[0]?.idx, 0);
+const expectedLastMigration = assertExpectedSyntheticMigrationJournal(
+  migrationJournal.entries,
+);
+assert.equal(expectedLastMigration.idx, migrationJournal.entries.length - 1);
+assert.equal(expectedLastMigration.idx, SYNTHETIC_LAST_MIGRATION_INDEX);
+assert.equal(expectedLastMigration.tag, SYNTHETIC_LAST_MIGRATION_TAG);
+
+const expectMigrationJournalRefusal = (
+  last: { idx: number; when: number; tag: string },
+): void => {
+  assert.throws(
+    () =>
+      assertExpectedSyntheticMigrationJournal([
+        ...migrationJournal.entries.slice(0, -1),
+        last,
+      ]),
+    {
+      name: 'Error',
+      message: 'Synthetic handoff refused: unexpected migration journal head',
+    },
+  );
+};
+expectMigrationJournalRefusal({
+  ...expectedLastMigration,
+  idx: SYNTHETIC_LAST_MIGRATION_INDEX + 1,
+});
+expectMigrationJournalRefusal({
+  ...expectedLastMigration,
+  tag: SYNTHETIC_LAST_MIGRATION_TAG + '_wrong',
+});
 
 function captureRefusal(env: NodeJS.ProcessEnv): SyntheticRuntimeGuardError {
   try {

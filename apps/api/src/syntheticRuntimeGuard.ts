@@ -16,6 +16,29 @@ export const SYNTHETIC_DATABASE_FILE = path.join(
   'vts-synthetic-handoff-v1',
   'synthetic-handoff.db',
 );
+export const SYNTHETIC_LAST_MIGRATION_INDEX = 137;
+export const SYNTHETIC_LAST_MIGRATION_TAG = '0138_broker_credential_state';
+
+export interface SyntheticMigrationJournalEntry {
+  idx: number;
+  when: number;
+  tag: string;
+}
+
+export function assertExpectedSyntheticMigrationJournal(
+  entries: readonly SyntheticMigrationJournalEntry[],
+): SyntheticMigrationJournalEntry {
+  const expectedLast = entries.at(-1);
+  if (
+    !expectedLast ||
+    expectedLast.idx !== SYNTHETIC_LAST_MIGRATION_INDEX ||
+    expectedLast.idx !== entries.length - 1 ||
+    expectedLast.tag !== SYNTHETIC_LAST_MIGRATION_TAG
+  ) {
+    throw new Error('Synthetic handoff refused: unexpected migration journal head');
+  }
+  return expectedLast;
+}
 
 export const SYNTHETIC_RUNTIME_RULES = {
   MISSING_REQUIRED: 'G001_MISSING_REQUIRED',

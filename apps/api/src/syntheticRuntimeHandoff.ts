@@ -5,6 +5,7 @@ import path from 'node:path';
 import { assertNormalServerBoundary } from './runtimeBoundary.js';
 import {
   assertControlledSyntheticRuntime,
+  assertExpectedSyntheticMigrationJournal,
   SYNTHETIC_DATABASE_FILE,
   SYNTHETIC_MOUNT_PATH,
 } from './syntheticRuntimeGuard.js';
@@ -174,9 +175,7 @@ async function main(): Promise<void> {
   const journal = JSON.parse(fs.readFileSync(journalPath, 'utf8')) as {
     entries: Array<{ idx: number; when: number; tag: string }>;
   };
-  const expectedLast = journal.entries.at(-1);
-  assert.equal(expectedLast?.idx, 138);
-  assert.match(expectedLast?.tag ?? '', /^0138_/);
+  const expectedLast = assertExpectedSyntheticMigrationJournal(journal.entries);
 
   const migrationRows = await client.execute(
     'SELECT COUNT(*) AS count, MAX(created_at) AS last_created_at FROM __drizzle_migrations',
