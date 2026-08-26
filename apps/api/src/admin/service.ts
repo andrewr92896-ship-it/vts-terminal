@@ -91,6 +91,7 @@ import {
 } from '../db/schema.js';
 import { hashPassword } from '../auth/passwords.js';
 import { destroyUserSessions } from '../auth/sessions.js';
+import { forgetTerminalDevicesForUser } from '../auth/twoFactor.js';
 import { isAdmin, isFounder, isRoleKey, parseRoles, parseBadges, type RoleKey } from '../auth/rbac.js';
 import { teamExists } from '../teams/service.js';
 import { assignableBadgeKeys } from '../badges/service.js';
@@ -448,11 +449,14 @@ export async function updateUser(
 
   await db.update(users).set(patch).where(eq(users.id, targetId));
   if (input.password != null || input.active === false || input.email != null) {
-    // An admin-set password, deactivation, or mailbox change supersedes any
-    // recovery credential previously sent to this account.
-    await db
-      .delete(passwordResetCredentials)
-      .where(eq(passwordResetCredentials.userId, targetId));
+    // An admin-set password, deactivation, or mailbox change supersedes both
+    // recovery credentials and every browser remembered under the old state.
+    await Promise.all([
+      db
+        .delete(passwordResetCredentials)
+        .where(eq(passwordResetCredentials.userId, targetId)),
+      forgetTerminalDevicesForUser(targetId),
+    ]);
   }
   if (revoke) await destroyUserSessions(targetId);
 
