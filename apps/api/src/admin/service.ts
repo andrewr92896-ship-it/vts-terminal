@@ -4,7 +4,9 @@ import { db } from '../db/index.js';
 import {
   users,
   sessions,
+  loginChallenges,
   passwordResetCredentials,
+  terminalTrustedDevices,
   todoSections,
   todoItems,
   tradingTrades,
@@ -91,7 +93,8 @@ import {
 } from '../db/schema.js';
 import { hashPassword } from '../auth/passwords.js';
 import { destroyUserSessions } from '../auth/sessions.js';
-import { forgetTerminalDevicesForUser } from '../auth/twoFactor.js';
+import { forgetTerminalAuthForUser } from '../auth/twoFactor.js';
+import { forgetAllDevices as forgetEmployeeDevices } from '../employee/trustedDevices.js';
 import { isAdmin, isFounder, isRoleKey, parseRoles, parseBadges, type RoleKey } from '../auth/rbac.js';
 import { teamExists } from '../teams/service.js';
 import { assignableBadgeKeys } from '../badges/service.js';
@@ -455,7 +458,8 @@ export async function updateUser(
       db
         .delete(passwordResetCredentials)
         .where(eq(passwordResetCredentials.userId, targetId)),
-      forgetTerminalDevicesForUser(targetId),
+      forgetTerminalAuthForUser(targetId),
+      forgetEmployeeDevices(targetId),
     ]);
   }
   if (revoke) await destroyUserSessions(targetId);
@@ -776,6 +780,8 @@ export async function deleteUser(actingUserId: string, targetId: string): Promis
     await tx.delete(employeeTrustedDevices).where(eq(employeeTrustedDevices.userId, targetId));
     await tx.delete(employeeProfiles).where(eq(employeeProfiles.userId, targetId));
     await tx.delete(employeeLoginAttempts).where(eq(employeeLoginAttempts.id, `user:${targetId}`));
+    await tx.delete(loginChallenges).where(eq(loginChallenges.userId, targetId));
+    await tx.delete(terminalTrustedDevices).where(eq(terminalTrustedDevices.userId, targetId));
     await tx
       .delete(passwordResetCredentials)
       .where(eq(passwordResetCredentials.userId, targetId));

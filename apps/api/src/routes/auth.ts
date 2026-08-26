@@ -39,14 +39,21 @@ import {
   beginLoginChallenge,
   challengeUser,
   destroyLoginChallenge,
-  forgetTerminalDevicesForUser,
+  forgetTerminalAuthForUser,
+  forgetTerminalDevice,
   loginChallengeCookieOptions,
   rememberTerminalDevice,
   resendLoginChallenge,
   terminalDeviceCookieOptions,
   terminalDeviceTrusted,
   verifyLoginChallenge,
+  type LoginTwoFactorDelivery,
 } from '../auth/twoFactor.js';
+import {
+  checkTerminalAuthLock,
+  clearTerminalAuthFailures,
+  recordTerminalAuthFailure,
+} from '../auth/twoFactorRateLimit.js';
 
 // Build the browser-safe user: the trading-team name from the user's teamId, the
 // optional features they have turned on (which decides the workspaces the
@@ -108,6 +115,7 @@ function signedCookie(request: FastifyRequest, name: string): string | undefined
 export interface AuthRouteOptions {
   passwordResetDelivery?: PasswordResetDelivery;
   passwordResetLimiter?: PasswordResetRateLimiter;
+  twoFactorDelivery?: LoginTwoFactorDelivery;
 }
 
 const profileSchema = z
@@ -161,6 +169,7 @@ const profileSchema = z
 export async function authRoutes(app: FastifyInstance, options: AuthRouteOptions = {}) {
   const resetDelivery = options.passwordResetDelivery ?? defaultPasswordResetDelivery;
   const resetLimiter = options.passwordResetLimiter ?? passwordResetRateLimiter;
+  const twoFactorDelivery = options.twoFactorDelivery;
 
   app.post('/api/auth/forgot-password', async (request, reply) => {
     const parsed = forgotPasswordSchema.safeParse(request.body);
@@ -194,6 +203,15 @@ export async function authRoutes(app: FastifyInstance, options: AuthRouteOptions
     }
     const { email, username, password } = parsed.data;
     const identifier = (email ?? username)!.toLowerCase();
+    const loginSubject = `login:${identifier}`;
+    const ip = request.ip ?? '';
+    const preLock = await checkTerminalAuthLock(loginSubject, ip);
+    if (preLock.locked) {
+      return reply
+        .code(429)
+        .header('Retry-After', String(preLock.retryAfter))
+        .send({ error: 'Too many attempts. Try again later.', retryAfter: preLock.retryAfter });
+    }
 
     // Primary: match by email. The demo account is excluded — its email column
     // stores an internal seed-version marker, not a real address. Fallback:
@@ -234,7 +252,17 @@ export async function authRoutes(app: FastifyInstance, options: AuthRouteOptions
     }
 
     if (!credentialsValid || !admitted || !user) {
+      await recordTerminalAuthFailure(loginSubject, ip);
       return reply.code(401).send({ error: 'Invalid email or password' });
+    }
+
+    const userSubject = `user:${user.id}`;
+    const userLock = await checkTerminalAuthLock(userSubject, ip);
+    if (userLock.locked) {
+      return reply
+        .code(429)
+        .header('Retry-After', String(userLock.retryAfter))
+        .send({ error: 'Too many attempts. Try again later.', retryAfter: userLock.retryAfter });
     }
 
     // A remembered browser skips only the emailed code. The password above is
@@ -244,11 +272,19 @@ export async function authRoutes(app: FastifyInstance, options: AuthRouteOptions
       signedCookie(request, TERMINAL_DEVICE_COOKIE),
     );
     if (config.AUTH_REQUIRE_2FA && user.username !== DEMO_USERNAME && !remembered) {
-      const challenge = await beginLoginChallenge(user, {
-        ip: request.ip,
-        userAgent: request.headers['user-agent'],
-      });
-      if (!challenge) {
+      const challenge = await beginLoginChallenge(
+        user,
+        { ip: request.ip, userAgent: request.headers['user-agent'] },
+        twoFactorDelivery,
+      );
+      if (!challenge.ok) {
+        if (challenge.reason === 'limited') {
+          const retryAfter = challenge.retryAfter ?? 30;
+          return reply
+            .code(429)
+            .header('Retry-After', String(retryAfter))
+            .send({ error: 'Too many code requests. Try again later.', retryAfter });
+        }
         return reply.code(503).send({
           error: 'A sign-in code could not be emailed. Please try again shortly.',
         });
@@ -265,6 +301,10 @@ export async function authRoutes(app: FastifyInstance, options: AuthRouteOptions
       };
     }
 
+    await Promise.all([
+      clearTerminalAuthFailures(loginSubject, ip),
+      clearTerminalAuthFailures(userSubject, ip),
+    ]);
     const { token, maxAgeSeconds } = await createSession(
       user.id,
       request.headers['user-agent'],
@@ -279,8 +319,26 @@ export async function authRoutes(app: FastifyInstance, options: AuthRouteOptions
       return reply.code(400).send({ error: 'Enter the 6-digit code' });
     }
     const rawChallenge = signedCookie(request, LOGIN_CHALLENGE_COOKIE);
+    const pendingUser = await challengeUser(rawChallenge);
+    if (!pendingUser || !pendingUser.active || !isPrivateUserAllowed(pendingUser.id)) {
+      reply.clearCookie(LOGIN_CHALLENGE_COOKIE, loginChallengeCookieOptions());
+      return reply.code(401).send({ error: 'Sign in again to continue' });
+    }
+    const ip = request.ip ?? '';
+    const userSubject = `user:${pendingUser.id}`;
+    const lock = await checkTerminalAuthLock(userSubject, ip);
+    if (lock.locked) {
+      return reply
+        .code(429)
+        .header('Retry-After', String(lock.retryAfter))
+        .send({ error: 'Too many attempts. Try again later.', retryAfter: lock.retryAfter });
+    }
+
     const result = await verifyLoginChallenge(rawChallenge, parsed.data.code);
     if (!result.ok) {
+      if (result.reason === 'invalid' || result.reason === 'attempts') {
+        await recordTerminalAuthFailure(userSubject, ip);
+      }
       if (result.reason === 'expired' || result.reason === 'missing' || result.reason === 'attempts') {
         reply.clearCookie(LOGIN_CHALLENGE_COOKIE, loginChallengeCookieOptions());
       }
@@ -300,6 +358,11 @@ export async function authRoutes(app: FastifyInstance, options: AuthRouteOptions
       return reply.code(401).send({ error: 'Sign in again to continue' });
     }
 
+    await Promise.all([
+      clearTerminalAuthFailures(userSubject, ip),
+      ...(user.email ? [clearTerminalAuthFailures(`login:${user.email.toLowerCase()}`, ip)] : []),
+      clearTerminalAuthFailures(`login:${user.username.toLowerCase()}`, ip),
+    ]);
     const { token, maxAgeSeconds } = await createSession(
       user.id,
       request.headers['user-agent'],
@@ -329,8 +392,19 @@ export async function authRoutes(app: FastifyInstance, options: AuthRouteOptions
     if (!user || !user.active || !isPrivateUserAllowed(user.id)) {
       return reply.code(401).send({ error: 'Sign in again to request a new code' });
     }
-    const result = await resendLoginChallenge(rawChallenge, user, request.ip);
+    const lock = await checkTerminalAuthLock(`user:${user.id}`, request.ip ?? '');
+    if (lock.locked) {
+      return reply
+        .code(429)
+        .header('Retry-After', String(lock.retryAfter))
+        .send({ error: 'Too many attempts. Try again later.', retryAfter: lock.retryAfter });
+    }
+    const result = await resendLoginChallenge(rawChallenge, user, request.ip, twoFactorDelivery);
     if (!result.ok) {
+      if (result.reason === 'missing') {
+        reply.clearCookie(LOGIN_CHALLENGE_COOKIE, loginChallengeCookieOptions());
+        return reply.code(401).send({ error: 'Sign in again to request a new code' });
+      }
       if (result.retryAfter) {
         return reply.code(429).send({
           error: `Wait ${result.retryAfter} seconds before requesting another code`,
@@ -345,9 +419,15 @@ export async function authRoutes(app: FastifyInstance, options: AuthRouteOptions
   app.post('/api/auth/logout', async (request, reply) => {
     const raw = signedCookie(request, SESSION_COOKIE);
     const challenge = signedCookie(request, LOGIN_CHALLENGE_COOKIE);
-    await Promise.all([destroySession(raw), destroyLoginChallenge(challenge)]);
+    const device = signedCookie(request, TERMINAL_DEVICE_COOKIE);
+    await Promise.all([
+      destroySession(raw),
+      destroyLoginChallenge(challenge),
+      forgetTerminalDevice(device),
+    ]);
     reply.clearCookie(SESSION_COOKIE, cookieOptions());
     reply.clearCookie(LOGIN_CHALLENGE_COOKIE, loginChallengeCookieOptions());
+    reply.clearCookie(TERMINAL_DEVICE_COOKIE, terminalDeviceCookieOptions());
     return { ok: true };
   });
 
@@ -393,7 +473,7 @@ export async function authRoutes(app: FastifyInstance, options: AuthRouteOptions
       if (raw) {
         await destroyOtherUserSessions(me.id, sessionIdForToken(raw));
       }
-      await forgetTerminalDevicesForUser(me.id);
+      await forgetTerminalAuthForUser(me.id);
       reply.clearCookie(TERMINAL_DEVICE_COOKIE, terminalDeviceCookieOptions());
 
       const fresh = (await db.select().from(users).where(eq(users.id, me.id)).limit(1))[0];
@@ -490,7 +570,7 @@ export async function authRoutes(app: FastifyInstance, options: AuthRouteOptions
         db
           .delete(passwordResetCredentials)
           .where(eq(passwordResetCredentials.userId, me.id)),
-        forgetTerminalDevicesForUser(me.id),
+        forgetTerminalAuthForUser(me.id),
       ]);
       reply.clearCookie(TERMINAL_DEVICE_COOKIE, terminalDeviceCookieOptions());
     }

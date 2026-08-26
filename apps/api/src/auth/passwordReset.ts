@@ -4,8 +4,12 @@ import { z } from 'zod';
 import { config } from '../config.js';
 import { db } from '../db/index.js';
 import {
+  employeeSessions,
+  employeeTrustedDevices,
+  loginChallenges,
   passwordResetCredentials,
   sessions,
+  terminalTrustedDevices,
   users,
   type UserRow,
 } from '../db/schema.js';
@@ -194,7 +198,13 @@ export async function promotePasswordResetCredential(
       })
       .where(eq(users.id, user.id));
     await tx.delete(passwordResetCredentials).where(eq(passwordResetCredentials.id, current.id));
-    await tx.delete(sessions).where(eq(sessions.userId, user.id));
+    await Promise.all([
+      tx.delete(sessions).where(eq(sessions.userId, user.id)),
+      tx.delete(loginChallenges).where(eq(loginChallenges.userId, user.id)),
+      tx.delete(terminalTrustedDevices).where(eq(terminalTrustedDevices.userId, user.id)),
+      tx.delete(employeeSessions).where(eq(employeeSessions.userId, user.id)),
+      tx.delete(employeeTrustedDevices).where(eq(employeeTrustedDevices.userId, user.id)),
+    ]);
     promoted = true;
   });
 
