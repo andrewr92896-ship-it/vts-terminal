@@ -1,5 +1,6 @@
 import fs from 'node:fs';
 import os from 'node:os';
+import { spawnSync } from 'node:child_process';
 
 // One auditable process boundary for normal service startup versus offline tools.
 //
@@ -96,10 +97,33 @@ export function assertOfflineRekeyBoundary(env: NodeJS.ProcessEnv = process.env)
 
 
 export interface OfflineNetworkProbe {
-  platform: NodeJS.Platform;
+  platform: string;
   interfaces: ReturnType<typeof os.networkInterfaces>;
   readText(path: string): string;
+  darwinNetworkDenied(): boolean;
 }
+
+const DARWIN_NETWORK_DENIAL_PROBE = `
+const dgram = require('node:dgram');
+function denied(error) {
+  return error && (error.code === 'EPERM' || error.code === 'EACCES');
+}
+try {
+  const socket = dgram.createSocket('udp4');
+  const timer = setTimeout(() => process.exit(3), 1000);
+  socket.once('error', (error) => {
+    clearTimeout(timer);
+    process.exit(denied(error) ? 0 : 4);
+  });
+  socket.connect(9, '192.0.2.1', () => {
+    clearTimeout(timer);
+    socket.close();
+    process.exit(2);
+  });
+} catch (error) {
+  process.exit(denied(error) ? 0 : 4);
+}
+`;
 
 function defaultOfflineNetworkProbe(): OfflineNetworkProbe {
   return {
@@ -108,16 +132,34 @@ function defaultOfflineNetworkProbe(): OfflineNetworkProbe {
     readText(file) {
       return fs.readFileSync(file, 'utf8');
     },
+    darwinNetworkDenied() {
+      const result = spawnSync(process.execPath, ['-e', DARWIN_NETWORK_DENIAL_PROBE], {
+        stdio: 'ignore',
+        timeout: 2_000,
+      });
+      return result.status === 0;
+    },
   };
 }
 
-// A real re-key run is accepted only inside a Linux network namespace whose
-// visible interfaces and routes are loopback-only. This executes before any key
-// file descriptor is read. Tests may inject a synthetic probe through the
-// re-key service seam; the CLI exposes no bypass.
+// This executes before any key file descriptor is read. Linux proves a
+// loopback-only namespace from interfaces and kernel route tables. macOS proves
+// that its inherited sandbox denies creation of an outbound UDP socket: the
+// documentation-only address cannot receive a packet, and only EPERM/EACCES is
+// accepted. Ordinary routing errors, timeouts, and merely disconnected hosts
+// fail closed. Tests may inject a synthetic probe through the re-key service
+// seam; the CLI exposes no bypass.
 export function assertOfflineNetworkIsolation(
   probe: OfflineNetworkProbe = defaultOfflineNetworkProbe(),
 ): void {
+  if (probe.platform === 'darwin') {
+    if (!probe.darwinNetworkDenied()) {
+      throw new RuntimeBoundaryError(
+        'Offline credential re-key refused: macOS network denial was not verified.',
+      );
+    }
+    return;
+  }
   if (probe.platform !== 'linux') {
     throw new RuntimeBoundaryError(
       'Offline credential re-key refused: network isolation is not verifiable on this host.',
