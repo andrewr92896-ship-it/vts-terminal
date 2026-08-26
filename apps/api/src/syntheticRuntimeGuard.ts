@@ -4,13 +4,13 @@ export const SYNTHETIC_RUNTIME_BOUNDARY = 'controlled-synthetic-runtime-handoff-
 export const SYNTHETIC_ASSERTION = 'disposable-only-no-real-data-v1';
 export const SYNTHETIC_PROJECT_ID = 'c189b759-0501-4011-9403-0de87242c7e6';
 export const SYNTHETIC_ENVIRONMENT_ID = 'dda589ea-dace-47e7-93fa-23e29cbcb0a6';
-export const SYNTHETIC_SERVICE_ID = '278b27cc-0fa9-4132-8951-ef4394990362';
-export const SYNTHETIC_SERVICE_INSTANCE_ID = '8ac48429-7b56-49c3-baea-f3c2c2c638fa';
-export const SYNTHETIC_VOLUME_ID = '4764542c-7343-4fd3-933d-367098f5d81b';
-export const SYNTHETIC_VOLUME_INSTANCE_ID = '3a2c92f0-34c5-4fa5-afe7-9b12dd7f0e1c';
+export const SYNTHETIC_SERVICE_ID = '99a64dd0-ad64-47e5-ad86-bb61d32a10eb';
+export const SYNTHETIC_SERVICE_INSTANCE_ID = 'f72ae2bc-00d1-4fc8-8290-581048481197';
+export const SYNTHETIC_VOLUME_ID = 'c4225198-53d2-4687-b93a-ecb099f5afbd';
+export const SYNTHETIC_VOLUME_INSTANCE_ID = 'b5d23483-ff6b-43a3-ab9d-553186a5f338';
 export const SYNTHETIC_MOUNT_PATH =
-  '/railway-synthetic-candidate/pinned-20260826-105251';
-export const SYNTHETIC_BRANCH = 'codex/private-staging-runtime-handoff-pinned';
+  '/railway-synthetic-candidate/final-20260826t174608';
+export const SYNTHETIC_BRANCH = 'codex/private-staging-runtime-cross-service-pinned';
 
 export const SYNTHETIC_RUNTIME_RULES = {
   MISSING_REQUIRED: 'G001_MISSING_REQUIRED',
