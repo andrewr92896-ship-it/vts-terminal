@@ -35,8 +35,9 @@ const BROKERS: { key: BrokerConnectionKind; label: string }[] = [
   { key: 'manual', label: 'Manual (enter trades by hand)' },
 ];
 
-function statusColor(s: BrokerConnection['lastStatus']): string {
-  return s === 'ok' ? GREEN : s === 'error' ? RED : FAINT;
+function statusColor(c: BrokerConnection): string {
+  if (c.credentialState === 'reconnect_required') return GOLD;
+  return c.lastStatus === 'ok' ? GREEN : c.lastStatus === 'error' ? RED : FAINT;
 }
 
 // The "count trades since" cutoff maps to UTC midnight of the chosen day, so it
@@ -163,6 +164,11 @@ export function BrokerConnectionsPanel({ onChanged }: { onChanged?: () => void }
     const creds = buildCreds();
     let okDone = false;
     if (editingId) {
+      const editing = conns.find((connection) => connection.id === editingId);
+      if (editing?.credentialState === 'reconnect_required' && !creds) {
+        setError('Enter replacement credentials to reconnect this account');
+        return;
+      }
       okDone = await apply(
         api.updateConnection(editingId, { label: label.trim(), ...(creds ? { creds } : {}) }),
       );
@@ -200,7 +206,7 @@ export function BrokerConnectionsPanel({ onChanged }: { onChanged?: () => void }
             <div key={c.id} style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
               <div style={{ ...panel, display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
                 <span
-                  style={{ width: 8, height: 8, borderRadius: '50%', background: statusColor(c.lastStatus), flex: 'none' }}
+                  style={{ width: 8, height: 8, borderRadius: '50%', background: statusColor(c), flex: 'none' }}
                   title={c.lastError ?? c.lastStatus}
                 />
                 <div style={{ flex: 1, minWidth: 0 }}>
@@ -208,12 +214,20 @@ export function BrokerConnectionsPanel({ onChanged }: { onChanged?: () => void }
                     {c.label}{' '}
                     <span style={{ fontSize: 10, color: FAINT, fontWeight: 500 }}>
                       · {c.broker}
-                      {c.active ? '' : ' · paused'}
+                      {c.credentialState === 'reconnect_required'
+                        ? ' · Reconnect required'
+                        : c.active
+                          ? ''
+                          : ' · paused'}
                     </span>
                   </div>
                   <div style={{ fontSize: 10.5, color: MUTED, fontFamily: "'IBM Plex Mono', monospace" }}>
-                    {c.summary ?? ''}
-                    {c.lastStatus === 'error' && c.lastError ? ` · ${c.lastError}` : ''}
+                    {c.credentialState === 'reconnect_required'
+                      ? 'Saved credentials could not be migrated and must be entered again.'
+                      : c.summary ?? ''}
+                    {c.credentialState !== 'reconnect_required' && c.lastStatus === 'error' && c.lastError
+                      ? ` · ${c.lastError}`
+                      : ''}
                   </div>
                 </div>
                 {!readOnly && (
@@ -223,9 +237,11 @@ export function BrokerConnectionsPanel({ onChanged }: { onChanged?: () => void }
                         {openPosConn === c.id ? 'Hide' : 'Positions'}
                       </button>
                     )}
-                    <button onClick={() => !busy && apply(api.updateConnection(c.id, { active: !c.active }))} style={ghostBtn}>
-                      {c.active ? 'Pause' : 'Resume'}
-                    </button>
+                    {c.credentialState !== 'reconnect_required' && (
+                      <button onClick={() => !busy && apply(api.updateConnection(c.id, { active: !c.active }))} style={ghostBtn}>
+                        {c.active ? 'Pause' : 'Resume'}
+                      </button>
+                    )}
                     <button onClick={() => startEdit(c)} style={ghostBtn}>
                       Edit
                     </button>
@@ -240,6 +256,11 @@ export function BrokerConnectionsPanel({ onChanged }: { onChanged?: () => void }
                   </>
                 )}
               </div>
+              {c.credentialState === 'reconnect_required' && (
+                <div style={{ ...panel, borderColor: 'rgba(235,203,116,.45)', color: GOLD, fontSize: 11.5, lineHeight: 1.55 }}>
+                  Reconnect required. This connection is blocked from broker, watcher, status, reconciliation, and trading use until you save new credentials here.
+                </div>
+              )}
               {c.broker !== 'manual' && (
                 <CutoffRow c={c} readOnly={readOnly} onSet={(ms) => setCutoff(c, ms)} />
               )}
@@ -255,7 +276,11 @@ export function BrokerConnectionsPanel({ onChanged }: { onChanged?: () => void }
       {!readOnly && (
       <div style={{ ...panel }}>
         <div style={{ fontSize: 11, letterSpacing: '0.6px', textTransform: 'uppercase', color: MUTED, marginBottom: 10 }}>
-          {editingId ? 'Edit connection' : 'Add a connection'}
+          {editingId && conns.find((connection) => connection.id === editingId)?.credentialState === 'reconnect_required'
+            ? 'Reconnect broker'
+            : editingId
+              ? 'Edit connection'
+              : 'Add a connection'}
         </div>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
           <select
@@ -288,7 +313,7 @@ export function BrokerConnectionsPanel({ onChanged }: { onChanged?: () => void }
                 value={token}
                 onChange={(e) => setToken(e.target.value)}
                 type="password"
-                placeholder={editingId ? 'API token (blank = keep)' : 'OANDA API token'}
+                placeholder={editingId && conns.find((connection) => connection.id === editingId)?.credentialState !== 'reconnect_required' ? 'API token (blank = keep)' : 'OANDA API token'}
                 style={{ ...input, flex: '1 1 100%' }}
               />
               <input

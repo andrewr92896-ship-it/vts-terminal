@@ -552,7 +552,7 @@ export interface BrokerStatus {
   short: string;
   platform: string;
   kind: string;
-  status: 'live' | 'pending' | 'unconfigured' | 'error';
+  status: 'live' | 'pending' | 'unconfigured' | 'error' | 'reconnect_required';
   balance: string | null;
   lastSyncAt: string | null;
 }
@@ -894,6 +894,7 @@ export interface BrokerConnection {
   summary: string | null;
   env: 'practice' | 'live' | null; // OANDA environment, for restoring it on edit
   active: boolean;
+  credentialState: 'active' | 'reconnect_required';
   lastStatus: 'unknown' | 'ok' | 'error';
   lastError: string | null;
   lastCheckedAt: number | null;
