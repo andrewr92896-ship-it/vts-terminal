@@ -109,7 +109,9 @@ function expectRefusal(
   }
 }
 
-const baselineResult = assertControlledSyntheticRuntime(controlledSyntheticTestEnv());
+const baselineEnv = controlledSyntheticTestEnv();
+assert.equal(baselineEnv.AUTH_REQUIRE_2FA, 'true');
+const baselineResult = assertControlledSyntheticRuntime(baselineEnv);
 assert.deepEqual(baselineResult.decisions, []);
 assert.equal(baselineResult.mountPath, '/railway-synthetic-fresh/v1');
 assert.equal(
@@ -148,6 +150,22 @@ for (const [label, value, rule] of [
     controlledSyntheticTestEnv({ PRIVATE_ACCESS_USER_IDS: value }),
     rule,
     'PRIVATE_ACCESS_USER_IDS',
+    value ? [value] : [],
+  );
+}
+
+for (const [label, value, rule] of [
+  ['missing', undefined, SYNTHETIC_RUNTIME_RULES.MISSING_REQUIRED],
+  ['empty', '', SYNTHETIC_RUNTIME_RULES.MISSING_REQUIRED],
+  ['false', 'false', SYNTHETIC_RUNTIME_RULES.EXACT_MARKER_MISMATCH],
+  ['case variant', 'TRUE', SYNTHETIC_RUNTIME_RULES.EXACT_MARKER_MISMATCH],
+  ['malformed', 'enabled', SYNTHETIC_RUNTIME_RULES.EXACT_MARKER_MISMATCH],
+] as const) {
+  expectRefusal(
+    'two-factor requirement ' + label,
+    controlledSyntheticTestEnv({ AUTH_REQUIRE_2FA: value }),
+    rule,
+    'AUTH_REQUIRE_2FA',
     value ? [value] : [],
   );
 }
@@ -534,6 +552,11 @@ const integrationKeys = [
   'PUSHOVER_APP_TOKEN',
   'VAPID_PRIVATE_KEY',
   'TRADINGVIEW_WEBHOOK_SECRET',
+  'OANDA_API_TOKEN',
+  'OANDA_ACCOUNT_ID',
+  'OANDA_ENV',
+  'KRAKEN_API_KEY',
+  'KRAKEN_API_SECRET',
 ] as const;
 for (const key of integrationKeys) {
   const value = 'integration-sentinel-' + key.toLowerCase();
@@ -572,6 +595,13 @@ expectRefusal(
   ['CREDENTIALS_KEY'],
 );
 expectRefusal(
+  'missing disposable session key',
+  controlledSyntheticTestEnv({ PRIVATE_SESSION_SECRET: '' }),
+  SYNTHETIC_RUNTIME_RULES.DISPOSABLE_KEYS_MISSING,
+  undefined,
+  ['PRIVATE_SESSION_SECRET'],
+);
+expectRefusal(
   'reused disposable keys',
   controlledSyntheticTestEnv({
     CREDENTIALS_KEY: 'same-disposable-secret',
@@ -580,6 +610,20 @@ expectRefusal(
   SYNTHETIC_RUNTIME_RULES.DISPOSABLE_KEYS_REUSED,
   undefined,
   ['same-disposable-secret'],
+);
+expectRefusal(
+  'malformed disposable credentials key',
+  controlledSyntheticTestEnv({ CREDENTIALS_KEY: 'not-generated-randomness' }),
+  SYNTHETIC_RUNTIME_RULES.DISPOSABLE_KEYS_INVALID,
+  undefined,
+  ['not-generated-randomness'],
+);
+expectRefusal(
+  'short private session secret',
+  controlledSyntheticTestEnv({ PRIVATE_SESSION_SECRET: 'too-short' }),
+  SYNTHETIC_RUNTIME_RULES.DISPOSABLE_KEYS_INVALID,
+  undefined,
+  ['too-short'],
 );
 
 
@@ -1125,6 +1169,24 @@ assert.deepEqual(railwayConfig.deploy, {
   restartPolicyType: 'NEVER',
   restartPolicyMaxRetries: null,
 });
+
+const handoffSource = fs.readFileSync(
+  new URL('./syntheticRuntimeHandoff.ts', import.meta.url),
+  'utf8',
+);
+const guardCallOffset = handoffSource.indexOf(
+  'const controlled = assertControlledSyntheticRuntime();',
+);
+const volumeClaimOffset = handoffSource.indexOf(
+  'const volume = claimFreshSyntheticVolume({',
+);
+assert.ok(guardCallOffset >= 0);
+assert.ok(volumeClaimOffset > guardCallOffset);
+assert.match(handoffSource, /twoFactorDelivery:\s*{/);
+assert.match(handoffSource, /configured: \(\) => true/);
+assert.doesNotMatch(handoffSource, /defaultLoginTwoFactorDelivery/);
+assert.match(handoffSource, /providerValidationCalls: 0/);
+assert.match(handoffSource, /simulatedTrades: 0/);
 
 const rootPackage = JSON.parse(
   fs.readFileSync(new URL('../../../package.json', import.meta.url), 'utf8'),

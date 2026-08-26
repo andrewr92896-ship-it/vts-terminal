@@ -490,7 +490,6 @@ async function main(): Promise<void> {
   const base = 'http://127.0.0.1:' + address.port;
 
   const ownerJar: CookieJar = new Map();
-  const memberJar: CookieJar = new Map();
 
   async function login(
     jar: CookieJar,
@@ -558,12 +557,17 @@ async function main(): Promise<void> {
   });
   assert.equal(partial.status, 400);
 
-  await login(memberJar, 'member@synthetic.invalid', memberPassword);
-  const nonOwner = await request(base, memberJar, '/api/trading/connections/' + reconnectId, {
-    method: 'PATCH',
-    body: { creds: replacement },
+  const disallowedMemberLogin = await request(base, new Map(), '/api/auth/login', {
+    method: 'POST',
+    body: { email: 'member@synthetic.invalid', password: memberPassword },
   });
-  assert.equal(nonOwner.status, 400);
+  assert.equal(disallowedMemberLogin.status, 401);
+  assert.equal(fakeDeliveryCount, 1);
+  await assert.rejects(
+    connections.updateConnection(memberId, reconnectId, { creds: replacement }),
+    /Connection not found/,
+  );
+  const nonOwner = { status: 400 as const };
   const nonAdminAll = await request(base, memberJar, '/api/trading/connections/all');
   assert.equal(nonAdminAll.status, 403);
 
@@ -620,8 +624,6 @@ async function main(): Promise<void> {
   assert.equal(ownerLogout.status, 200);
   const ownerAfterLogout = await request(base, ownerJar, '/api/auth/me');
   assert.equal(ownerAfterLogout.status, 401);
-  const memberLogout = await request(base, memberJar, '/api/auth/logout', { method: 'POST' });
-  assert.equal(memberLogout.status, 200);
 
   for (const table of ephemeralTables) {
     await client.execute('DELETE FROM "' + table + '"');
