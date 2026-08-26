@@ -1,7 +1,8 @@
-import type { FastifyInstance } from 'fastify';
+import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { and, eq, ne } from 'drizzle-orm';
 import { z } from 'zod';
 import { db } from '../db/index.js';
+import { config } from '../config.js';
 import { passwordResetCredentials, users } from '../db/schema.js';
 import { DUMMY_PASSWORD_HASH, hashPassword, verifyPassword } from '../auth/passwords.js';
 import {
@@ -32,6 +33,20 @@ import {
   passwordResetRateLimiter,
   type PasswordResetRateLimiter,
 } from '../auth/passwordResetRateLimit.js';
+import {
+  LOGIN_CHALLENGE_COOKIE,
+  TERMINAL_DEVICE_COOKIE,
+  beginLoginChallenge,
+  challengeUser,
+  destroyLoginChallenge,
+  forgetTerminalDevicesForUser,
+  loginChallengeCookieOptions,
+  rememberTerminalDevice,
+  resendLoginChallenge,
+  terminalDeviceCookieOptions,
+  terminalDeviceTrusted,
+  verifyLoginChallenge,
+} from '../auth/twoFactor.js';
 
 // Build the browser-safe user: the trading-team name from the user's teamId, the
 // optional features they have turned on (which decides the workspaces the
@@ -70,11 +85,25 @@ const forgotPasswordSchema = z.object({
   email: z.string().trim().max(255),
 });
 
+
+const verifyTwoFactorSchema = z.object({
+  code: z.string().trim().regex(/^\d{6}$/),
+  remember: z.boolean().optional(),
+});
+
 export const FORGOT_PASSWORD_RESPONSE = {
   ok: true,
   message:
     'If an eligible account exists and email delivery is available, a temporary password will be sent shortly.',
 } as const;
+
+
+function signedCookie(request: FastifyRequest, name: string): string | undefined {
+  const raw = request.cookies[name];
+  if (!raw) return undefined;
+  const unsigned = request.unsignCookie(raw);
+  return unsigned.valid ? unsigned.value ?? undefined : undefined;
+}
 
 export interface AuthRouteOptions {
   passwordResetDelivery?: PasswordResetDelivery;
@@ -208,23 +237,117 @@ export async function authRoutes(app: FastifyInstance, options: AuthRouteOptions
       return reply.code(401).send({ error: 'Invalid email or password' });
     }
 
+    // A remembered browser skips only the emailed code. The password above is
+    // still required on every new session.
+    const remembered = await terminalDeviceTrusted(
+      user.id,
+      signedCookie(request, TERMINAL_DEVICE_COOKIE),
+    );
+    if (config.AUTH_REQUIRE_2FA && user.username !== DEMO_USERNAME && !remembered) {
+      const challenge = await beginLoginChallenge(user, {
+        ip: request.ip,
+        userAgent: request.headers['user-agent'],
+      });
+      if (!challenge) {
+        return reply.code(503).send({
+          error: 'A sign-in code could not be emailed. Please try again shortly.',
+        });
+      }
+      reply.setCookie(
+        LOGIN_CHALLENGE_COOKIE,
+        challenge.token,
+        loginChallengeCookieOptions(challenge.maxAgeSeconds),
+      );
+      return {
+        requiresTwoFactor: true as const,
+        sentTo: challenge.sentTo,
+        rememberDays: config.AUTH_2FA_REMEMBER_DAYS,
+      };
+    }
+
     const { token, maxAgeSeconds } = await createSession(
       user.id,
       request.headers['user-agent'],
     );
     reply.setCookie(SESSION_COOKIE, token, cookieOptions(maxAgeSeconds));
+    return { requiresTwoFactor: false as const, user: await publicUser(user) };
+  });
+
+  app.post('/api/auth/two-factor/verify', async (request, reply) => {
+    const parsed = verifyTwoFactorSchema.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.code(400).send({ error: 'Enter the 6-digit code' });
+    }
+    const rawChallenge = signedCookie(request, LOGIN_CHALLENGE_COOKIE);
+    const result = await verifyLoginChallenge(rawChallenge, parsed.data.code);
+    if (!result.ok) {
+      if (result.reason === 'expired' || result.reason === 'missing' || result.reason === 'attempts') {
+        reply.clearCookie(LOGIN_CHALLENGE_COOKIE, loginChallengeCookieOptions());
+      }
+      return reply.code(401).send({
+        error:
+          result.reason === 'expired'
+            ? 'That code expired. Sign in again for a new code.'
+            : result.reason === 'attempts'
+              ? 'Too many incorrect codes. Sign in again.'
+              : 'That code is not correct.',
+      });
+    }
+
+    const user = (await db.select().from(users).where(eq(users.id, result.userId)).limit(1))[0];
+    if (!user || !user.active || !isPrivateUserAllowed(user.id)) {
+      reply.clearCookie(LOGIN_CHALLENGE_COOKIE, loginChallengeCookieOptions());
+      return reply.code(401).send({ error: 'Sign in again to continue' });
+    }
+
+    const { token, maxAgeSeconds } = await createSession(
+      user.id,
+      request.headers['user-agent'],
+    );
+    reply.setCookie(SESSION_COOKIE, token, cookieOptions(maxAgeSeconds));
+    reply.clearCookie(LOGIN_CHALLENGE_COOKIE, loginChallengeCookieOptions());
+
+    if (parsed.data.remember) {
+      const device = await rememberTerminalDevice(user.id, {
+        ip: request.ip,
+        userAgent: request.headers['user-agent'],
+      });
+      reply.setCookie(
+        TERMINAL_DEVICE_COOKIE,
+        device.token,
+        terminalDeviceCookieOptions(device.maxAgeSeconds),
+      );
+    }
+
+    app.log.info({ event: 'auth.two_factor_verified', userId: user.id });
     return { user: await publicUser(user) };
   });
 
-  app.post('/api/auth/logout', async (request, reply) => {
-    const raw = request.cookies[SESSION_COOKIE];
-    if (raw) {
-      const unsigned = request.unsignCookie(raw);
-      if (unsigned.valid && unsigned.value) {
-        await destroySession(unsigned.value);
-      }
+  app.post('/api/auth/two-factor/resend', async (request, reply) => {
+    const rawChallenge = signedCookie(request, LOGIN_CHALLENGE_COOKIE);
+    const user = await challengeUser(rawChallenge);
+    if (!user || !user.active || !isPrivateUserAllowed(user.id)) {
+      return reply.code(401).send({ error: 'Sign in again to request a new code' });
     }
+    const result = await resendLoginChallenge(rawChallenge, user, request.ip);
+    if (!result.ok) {
+      if (result.retryAfter) {
+        return reply.code(429).send({
+          error: `Wait ${result.retryAfter} seconds before requesting another code`,
+          retryAfter: result.retryAfter,
+        });
+      }
+      return reply.code(503).send({ error: 'A new code could not be emailed. Try again shortly.' });
+    }
+    return { ok: true as const, sentTo: result.sentTo };
+  });
+
+  app.post('/api/auth/logout', async (request, reply) => {
+    const raw = signedCookie(request, SESSION_COOKIE);
+    const challenge = signedCookie(request, LOGIN_CHALLENGE_COOKIE);
+    await Promise.all([destroySession(raw), destroyLoginChallenge(challenge)]);
     reply.clearCookie(SESSION_COOKIE, cookieOptions());
+    reply.clearCookie(LOGIN_CHALLENGE_COOKIE, loginChallengeCookieOptions());
     return { ok: true };
   });
 
@@ -266,11 +389,12 @@ export async function authRoutes(app: FastifyInstance, options: AuthRouteOptions
           .where(eq(passwordResetCredentials.userId, me.id));
       });
 
-      const raw = request.cookies[SESSION_COOKIE];
-      const unsigned = raw ? request.unsignCookie(raw) : null;
-      if (unsigned?.valid && unsigned.value) {
-        await destroyOtherUserSessions(me.id, sessionIdForToken(unsigned.value));
+      const raw = signedCookie(request, SESSION_COOKIE);
+      if (raw) {
+        await destroyOtherUserSessions(me.id, sessionIdForToken(raw));
       }
+      await forgetTerminalDevicesForUser(me.id);
+      reply.clearCookie(TERMINAL_DEVICE_COOKIE, terminalDeviceCookieOptions());
 
       const fresh = (await db.select().from(users).where(eq(users.id, me.id)).limit(1))[0];
       return { user: await publicUser(fresh) };
@@ -360,11 +484,15 @@ export async function authRoutes(app: FastifyInstance, options: AuthRouteOptions
 
     await db.update(users).set(patch).where(eq(users.id, me.id));
     if (patch.email != null) {
-      // A credential delivered to the former mailbox must not remain live after
-      // the account moves to a new address.
-      await db
-        .delete(passwordResetCredentials)
-        .where(eq(passwordResetCredentials.userId, me.id));
+      // Credentials and remembered browsers tied to the former mailbox stop
+      // working when the account moves to a new address.
+      await Promise.all([
+        db
+          .delete(passwordResetCredentials)
+          .where(eq(passwordResetCredentials.userId, me.id)),
+        forgetTerminalDevicesForUser(me.id),
+      ]);
+      reply.clearCookie(TERMINAL_DEVICE_COOKIE, terminalDeviceCookieOptions());
     }
     const fresh = (await db.select().from(users).where(eq(users.id, me.id)).limit(1))[0];
     return { user: await publicUser(fresh) };
