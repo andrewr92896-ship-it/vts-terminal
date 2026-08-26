@@ -64,7 +64,10 @@ export interface MigrateOnlyOptions {
 }
 
 interface QueryClient {
-  execute(statement: string | { sql: string; args: unknown[] }): Promise<{ rows: readonly unknown[] }>;
+  // Both @libsql/client and the native read-only adapter implement this seam.
+  // The concrete statement types differ, while this module supplies only
+  // strings and { sql, args } objects accepted by both.
+  execute(statement: any): Promise<{ rows: readonly unknown[] }>;
 }
 
 interface MigrationState {
@@ -495,9 +498,7 @@ class ReadOnlySnapshot implements QueryClient {
     this.database = new DatabaseSync(file, { readOnly: true });
   }
 
-  async execute(
-    statement: string | { sql: string; args: unknown[] },
-  ): Promise<{ rows: readonly unknown[] }> {
+  async execute(statement: any): Promise<{ rows: readonly unknown[] }> {
     const sql = typeof statement === 'string' ? statement : statement.sql;
     const args = typeof statement === 'string' ? [] : statement.args;
     const prepared = this.database.prepare(sql);
