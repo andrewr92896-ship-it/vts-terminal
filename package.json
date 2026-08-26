@@ -47,7 +47,9 @@
     "db:check-two-factor": "npm --workspace @vts/api run db:check-two-factor",
     "db:prepare-offline": "npm --workspace @vts/api run db:prepare-offline --",
     "db:migrate-only": "npm --workspace @vts/api run db:migrate-only --",
-    "verify:offline-migration": "npm --workspace @vts/api run db:check-offline-migration"
+    "verify:offline-migration": "npm --workspace @vts/api run db:check-offline-migration",
+    "db:rekey-offline": "npm --workspace @vts/api run db:rekey-offline --",
+    "verify:offline-rekey": "npm --workspace @vts/api run db:check-offline-rekey"
   },
   "devDependencies": {
     "npm-run-all": "^4.1.5"

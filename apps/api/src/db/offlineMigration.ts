@@ -440,7 +440,7 @@ function assertIntendedTransition(from: number, to: number): JournalEntry[] {
   return entries;
 }
 
-async function applyIntendedMigrations(
+export async function applyIntendedMigrations(
   client: Client,
   from: number,
   to: number,
@@ -650,7 +650,7 @@ export async function prepareOfflineCandidate(options: PrepareOfflineOptions): P
         counts: destinationCheck.counts,
         nonSecretHashes: destinationCheck.hashes,
         requiredSettingKeyHash: destinationCheck.requiredSettingKeyHash,
-        brokerCredentialKeyId: destinationCheck.brokerKeyId,
+        brokerCredentialKeyIdVerified: true,
         foreignKeyViolations: destinationCheck.foreignKeyViolations,
       },
       exclusions: {

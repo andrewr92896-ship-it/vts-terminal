@@ -32,7 +32,9 @@
     "db:check-two-factor": "tsx src/auth/checkTwoFactor.ts",
     "db:prepare-offline": "tsx src/db/offlinePrepare.ts prepare",
     "db:migrate-only": "tsx src/db/offlinePrepare.ts migrate-only",
-    "db:check-offline-migration": "tsx src/db/checkOfflineMigration.ts"
+    "db:check-offline-migration": "tsx src/db/checkOfflineMigration.ts",
+    "db:rekey-offline": "tsx src/db/offlineRekeyCli.ts",
+    "db:check-offline-rekey": "tsx src/db/checkOfflineRekey.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.105.0",
