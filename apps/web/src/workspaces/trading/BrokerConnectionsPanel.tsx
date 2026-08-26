@@ -562,7 +562,7 @@ function TeamConnections({ onChanged }: { onChanged?: () => void }) {
         <div style={{ display: 'grid', gap: 6 }}>
           {conns.map((c) => (
             <div key={c.id} style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', fontSize: 12 }}>
-              <span style={{ width: 8, height: 8, borderRadius: '50%', background: statusColor(c.lastStatus), flex: 'none' }} />
+              <span style={{ width: 8, height: 8, borderRadius: '50%', background: statusColor(c), flex: 'none' }} />
               {editId === c.id ? (
                 <>
                   <input
