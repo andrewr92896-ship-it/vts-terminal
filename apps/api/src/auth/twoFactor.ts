@@ -1,7 +1,7 @@
 import crypto from 'node:crypto';
 import { and, eq, lt, sql } from 'drizzle-orm';
 import { db } from '../db/index.js';
-import { loginChallenges, terminalTrustedDevices, type UserRow } from '../db/schema.js';
+import { loginChallenges, terminalTrustedDevices, users, type UserRow } from '../db/schema.js';
 import { config } from '../config.js';
 import { mailConfigured, sendMail } from '../employee/mailer.js';
 
@@ -196,7 +196,7 @@ export async function challengeUser(rawToken: string | undefined): Promise<UserR
   const id = hashToken(rawToken);
   const row = (await db.select().from(loginChallenges).where(eq(loginChallenges.id, id)).limit(1))[0];
   if (!row || row.expiresAt.getTime() < Date.now()) return null;
-  return (await db.select().from((await import('../db/schema.js')).users).where(eq((await import('../db/schema.js')).users.id, row.userId)).limit(1))[0] ?? null;
+  return (await db.select().from(users).where(eq(users.id, row.userId)).limit(1))[0] ?? null;
 }
 
 export async function destroyLoginChallenge(rawToken: string | undefined): Promise<void> {
