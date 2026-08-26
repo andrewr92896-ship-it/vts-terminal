@@ -31,6 +31,14 @@ import { pathToFileURL } from 'node:url';
 const CHECKS = [
   { script: 'db:check-ai-usage', env: { AI_MONTHLY_LIMIT: '3', AI_RATE_PER_MIN: '15' } },
   {
+    script: 'db:check-two-factor',
+    env: {
+      AUTH_REQUIRE_2FA: 'true',
+      AUTH_2FA_REMEMBER_DAYS: '30',
+      PRIVATE_ACCESS_USER_IDS: '22222222-2222-4222-8222-222222222222',
+    },
+  },
+  {
     script: 'db:check-password-reset',
     env: { PRIVATE_ACCESS_USER_IDS: '11111111-1111-4111-8111-111111111111' },
   },

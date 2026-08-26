@@ -32,7 +32,6 @@ import { randomBytes } from 'node:crypto';
 const STEPS = [
   ['typecheck', 'typecheck'],
   ['migrations', 'verify:migrations'],
-  ['terminal email two-factor', 'db:check-two-factor'],
   ['credential encryption', 'verify:secretbox'],
   ['market data macro', 'verify:market-macro'],
   ['investments math', 'verify:investments'],
@@ -41,7 +40,7 @@ const STEPS = [
   ['rollover alerts and re-entry math', 'verify:rollover'],
   ['study packages', 'verify:study-packages'],
   ['study category draw and breakdown', 'verify:study-categories'],
-  ['study sharing, alerts and package edits', 'verify:db'],
+  ['database integration (auth, sharing, alerts and package edits)', 'verify:db'],
   ['public/private application boundary', 'verify:boundaries'],
   ['build', 'build'],
 ];
