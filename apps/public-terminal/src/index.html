@@ -4,15 +4,306 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="robots" content="noindex, nofollow">
-  <link rel="stylesheet" href="/styles.css">
-  <title>VTS Customer Terminal</title>
+  <meta name="description" content="A static, client-only VTS product demonstration using fictional data.">
+  <link rel="stylesheet" href="./styles.css">
+  <script src="./app.js" defer></script>
+  <title>VTS Terminal — Interactive Demo</title>
 </head>
 <body>
-  <main>
-    <p class="eyebrow">Vitalis Trading Systems</p>
-    <h1>Customer Terminal</h1>
-    <p>This isolated customer application is not open yet.</p>
-    <p class="muted">Customer authentication and data services will be enabled only after their separate infrastructure is provisioned and reviewed.</p>
-  </main>
+  <a class="skip-link" href="#workspace">Skip to workspace</a>
+  <div class="app-shell">
+    <aside class="sidebar" aria-label="Application sidebar">
+      <div class="brand">
+        <span class="brand-mark" aria-hidden="true">V</span>
+        <span><strong>VTS</strong><small>Terminal preview</small></span>
+      </div>
+
+      <nav class="primary-nav" aria-label="Demo sections">
+        <button class="nav-item is-active" type="button" data-view="dashboard" aria-controls="view-dashboard" aria-current="page">
+          <span class="nav-icon" aria-hidden="true">⌂</span><span>Dashboard</span>
+        </button>
+        <button class="nav-item" type="button" data-view="journal" aria-controls="view-journal">
+          <span class="nav-icon" aria-hidden="true">≡</span><span>Journal</span>
+        </button>
+        <button class="nav-item" type="button" data-view="photo" aria-controls="view-photo">
+          <span class="nav-icon" aria-hidden="true">⌗</span><span>Photo to log</span>
+        </button>
+        <button class="nav-item" type="button" data-view="help" aria-controls="view-help">
+          <span class="nav-icon" aria-hidden="true">?</span><span>Help &amp; feedback</span>
+        </button>
+      </nav>
+
+      <div class="sidebar-note">
+        <span class="status-dot" aria-hidden="true"></span>
+        <div><strong>Static demo</strong><span>No account or connection</span></div>
+      </div>
+    </aside>
+
+    <div class="app-frame">
+      <header class="topbar">
+        <button class="mobile-menu" id="mobile-menu" type="button" aria-expanded="false" aria-controls="mobile-navigation">
+          <span class="sr-only">Open navigation</span><span aria-hidden="true">☰</span>
+        </button>
+        <div class="topbar-title">
+          <p>Portfolio experience</p>
+          <h1 id="page-title">Dashboard</h1>
+        </div>
+        <div class="topbar-actions">
+          <span class="demo-chip"><span aria-hidden="true">●</span> Fictional demo data</span>
+          <button class="privacy-button" id="privacy-toggle" type="button" aria-pressed="false">
+            <span aria-hidden="true">◉</span><span id="privacy-label">Hide amounts</span>
+          </button>
+        </div>
+      </header>
+
+      <div class="mobile-nav" id="mobile-navigation" hidden>
+        <nav aria-label="Mobile demo sections">
+          <button class="nav-item is-active" type="button" data-view="dashboard" aria-controls="view-dashboard" aria-current="page">Dashboard</button>
+          <button class="nav-item" type="button" data-view="journal" aria-controls="view-journal">Journal</button>
+          <button class="nav-item" type="button" data-view="photo" aria-controls="view-photo">Photo to log</button>
+          <button class="nav-item" type="button" data-view="help" aria-controls="view-help">Help &amp; feedback</button>
+        </nav>
+      </div>
+
+      <main id="workspace" tabindex="-1">
+        <div class="session-banner" role="note">
+          <span aria-hidden="true">◇</span>
+          <span><strong>Safe preview:</strong> every record is fictional and exists in JavaScript memory only. Reloading or leaving clears all changes.</span>
+        </div>
+
+        <section class="view is-active" id="view-dashboard" data-view-panel="dashboard" aria-labelledby="dashboard-heading">
+          <div class="section-heading">
+            <div>
+              <span class="surface-label">Fictional demonstration data</span>
+              <h2 id="dashboard-heading">Good afternoon, Alex.</h2>
+              <p>A compact view of a fictional trading journal workspace.</p>
+            </div>
+            <button class="secondary-button" type="button" data-go="journal">Review journal <span aria-hidden="true">→</span></button>
+          </div>
+
+          <div class="metric-grid" aria-label="Fictional account overview">
+            <article class="metric-card accent-card">
+              <div class="metric-top"><span>Demo cash balance</span><span class="mini-icon" aria-hidden="true">$</span></div>
+              <strong class="metric-value money" data-amount="$42,680">$42,680</strong>
+              <p>Illustrative snapshot · not live</p>
+            </article>
+            <article class="metric-card">
+              <div class="metric-top"><span>Closed trade logs</span><span class="mini-icon" aria-hidden="true">✓</span></div>
+              <strong class="metric-value" id="dashboard-trade-count">8</strong>
+              <p>Available in this demo session</p>
+            </article>
+            <article class="metric-card">
+              <div class="metric-top"><span>Notes to review</span><span class="mini-icon" aria-hidden="true">✎</span></div>
+              <strong class="metric-value">3</strong>
+              <p>Fictional journal prompts</p>
+            </article>
+            <article class="metric-card">
+              <div class="metric-top"><span>Workspace mode</span><span class="mini-icon" aria-hidden="true">⌁</span></div>
+              <strong class="metric-value text-value">Local demo</strong>
+              <p>Memory resets on reload</p>
+            </article>
+          </div>
+
+          <div class="dashboard-grid">
+            <article class="panel">
+              <div class="panel-heading">
+                <div><span class="surface-label">Fictional demonstration data</span><h3>Recent activity</h3></div>
+                <button class="text-button" type="button" data-go="journal">View all</button>
+              </div>
+              <ol class="activity-list" id="activity-list">
+                <li><span class="activity-icon blue" aria-hidden="true">✓</span><div><strong>Closed log reviewed</strong><p>EUR/USD · Range rejection</p></div><time datetime="2026-08-26T14:32">2:32 PM</time></li>
+                <li><span class="activity-icon gold" aria-hidden="true">✎</span><div><strong>Journal note updated</strong><p>Added exit context to AAPL</p></div><time datetime="2026-08-26T11:18">11:18 AM</time></li>
+                <li><span class="activity-icon green" aria-hidden="true">＋</span><div><strong>Closed log added</strong><p>ES · Opening range</p></div><time datetime="2026-08-25">Yesterday</time></li>
+                <li><span class="activity-icon violet" aria-hidden="true">◇</span><div><strong>Review prompt completed</strong><p>Weekly process reflection</p></div><time datetime="2026-08-22">Aug 22</time></li>
+              </ol>
+            </article>
+
+            <article class="panel review-card">
+              <span class="surface-label">Fictional demonstration data</span>
+              <div class="review-orb" aria-hidden="true">03</div>
+              <h3>Three notes are ready for review</h3>
+              <p>Revisit entry context, exit rationale, and process observations from fictional closed logs.</p>
+              <button class="primary-button" type="button" data-go="journal">Open review queue</button>
+            </article>
+          </div>
+
+          <article class="panel focus-panel">
+            <div>
+              <span class="surface-label">Fictional demonstration data</span>
+              <h3>Today’s review focus</h3>
+              <p>Compare the plan written before each fictional close with the context recorded afterward.</p>
+            </div>
+            <div class="focus-tags" aria-label="Fictional review focus topics">
+              <span>Context</span><span>Process</span><span>Exit notes</span>
+            </div>
+          </article>
+        </section>
+
+        <section class="view" id="view-journal" data-view-panel="journal" aria-labelledby="journal-heading" hidden>
+          <div class="section-heading">
+            <div>
+              <span class="surface-label">Fictional closed trades · demonstration data</span>
+              <h2 id="journal-heading">Trade journal</h2>
+              <p>Search, sort, and inspect fictional closed records. Recording only; no live market connection.</p>
+            </div>
+            <span class="memory-badge">Session memory only</span>
+          </div>
+
+          <div class="journal-layout">
+            <div class="journal-main">
+              <div class="toolbar" role="search">
+                <label class="search-field">
+                  <span class="sr-only">Search fictional closed trades</span>
+                  <span aria-hidden="true">⌕</span>
+                  <input id="journal-search" type="search" placeholder="Search instrument, setup, or tag">
+                </label>
+                <label>
+                  <span class="sr-only">Filter by outcome</span>
+                  <select id="journal-filter">
+                    <option value="all">All outcomes</option>
+                    <option value="positive">Positive result</option>
+                    <option value="negative">Negative result</option>
+                    <option value="flat">Flat result</option>
+                  </select>
+                </label>
+                <label>
+                  <span class="sr-only">Sort closed trades</span>
+                  <select id="journal-sort">
+                    <option value="newest">Newest first</option>
+                    <option value="oldest">Oldest first</option>
+                    <option value="symbol">Instrument A–Z</option>
+                  </select>
+                </label>
+              </div>
+
+              <div class="table-card">
+                <div class="table-caption"><span id="journal-count">8 records</span><span>Fictional demonstration data</span></div>
+                <div class="table-scroll">
+                  <table>
+                    <caption class="sr-only">Fictional closed trade journal</caption>
+                    <thead><tr><th scope="col">Closed</th><th scope="col">Instrument</th><th scope="col">Direction</th><th scope="col">Setup</th><th scope="col">Result</th><th scope="col"><span class="sr-only">Details</span></th></tr></thead>
+                    <tbody id="journal-body"></tbody>
+                  </table>
+                </div>
+                <div class="empty-state" id="journal-empty" hidden>
+                  <strong>No matching demo records</strong><p>Try a broader search or another outcome filter.</p>
+                </div>
+              </div>
+            </div>
+
+            <aside class="detail-panel" id="trade-detail" aria-live="polite" aria-label="Selected fictional closed trade detail">
+              <span class="surface-label">Fictional demonstration data</span>
+              <div class="detail-placeholder"><span aria-hidden="true">↗</span><h3>Select a closed trade</h3><p>Choose a row to inspect its recorded context and notes.</p></div>
+            </aside>
+          </div>
+        </section>
+
+        <section class="view" id="view-photo" data-view-panel="photo" aria-labelledby="photo-heading" hidden>
+          <div class="section-heading">
+            <div>
+              <span class="surface-label">Fictional demonstration data</span>
+              <h2 id="photo-heading">Photo-to-log preview</h2>
+              <p>Review a preloaded fictional capture and shape a draft before adding it to this demo session.</p>
+            </div>
+            <span class="memory-badge">No upload · no camera · no network</span>
+          </div>
+
+          <div class="photo-layout">
+            <article class="capture-card">
+              <div class="capture-head">
+                <div><span class="surface-label">Bundled fictional visual</span><h3>Sample trade capture</h3></div>
+                <span class="capture-status">Preloaded</span>
+              </div>
+              <div class="mock-capture" role="img" aria-label="Fictional static trade chart placeholder for NQ with candlesticks and entry and exit markers">
+                <div class="mock-toolbar"><span>NQ · 5m</span><span>Fictional capture</span></div>
+                <div class="chart-grid">
+                  <span class="price-label p1">19,920</span><span class="price-label p2">19,880</span><span class="price-label p3">19,840</span>
+                  <div class="candles" aria-hidden="true">
+                    <i class="down" style="--h:38%;--y:35%"></i><i class="up" style="--h:50%;--y:29%"></i><i class="up" style="--h:66%;--y:18%"></i><i class="down" style="--h:46%;--y:25%"></i><i class="up" style="--h:58%;--y:14%"></i><i class="up" style="--h:72%;--y:8%"></i><i class="down" style="--h:42%;--y:20%"></i><i class="down" style="--h:55%;--y:27%"></i><i class="up" style="--h:36%;--y:24%"></i><i class="down" style="--h:49%;--y:30%"></i><i class="down" style="--h:62%;--y:38%"></i><i class="up" style="--h:43%;--y:35%"></i>
+                  </div>
+                  <span class="chart-marker entry">Entry 19,862</span>
+                  <span class="chart-marker exit">Exit 19,901</span>
+                </div>
+                <div class="mock-ticket"><span>Closed</span><strong>NQ</strong><span>Aug 26 · 10:42</span></div>
+              </div>
+              <div class="capture-copy">
+                <span aria-hidden="true">◇</span>
+                <p>This artwork is bundled with the page. It is not a real screenshot and is never transmitted.</p>
+              </div>
+              <button class="primary-button wide-button" id="extract-button" type="button">Run simulated demo extraction</button>
+            </article>
+
+            <article class="draft-card" aria-labelledby="draft-heading">
+              <div class="draft-heading">
+                <div><span class="surface-label">Editable in-memory draft</span><h3 id="draft-heading">Extraction review</h3></div>
+                <span class="draft-state" id="draft-state">Ready to preview</span>
+              </div>
+              <form id="draft-form">
+                <fieldset id="draft-fields">
+                  <legend class="sr-only">Fictional extracted trade fields</legend>
+                  <div class="form-grid">
+                    <label>Instrument<input id="draft-symbol" name="symbol" value="NQ" required maxlength="12"></label>
+                    <label>Direction<select id="draft-side" name="side"><option>Long</option><option>Short</option></select></label>
+                    <label>Closed date<input id="draft-date" name="date" type="date" value="2026-08-26" required></label>
+                    <label>Quantity<input id="draft-quantity" name="quantity" type="number" min="1" max="99" value="1" required></label>
+                    <label>Entry<input id="draft-entry" name="entry" type="number" step="0.01" value="19862" required></label>
+                    <label>Exit<input id="draft-exit" name="exit" type="number" step="0.01" value="19901" required></label>
+                  </div>
+                  <label>Setup<input id="draft-setup" name="setup" value="Opening range reclaim" required maxlength="60"></label>
+                  <label>Review note<textarea id="draft-note" name="note" rows="4" maxlength="240">Waited for price to reclaim the opening range, then recorded the close after momentum slowed.</textarea></label>
+                </fieldset>
+                <div class="draft-actions">
+                  <button class="secondary-button" id="reset-draft" type="button">Reset draft</button>
+                  <button class="primary-button" id="confirm-draft" type="submit" disabled>Confirm to demo journal · memory only</button>
+                </div>
+                <p class="form-hint">Demo-only action. Adds one fictional closed record to JavaScript memory and nowhere else.</p>
+              </form>
+              <div class="inline-status" id="draft-message" role="status" hidden></div>
+            </article>
+          </div>
+        </section>
+
+        <section class="view" id="view-help" data-view-panel="help" aria-labelledby="help-heading" hidden>
+          <div class="section-heading">
+            <div>
+              <span class="surface-label">Demo preview · no live support connection</span>
+              <h2 id="help-heading">Terminal help &amp; feedback</h2>
+              <p>Explore scoped guidance or save a fictional feedback note in this browser session.</p>
+            </div>
+            <span class="memory-badge">Nothing is submitted</span>
+          </div>
+
+          <div class="help-layout">
+            <article class="panel help-panel">
+              <div class="panel-heading"><div><span class="surface-label">Fictional demonstration surface</span><h3>Quick help</h3></div><span class="help-count">4 topics</span></div>
+              <div class="help-list">
+                <details open><summary><span>Navigate the demo</span><span aria-hidden="true">＋</span></summary><p>Use the sidebar, or Tab and Enter, to move among the four preview surfaces. On small screens, open the menu from the header.</p></details>
+                <details><summary><span>Review closed journal records</span><span aria-hidden="true">＋</span></summary><p>Search by instrument, setup, or tag. Use the filters to narrow fictional outcomes, then select a row for its full context.</p></details>
+                <details><summary><span>Use privacy mode</span><span aria-hidden="true">＋</span></summary><p>Choose “Hide amounts” in the header to mask fictional money figures. The preference lives only until this page reloads.</p></details>
+                <details><summary><span>Try photo-to-log</span><span aria-hidden="true">＋</span></summary><p>The sample visual is built into this page. Run the simulated extraction, edit the draft, and confirm it to the in-memory journal.</p></details>
+              </div>
+            </article>
+
+            <article class="panel feedback-panel">
+              <span class="surface-label">Demo preview · not submitted anywhere</span>
+              <h3>Share preview feedback</h3>
+              <p>Try the form interaction. Its contents remain in JavaScript memory and disappear on reload.</p>
+              <form id="feedback-form">
+                <label>Feedback type<select id="feedback-type" required><option value="Bug">Bug preview</option><option value="Suggestion">Suggestion preview</option></select></label>
+                <label>What would you like to note?<textarea id="feedback-message" rows="6" maxlength="400" placeholder="Describe a fictional issue or product idea…" required></textarea></label>
+                <div class="character-row"><span id="feedback-count">0 / 400</span><span id="saved-feedback-count">0 saved this session</span></div>
+                <button class="primary-button wide-button" type="submit">Save demo feedback · memory only</button>
+                <p class="form-hint">No message leaves this page. This is an interaction preview, not a support channel.</p>
+              </form>
+              <div class="inline-status" id="feedback-status" role="status" hidden></div>
+            </article>
+          </div>
+        </section>
+      </main>
+
+      <footer><span>VTS Terminal product preview</span><span>Fictional data · client-only · resets on reload</span></footer>
+    </div>
+  </div>
+  <noscript><div class="noscript">This interactive static demo requires JavaScript. No information is sent or saved.</div></noscript>
 </body>
 </html>
