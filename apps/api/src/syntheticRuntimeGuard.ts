@@ -1,10 +1,11 @@
 import path from 'node:path';
+import { parseCredentialsKey } from './security/credentialsKey.js';
 
 export const SYNTHETIC_RUNTIME_BOUNDARY = 'controlled-synthetic-runtime-handoff-v1';
 export const SYNTHETIC_ASSERTION = 'disposable-only-no-real-data-v1';
 export const SYNTHETIC_PROJECT_ID = '96a2b238-7ea0-47fc-8dc6-cd76639a15af';
 export const SYNTHETIC_ENVIRONMENT_ID = '5d336031-9fda-47db-988c-4c6983a4b13a';
-export const SYNTHETIC_BRANCH = 'codex/fix-synthetic-owner-cleanup-v1';
+export const SYNTHETIC_BRANCH = 'codex/complete-synthetic-runtime-contract-v1';
 export const SYNTHETIC_REPOSITORY_OWNER = 'andrewr92896-ship-it';
 export const SYNTHETIC_REPOSITORY_NAME = 'vts-terminal';
 
@@ -92,6 +93,7 @@ export const SYNTHETIC_RUNTIME_RULES = {
   IDENTITY_FORMAT_INVALID: 'G015_IDENTITY_FORMAT_INVALID',
   MOUNT_PATH_INVALID: 'G016_MOUNT_PATH_INVALID',
   ACCESS_ALLOWLIST_INVALID: 'G017_ACCESS_ALLOWLIST_INVALID',
+  DISPOSABLE_KEYS_INVALID: 'G018_DISPOSABLE_KEYS_INVALID',
 } as const;
 
 export type SyntheticRuntimeRuleCode =
@@ -127,6 +129,11 @@ const INTEGRATION_KEYS = [
   'PUSHOVER_APP_TOKEN',
   'VAPID_PRIVATE_KEY',
   'TRADINGVIEW_WEBHOOK_SECRET',
+  'OANDA_API_TOKEN',
+  'OANDA_ACCOUNT_ID',
+  'OANDA_ENV',
+  'KRAKEN_API_KEY',
+  'KRAKEN_API_SECRET',
 ] as const;
 
 // These names are public platform/application contract names. Anything not on
@@ -143,6 +150,7 @@ const SAFE_DIAGNOSTIC_VARIABLE_NAMES = new Set([
   'VTS_SYNTHETIC_EXPECTED_BRANCH',
   'VTS_SYNTHETIC_EXPECTED_COMMIT',
   'PRIVATE_ACCESS_USER_IDS',
+  'AUTH_REQUIRE_2FA',
   'NODE_ENV',
   'RAILWAY_PUBLIC_DOMAIN',
   'RAILWAY_PRIVATE_DOMAIN',
@@ -389,6 +397,7 @@ export function assertControlledSyntheticRuntime(
   }
 
   required(env, 'NODE_ENV', 'production');
+  required(env, 'AUTH_REQUIRE_2FA', 'true');
   const syntheticUserId = requiredSyntheticAccessUserId(env);
   const projectId = requiredUuid(env, 'RAILWAY_PROJECT_ID');
   if (projectId !== SYNTHETIC_PROJECT_ID) {
@@ -467,11 +476,21 @@ export function assertControlledSyntheticRuntime(
     refuse(SYNTHETIC_RUNTIME_RULES.DATABASE_OUTSIDE_MOUNT, 'PRIVATE_DATABASE_URL');
   }
   required(env, 'DATABASE_URL', databaseUrl);
-  if (!env.CREDENTIALS_KEY?.trim() || !env.PRIVATE_SESSION_SECRET?.trim()) {
+  const credentialsKey = env.CREDENTIALS_KEY?.trim();
+  const sessionSecret = env.PRIVATE_SESSION_SECRET?.trim();
+  if (!credentialsKey || !sessionSecret) {
     refuse(SYNTHETIC_RUNTIME_RULES.DISPOSABLE_KEYS_MISSING);
   }
-  if (env.CREDENTIALS_KEY === env.PRIVATE_SESSION_SECRET) {
+  if (credentialsKey === sessionSecret) {
     refuse(SYNTHETIC_RUNTIME_RULES.DISPOSABLE_KEYS_REUSED);
+  }
+  if (
+    env.CREDENTIALS_KEY !== credentialsKey ||
+    env.PRIVATE_SESSION_SECRET !== sessionSecret ||
+    sessionSecret.length < 16 ||
+    !parseCredentialsKey(credentialsKey).ok
+  ) {
+    refuse(SYNTHETIC_RUNTIME_RULES.DISPOSABLE_KEYS_INVALID);
   }
 
   return {
@@ -508,6 +527,7 @@ export function controlledSyntheticTestEnv(
     VTS_SYNTHETIC_EXPECTED_BRANCH: SYNTHETIC_BRANCH,
     VTS_SYNTHETIC_EXPECTED_COMMIT: '1111111111111111111111111111111111111111',
     PRIVATE_ACCESS_USER_IDS: '77777777-7777-4777-8777-777777777777',
+    AUTH_REQUIRE_2FA: 'true',
     NODE_ENV: 'production',
     RAILWAY_PROJECT_ID: SYNTHETIC_PROJECT_ID,
     RAILWAY_ENVIRONMENT_ID: SYNTHETIC_ENVIRONMENT_ID,
