@@ -75,6 +75,9 @@ assert.doesNotThrow(() =>
 for (const [key, value] of [
   ['RAILWAY_PUBLIC_DOMAIN', 'synthetic.example.invalid'],
   ['RAILWAY_STATIC_URL', 'https://synthetic.example.invalid'],
+  ['RAILWAY_TCP_PROXY_DOMAIN', 'synthetic.proxy.invalid'],
+  ['RAILWAY_TCP_PROXY_PORT', '11105'],
+  ['RAILWAY_TCP_APPLICATION_PORT', '25565'],
 ] as const) {
   expectRefusal(
     'public exposure ' + key,

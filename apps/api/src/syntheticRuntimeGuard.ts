@@ -186,11 +186,14 @@ export function assertControlledSyntheticRuntime(
     }
   }
 
-  if (env.RAILWAY_PUBLIC_DOMAIN?.trim() || env.RAILWAY_STATIC_URL?.trim()) {
-    refuse(
-      SYNTHETIC_RUNTIME_RULES.PUBLIC_EXPOSURE,
-      env.RAILWAY_PUBLIC_DOMAIN?.trim() ? 'RAILWAY_PUBLIC_DOMAIN' : 'RAILWAY_STATIC_URL',
-    );
+  for (const key of [
+    'RAILWAY_PUBLIC_DOMAIN',
+    'RAILWAY_STATIC_URL',
+    'RAILWAY_TCP_PROXY_DOMAIN',
+    'RAILWAY_TCP_PROXY_PORT',
+    'RAILWAY_TCP_APPLICATION_PORT',
+  ] as const) {
+    if (env[key]?.trim()) refuse(SYNTHETIC_RUNTIME_RULES.PUBLIC_EXPOSURE, key);
   }
   for (const key of ['PRIVATE_PORTAL_ORIGIN', 'WEB_ORIGIN'] as const) {
     const value = env[key]?.trim();
