@@ -5,8 +5,10 @@ import path from 'node:path';
 import { assertNormalServerBoundary } from './runtimeBoundary.js';
 import {
   assertControlledSyntheticRuntime,
+  SYNTHETIC_DATABASE_FILE,
   SYNTHETIC_MOUNT_PATH,
 } from './syntheticRuntimeGuard.js';
+import { claimFreshSyntheticVolume } from './syntheticVolumeFreshness.js';
 
 interface EgressStats {
   blockedNonLoopback: number;
@@ -104,21 +106,23 @@ async function request(
 
 async function main(): Promise<void> {
   const controlled = assertControlledSyntheticRuntime();
-  const initialEntries = fs.readdirSync(SYNTHETIC_MOUNT_PATH);
-  if (initialEntries.length !== 0) {
-    throw new Error('Synthetic handoff refused: disposable volume was not empty');
-  }
-
-  fs.writeFileSync(
-    path.join(SYNTHETIC_MOUNT_PATH, 'SYNTHETIC_ONLY.json'),
-    JSON.stringify({
+  const volume = claimFreshSyntheticVolume({
+    mountPath: SYNTHETIC_MOUNT_PATH,
+    configuredDatabaseFile: SYNTHETIC_DATABASE_FILE,
+    sentinelContents: JSON.stringify({
       format: 'vts-controlled-synthetic-handoff-v1',
       nonceHash: crypto.createHash('sha256').update(controlled.nonce).digest('hex').slice(0, 12),
     }),
-    { flag: 'wx', mode: 0o600 },
-  );
+  });
+  let clientForCleanup: { close(): void | Promise<void> } | undefined;
 
-  await assert.rejects(
+  try {
+    // These internal values are generated only after the fixed configured path
+    // and fresh descriptor-pinned namespace have both been proven.
+    process.env.PRIVATE_DATABASE_URL = volume.databaseUrl;
+    process.env.DATABASE_URL = volume.databaseUrl;
+
+    await assert.rejects(
     fetch('https://synthetic-runtime-probe.invalid/'),
     /non-loopback network denied/,
   );
@@ -159,6 +163,8 @@ async function main(): Promise<void> {
   ]);
 
   const { db, client, waitForDatabase } = databaseModule;
+  clientForCleanup = client;
+  assert.equal(config.databaseUrl, volume.databaseUrl);
   await waitForDatabase();
   await runMigrations();
   await client.execute('PRAGMA foreign_keys = ON');
@@ -436,7 +442,7 @@ async function main(): Promise<void> {
     await client.execute('PRAGMA wal_checkpoint(TRUNCATE)');
     return crypto
       .createHash('sha256')
-      .update(fs.readFileSync(controlled.databaseFile))
+      .update(fs.readFileSync(volume.databaseFile))
       .digest('hex')
       .slice(0, 12);
   }
@@ -685,13 +691,19 @@ async function main(): Promise<void> {
     tradingState: finalTradeState,
     simulatedTrades: 0,
   };
-  fs.writeFileSync(
-    path.join(SYNTHETIC_MOUNT_PATH, 'synthetic-handoff-report.json'),
-    JSON.stringify(report, null, 2),
-    { flag: 'wx', mode: 0o600 },
-  );
-  console.log('[synthetic-handoff] ' + JSON.stringify(report));
+  await client.execute('PRAGMA wal_checkpoint(TRUNCATE)');
+  await client.execute('PRAGMA journal_mode=DELETE');
   await client.close();
+  clientForCleanup = undefined;
+  volume.writeReportAndValidate(JSON.stringify(report, null, 2));
+  console.log('[synthetic-handoff] ' + JSON.stringify(report));
+  } finally {
+    try {
+      if (clientForCleanup) await clientForCleanup.close();
+    } finally {
+      volume.close();
+    }
+  }
 }
 
 main().catch((error) => {

@@ -10,7 +10,12 @@ export const SYNTHETIC_VOLUME_ID = 'd93c6198-8aba-4cf7-9d52-cad68fea7321';
 export const SYNTHETIC_VOLUME_INSTANCE_ID = 'be5c2bd6-c802-47ac-beac-d19f7b420e3d';
 export const SYNTHETIC_MOUNT_PATH =
   '/railway-synthetic-isolated/v1';
-export const SYNTHETIC_BRANCH = 'codex/synthetic-runtime-project-isolated-pinned-v1';
+export const SYNTHETIC_BRANCH = 'codex/synthetic-volume-freshness-guard-v1';
+export const SYNTHETIC_DATABASE_FILE = path.join(
+  SYNTHETIC_MOUNT_PATH,
+  'vts-synthetic-handoff-v1',
+  'synthetic-handoff.db',
+);
 
 export const SYNTHETIC_RUNTIME_RULES = {
   MISSING_REQUIRED: 'G001_MISSING_REQUIRED',
@@ -270,8 +275,7 @@ export function assertControlledSyntheticRuntime(
     refuse(SYNTHETIC_RUNTIME_RULES.DATABASE_NOT_LOCAL_FILE, 'PRIVATE_DATABASE_URL');
   }
   const databaseFile = path.resolve(databaseUrl.slice('file:'.length));
-  const expectedDatabase = path.join(SYNTHETIC_MOUNT_PATH, 'synthetic-handoff.db');
-  if (databaseFile !== expectedDatabase) {
+  if (databaseFile !== SYNTHETIC_DATABASE_FILE) {
     refuse(SYNTHETIC_RUNTIME_RULES.DATABASE_OUTSIDE_MOUNT, 'PRIVATE_DATABASE_URL');
   }
   required(env, 'DATABASE_URL', databaseUrl);
@@ -288,7 +292,7 @@ export function assertControlledSyntheticRuntime(
 export function controlledSyntheticTestEnv(
   overrides: NodeJS.ProcessEnv = {},
 ): NodeJS.ProcessEnv {
-  const databaseUrl = 'file:' + path.join(SYNTHETIC_MOUNT_PATH, 'synthetic-handoff.db');
+  const databaseUrl = 'file:' + SYNTHETIC_DATABASE_FILE;
   return {
     VTS_RUNTIME_BOUNDARY: SYNTHETIC_RUNTIME_BOUNDARY,
     VTS_SYNTHETIC_HANDOFF_ASSERTION: SYNTHETIC_ASSERTION,

@@ -3,6 +3,8 @@ import { spawnSync } from 'node:child_process';
 import dgram from 'node:dgram';
 import fs from 'node:fs';
 import net from 'node:net';
+import os from 'node:os';
+import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
   assertControlledSyntheticRuntime,
@@ -13,6 +15,22 @@ import {
   SyntheticRuntimeGuardError,
   type SyntheticRuntimeRuleCode,
 } from './syntheticRuntimeGuard.js';
+import {
+  claimFreshSyntheticVolume,
+  createNodeSyntheticVolumeOperations,
+  SYNTHETIC_DATABASE_NAME,
+  SYNTHETIC_EXT_FILESYSTEM_MAGIC,
+  SYNTHETIC_OWNED_CHILD_NAME,
+  SYNTHETIC_REPORT_NAME,
+  SYNTHETIC_SENTINEL_NAME,
+  SYNTHETIC_SYSTEM_DIRECTORY_NAME,
+  SYNTHETIC_VOLUME_RULES,
+  SyntheticVolumeFreshnessError,
+  type SyntheticStat,
+  type SyntheticVolumeClaim,
+  type SyntheticVolumeOperations,
+  type SyntheticVolumeRuleCode,
+} from './syntheticVolumeFreshness.js';
 
 function captureRefusal(env: NodeJS.ProcessEnv): SyntheticRuntimeGuardError {
   try {
@@ -382,6 +400,412 @@ expectRefusal(
   undefined,
   ['same-disposable-secret'],
 );
+
+
+function copyStat(
+  source: SyntheticStat,
+  overrides: Partial<Pick<SyntheticStat, 'dev' | 'ino' | 'uid' | 'gid' | 'mode' | 'nlink'>> & {
+    directory?: boolean;
+    symlink?: boolean;
+    file?: boolean;
+  } = {},
+): SyntheticStat {
+  return {
+    dev: overrides.dev ?? source.dev,
+    ino: overrides.ino ?? source.ino,
+    uid: overrides.uid ?? source.uid,
+    gid: overrides.gid ?? source.gid,
+    mode: overrides.mode ?? source.mode,
+    nlink: overrides.nlink ?? source.nlink,
+    isDirectory: () => overrides.directory ?? source.isDirectory(),
+    isSymbolicLink: () => overrides.symlink ?? source.isSymbolicLink(),
+    isFile: () => overrides.file ?? source.isFile(),
+  };
+}
+
+function testRoot(): string {
+  return fs.mkdtempSync(path.join(os.tmpdir(), 'vts-volume-freshness-'));
+}
+
+function configuredDatabase(root: string): string {
+  return path.join(root, SYNTHETIC_OWNED_CHILD_NAME, SYNTHETIC_DATABASE_NAME);
+}
+
+function claimAt(
+  root: string,
+  operations: SyntheticVolumeOperations = createNodeSyntheticVolumeOperations(),
+): SyntheticVolumeClaim {
+  return claimFreshSyntheticVolume({
+    mountPath: root,
+    configuredDatabaseFile: configuredDatabase(root),
+    sentinelContents: '{"test":"sentinel-exclusive"}',
+    operations,
+  });
+}
+
+function finishClaim(claim: SyntheticVolumeClaim): void {
+  fs.writeFileSync(claim.databaseFile, '', { flag: 'wx', mode: 0o600 });
+  claim.writeReportAndValidate('{"test":"report-exclusive"}');
+}
+
+function expectVolumeRefusal(
+  label: string,
+  expectedRule: SyntheticVolumeRuleCode,
+  run: () => unknown,
+): void {
+  let captured: unknown;
+  try {
+    run();
+  } catch (error) {
+    captured = error;
+  }
+  assert.ok(captured instanceof SyntheticVolumeFreshnessError, label);
+  assert.equal(captured.rule, expectedRule, label + ' rule');
+  assert.equal(
+    captured.message,
+    'Synthetic volume freshness refused [' + expectedRule + ']',
+    label + ' sanitized message',
+  );
+  for (const forbidden of [
+    'lost+found',
+    'SYNTHETIC_ONLY.json',
+    'synthetic-handoff.db',
+    'synthetic-handoff-report.json',
+    '.hidden-sensitive',
+    'contents-must-never-leak',
+    '3735928559',
+  ]) {
+    assert.ok(!captured.message.includes(forbidden), label + ' leaked diagnostic detail');
+  }
+}
+
+function withScratch(run: (root: string) => void): void {
+  const root = testRoot();
+  try {
+    run(root);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+}
+
+function systemDirectoryOperations(
+  overrides: Partial<Pick<SyntheticStat, 'dev' | 'ino' | 'uid' | 'gid' | 'mode' | 'nlink'>> = {},
+  filesystemType: bigint = SYNTHETIC_EXT_FILESYSTEM_MAGIC,
+): SyntheticVolumeOperations {
+  const base = createNodeSyntheticVolumeOperations();
+  let systemFd: number | undefined;
+  return {
+    ...base,
+    openDirectory(target) {
+      const fd = base.openDirectory(target);
+      if (target.endsWith('/' + SYNTHETIC_SYSTEM_DIRECTORY_NAME)) systemFd = fd;
+      return fd;
+    },
+    lstat(target) {
+      const value = base.lstat(target);
+      return target.endsWith('/' + SYNTHETIC_SYSTEM_DIRECTORY_NAME)
+        ? copyStat(value, { uid: 0n, gid: 0n, ...overrides })
+        : value;
+    },
+    fstat(fd) {
+      const value = base.fstat(fd);
+      return fd === systemFd
+        ? copyStat(value, { uid: 0n, gid: 0n, ...overrides })
+        : value;
+    },
+    statfsType() {
+      return filesystemType;
+    },
+  };
+}
+
+withScratch((root) => {
+  const claim = claimAt(root);
+  try {
+    finishClaim(claim);
+  } finally {
+    claim.close();
+  }
+});
+
+withScratch((root) => {
+  fs.mkdirSync(path.join(root, SYNTHETIC_SYSTEM_DIRECTORY_NAME), { mode: 0o700 });
+  const claim = claimAt(root, systemDirectoryOperations());
+  try {
+    finishClaim(claim);
+  } finally {
+    claim.close();
+  }
+});
+
+withScratch((root) => {
+  fs.mkdirSync(path.join(root, SYNTHETIC_SYSTEM_DIRECTORY_NAME), { mode: 0o700 });
+  fs.writeFileSync(
+    path.join(root, SYNTHETIC_SYSTEM_DIRECTORY_NAME, '.hidden-sensitive'),
+    'contents-must-never-leak',
+  );
+  expectVolumeRefusal('nonempty system directory', SYNTHETIC_VOLUME_RULES.SYSTEM_NOT_EMPTY, () =>
+    claimAt(root, systemDirectoryOperations()),
+  );
+});
+
+withScratch((root) => {
+  fs.writeFileSync(path.join(root, '.hidden-sensitive'), 'contents-must-never-leak');
+  expectVolumeRefusal('extra hidden root entry', SYNTHETIC_VOLUME_RULES.ROOT_NAMESPACE, () =>
+    claimAt(root),
+  );
+});
+
+withScratch((root) => {
+  fs.symlinkSync(root, path.join(root, SYNTHETIC_SYSTEM_DIRECTORY_NAME));
+  expectVolumeRefusal('system symlink', SYNTHETIC_VOLUME_RULES.SYSTEM_METADATA, () =>
+    claimAt(root, systemDirectoryOperations()),
+  );
+});
+
+withScratch((root) => {
+  fs.writeFileSync(path.join(root, SYNTHETIC_SYSTEM_DIRECTORY_NAME), '');
+  expectVolumeRefusal('system wrong type', SYNTHETIC_VOLUME_RULES.SYSTEM_METADATA, () =>
+    claimAt(root, systemDirectoryOperations()),
+  );
+});
+
+for (const [label, override] of [
+  ['device', { dev: 3735928559n }],
+  ['uid', { uid: 101n }],
+  ['gid', { gid: 102n }],
+  ['mode', { mode: 0o40755n }],
+  ['nlink', { nlink: 3n }],
+] as const) {
+  withScratch((root) => {
+    fs.mkdirSync(path.join(root, SYNTHETIC_SYSTEM_DIRECTORY_NAME), { mode: 0o700 });
+    expectVolumeRefusal(
+      'system wrong ' + label,
+      SYNTHETIC_VOLUME_RULES.SYSTEM_METADATA,
+      () => claimAt(root, systemDirectoryOperations(override)),
+    );
+  });
+}
+
+withScratch((root) => {
+  fs.mkdirSync(path.join(root, SYNTHETIC_SYSTEM_DIRECTORY_NAME), { mode: 0o700 });
+  const base = systemDirectoryOperations();
+  const inaccessible: SyntheticVolumeOperations = {
+    ...base,
+    lstat(target) {
+      if (target.endsWith('/' + SYNTHETIC_SYSTEM_DIRECTORY_NAME)) {
+        throw new Error('contents-must-never-leak');
+      }
+      return base.lstat(target);
+    },
+  };
+  expectVolumeRefusal('inaccessible system metadata', SYNTHETIC_VOLUME_RULES.SYSTEM_METADATA, () =>
+    claimAt(root, inaccessible),
+  );
+});
+
+withScratch((root) => {
+  fs.mkdirSync(path.join(root, SYNTHETIC_SYSTEM_DIRECTORY_NAME), { mode: 0o700 });
+  expectVolumeRefusal('unsupported system filesystem', SYNTHETIC_VOLUME_RULES.SYSTEM_FILESYSTEM, () =>
+    claimAt(root, systemDirectoryOperations({}, 0x1234n)),
+  );
+});
+
+withScratch((root) => {
+  fs.mkdirSync(path.join(root, SYNTHETIC_SYSTEM_DIRECTORY_NAME), { mode: 0o700 });
+  const base = systemDirectoryOperations();
+  let systemFd: number | undefined;
+  const substituted: SyntheticVolumeOperations = {
+    ...base,
+    openDirectory(target) {
+      const fd = base.openDirectory(target);
+      if (target.endsWith('/' + SYNTHETIC_SYSTEM_DIRECTORY_NAME)) systemFd = fd;
+      return fd;
+    },
+    fstat(fd) {
+      const value = base.fstat(fd);
+      return fd === systemFd ? copyStat(value, { ino: value.ino + 1n }) : value;
+    },
+  };
+  expectVolumeRefusal('system lstat to open substitution', SYNTHETIC_VOLUME_RULES.SYSTEM_METADATA, () =>
+    claimAt(root, substituted),
+  );
+});
+
+withScratch((root) => {
+  const base = createNodeSyntheticVolumeOperations();
+  const raced: SyntheticVolumeOperations = {
+    ...base,
+    mkdir(target, mode) {
+      base.mkdir(target, mode);
+      fs.writeFileSync(path.join(path.dirname(target), '.hidden-sensitive'), 'contents-must-never-leak');
+    },
+  };
+  expectVolumeRefusal('initial to final root addition', SYNTHETIC_VOLUME_RULES.NAMESPACE_RACE, () =>
+    claimAt(root, raced),
+  );
+});
+
+withScratch((root) => {
+  const base = createNodeSyntheticVolumeOperations();
+  const raced: SyntheticVolumeOperations = {
+    ...base,
+    openDirectory(target) {
+      if (target.endsWith('/' + SYNTHETIC_OWNED_CHILD_NAME)) fs.chmodSync(target, 0o755);
+      return base.openDirectory(target);
+    },
+  };
+  expectVolumeRefusal('child metadata race', SYNTHETIC_VOLUME_RULES.CHILD_METADATA, () =>
+    claimAt(root, raced),
+  );
+});
+
+for (const preexisting of [
+  SYNTHETIC_OWNED_CHILD_NAME,
+  path.join(SYNTHETIC_OWNED_CHILD_NAME, SYNTHETIC_SENTINEL_NAME),
+  path.join(SYNTHETIC_OWNED_CHILD_NAME, SYNTHETIC_DATABASE_NAME),
+]) {
+  withScratch((root) => {
+    const target = path.join(root, preexisting);
+    if (preexisting === SYNTHETIC_OWNED_CHILD_NAME) fs.mkdirSync(target, { mode: 0o700 });
+    else {
+      fs.mkdirSync(path.dirname(target), { mode: 0o700 });
+      fs.writeFileSync(target, '');
+    }
+    expectVolumeRefusal('preexisting owned namespace', SYNTHETIC_VOLUME_RULES.ROOT_NAMESPACE, () =>
+      claimAt(root),
+    );
+  });
+}
+
+withScratch((root) => {
+  const base = createNodeSyntheticVolumeOperations();
+  let injected = false;
+  let rootProc: string | undefined;
+  const raced: SyntheticVolumeOperations = {
+    ...base,
+    list(target) {
+      const entries = base.list(target);
+      if (target.startsWith('/proc/self/fd/') && rootProc === undefined) rootProc = target;
+      if (!injected && target.startsWith('/proc/self/fd/') && target !== rootProc && entries.length === 0) {
+          fs.writeFileSync(path.join(target, SYNTHETIC_SENTINEL_NAME), 'contents-must-never-leak');
+        injected = true;
+      }
+      return entries;
+    },
+  };
+  expectVolumeRefusal('sentinel exclusive race', SYNTHETIC_VOLUME_RULES.SENTINEL_CREATE, () =>
+    claimAt(root, raced),
+  );
+});
+
+withScratch((root) => {
+  const base = createNodeSyntheticVolumeOperations();
+  let injected = false;
+  let rootProc: string | undefined;
+  const raced: SyntheticVolumeOperations = {
+    ...base,
+    list(target) {
+      const entries = base.list(target);
+      if (target.startsWith('/proc/self/fd/') && rootProc === undefined) rootProc = target;
+      if (!injected && target.startsWith('/proc/self/fd/') && target !== rootProc && entries.length === 0) {
+          fs.writeFileSync(path.join(target, SYNTHETIC_DATABASE_NAME), 'contents-must-never-leak');
+        injected = true;
+      }
+      return entries;
+    },
+  };
+  expectVolumeRefusal('database creation race', SYNTHETIC_VOLUME_RULES.NAMESPACE_RACE, () =>
+    claimAt(root, raced),
+  );
+});
+
+for (const [label, mismatch] of [
+  ['unavailable', false],
+  ['mismatch', true],
+] as const) {
+  withScratch((root) => {
+    const base = createNodeSyntheticVolumeOperations();
+    let firstProcStat = true;
+    const procFailure: SyntheticVolumeOperations = {
+      ...base,
+      stat(target) {
+        if (firstProcStat && target.startsWith('/proc/self/fd/')) {
+          firstProcStat = false;
+          if (!mismatch) throw new Error('contents-must-never-leak');
+          const value = base.stat(target);
+          return copyStat(value, { ino: value.ino + 1n });
+        }
+        return base.stat(target);
+      },
+    };
+    expectVolumeRefusal(
+      'proc descriptor ' + label,
+      SYNTHETIC_VOLUME_RULES.ROOT_DESCRIPTOR,
+      () => claimAt(root, procFailure),
+    );
+  });
+}
+
+withScratch((root) => {
+  const claim = claimAt(root);
+  try {
+    fs.writeFileSync(claim.databaseFile, '', { flag: 'wx', mode: 0o600 });
+    fs.writeFileSync(
+      path.join(path.dirname(claim.databaseFile), SYNTHETIC_REPORT_NAME),
+      'contents-must-never-leak',
+      { flag: 'wx', mode: 0o600 },
+    );
+    expectVolumeRefusal('report exclusive creation', SYNTHETIC_VOLUME_RULES.REPORT_CREATE, () =>
+      claim.writeReportAndValidate('{}'),
+    );
+  } finally {
+    claim.close();
+  }
+});
+
+if (process.platform === 'linux') {
+  withScratch((root) => {
+    const claim = claimAt(root);
+    try {
+      assert.ok(claim.databaseFile.startsWith('/proc/self/fd/'));
+      finishClaim(claim);
+      assert.deepEqual(
+        fs.readdirSync(path.join(root, SYNTHETIC_OWNED_CHILD_NAME)).sort(),
+        [SYNTHETIC_DATABASE_NAME, SYNTHETIC_REPORT_NAME, SYNTHETIC_SENTINEL_NAME].sort(),
+      );
+    } finally {
+      claim.close();
+    }
+  });
+
+  const libsqlRoot = testRoot();
+  try {
+    const claim = claimAt(libsqlRoot);
+    try {
+      const { createClient } = await import('@libsql/client');
+      const smokeClient = createClient({ url: claim.databaseUrl });
+      await smokeClient.execute('PRAGMA journal_mode=WAL');
+      await smokeClient.execute('CREATE TABLE descriptor_smoke (id INTEGER PRIMARY KEY)');
+      await smokeClient.execute('INSERT INTO descriptor_smoke DEFAULT VALUES');
+      const rows = await smokeClient.execute('SELECT COUNT(*) AS count FROM descriptor_smoke');
+      assert.equal(Number((rows.rows[0] as Record<string, unknown>).count), 1);
+      const liveEntries = fs.readdirSync(
+        path.join(libsqlRoot, SYNTHETIC_OWNED_CHILD_NAME),
+      );
+      assert.ok(liveEntries.includes(SYNTHETIC_DATABASE_NAME + '-wal'));
+      assert.ok(liveEntries.includes(SYNTHETIC_DATABASE_NAME + '-shm'));
+      await smokeClient.execute('PRAGMA wal_checkpoint(TRUNCATE)');
+      await smokeClient.execute('PRAGMA journal_mode=DELETE');
+      await smokeClient.close();
+      claim.writeReportAndValidate('{"test":"libsql-descriptor-sidecars"}');
+    } finally {
+      claim.close();
+    }
+  } finally {
+    fs.rmSync(libsqlRoot, { recursive: true, force: true });
+  }
+}
 
 const railwayConfig = JSON.parse(
   fs.readFileSync(new URL('../../../railway.json', import.meta.url), 'utf8'),
