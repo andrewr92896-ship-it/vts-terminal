@@ -473,11 +473,21 @@ async function main(): Promise<void> {
     console.log('\nFail-closed cases');
     const wrongSource = makeCase('wrong-source', validEnvelopes(sourceKey));
     roots.push(wrongSource.root);
-    const wrongSourceError = await rejection(() =>
-      run(wrongSource, otherKey, targetKey, {
-        expectedSourceKeyIdFd: channel(wrongSource.root, 'correct-source-id', keyId(sourceKey)),
-      }),
+    const correctSourceIdFd = channel(
+      wrongSource.root,
+      'correct-source-id',
+      keyId(sourceKey),
     );
+    let wrongSourceError: string;
+    try {
+      wrongSourceError = await rejection(() =>
+        run(wrongSource, otherKey, targetKey, {
+          expectedSourceKeyIdFd: correctSourceIdFd,
+        }),
+      );
+    } finally {
+      fs.closeSync(correctSourceIdFd);
+    }
     assert.match(wrongSourceError, /source key identifier validation failed/);
     assert.equal(fs.existsSync(wrongSource.destination), false);
     assertNoLeaks(wrongSourceError, [sourceKey, targetKey, otherKey], validEnvelopes(sourceKey));

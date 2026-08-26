@@ -6232,3 +6232,17 @@ Run `npm run verify:offline-migration` after changing this boundary, migrations
 0136–0137, the migration journal, or reconciliation behavior. The operator
 procedure and rollback checkpoints are in
 `docs/operations/offline-legacy-migration-rehearsal.md`.
+
+Broker credential re-keying uses a second, mutually exclusive boundary:
+`VTS_RUNTIME_BOUNDARY=offline-broker-credential-rekey-v1`. Its only entrypoint
+is `apps/api/src/db/offlineRekeyCli.ts`, via `npm run db:rekey-offline`.
+It accepts key material and expected key identifiers only through inherited file
+descriptors, opens the source with a native read-only SQLite handle, writes a
+distinct partial candidate, supports only authenticated current v2 and the
+repository-proven historical v1 envelopes, applies only the audited 135→137
+migration path, and publishes nothing until target-key authentication and full
+redacted reconciliation pass. It must never import the server, shared database,
+bootstrap, mail, broker, or watcher modules. Run `npm run verify:offline-rekey`
+after changing this boundary or its crypto, database, report, or CLI code. The
+operator procedure is
+`docs/operations/offline-broker-credential-rekey.md`.

@@ -1,5 +1,17 @@
 import { assertOfflineRekeyBoundary } from '../runtimeBoundary.js';
 
+const ALLOWED_FLAGS = new Set([
+  'source',
+  'destination',
+  'manifest',
+  'report',
+  'expected-business-tables',
+  'source-key-fd',
+  'target-key-fd',
+  'source-id-fd',
+  'target-id-fd',
+]);
+
 function parseFlags(args: string[]): Record<string, string> {
   const flags: Record<string, string> = {};
   for (let index = 0; index < args.length; index += 2) {
@@ -9,6 +21,7 @@ function parseFlags(args: string[]): Record<string, string> {
       throw new Error('Arguments must be explicit --name value pairs.');
     }
     const name = key.slice(2);
+    if (!ALLOWED_FLAGS.has(name)) throw new Error('Unknown argument: --' + name);
     if (flags[name] != null) throw new Error('Duplicate argument: --' + name);
     if (/key(?!-fd)|credential|ciphertext|secret/i.test(name)) {
       throw new Error('Literal credential or key arguments are forbidden.');
