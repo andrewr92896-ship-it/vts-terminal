@@ -315,10 +315,10 @@ async function main(): Promise<void> {
         ],
       );
       assert.equal(await count(candidate, 'side_effect_audit'), 1);
-      const sideEffects = await candidate.execute(
-        'SELECT events FROM side_effect_audit WHERE category = ?',
-        ['all-side-effects'],
-      );
+      const sideEffects = await candidate.execute({
+        sql: 'SELECT events FROM side_effect_audit WHERE category = ?',
+        args: ['all-side-effects'],
+      });
       assert.equal(Number((sideEffects.rows[0] as Record<string, unknown>).events), 0);
       assert.equal((await candidate.execute('PRAGMA foreign_key_check')).rows.length, 0);
     } finally {
