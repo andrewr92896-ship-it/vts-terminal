@@ -157,8 +157,8 @@ async function write(entry: CredentialUseEntry): Promise<void> {
 // Its own failures are logged and go no further.
 export function recordCredentialUse(entry: CredentialUseEntry): void {
   void write(entry).catch((err: unknown) => {
-    const msg = err instanceof Error ? err.message : String(err);
-    console.error(`[credentialAudit] could not record ${entry.purpose} on ${entry.connectionId}: ${msg}`);
+    void err;
+    console.error('[credentialAudit] could not record a redacted credential event');
   });
 }
 

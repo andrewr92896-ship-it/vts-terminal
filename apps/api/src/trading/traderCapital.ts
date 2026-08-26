@@ -228,7 +228,7 @@ async function slotsFor(userId: string, rows: Map<string, CapitalRow>): Promise<
     broker: c.broker,
     summary: c.summary,
     active: c.active,
-    canSync: c.broker === 'oanda' && c.active,
+    canSync: c.broker === 'oanda' && c.active && c.credentialState === 'ready',
   }));
   // A row whose connection has since been removed keeps its place, named for
   // what it is. Dropping it would take a figure the trader entered off the card
@@ -582,7 +582,7 @@ export async function syncCapital(
   actor?: AuditActor,
 ): Promise<TraderCapital> {
   const conn = (await listConnections(userId)).find((c) => c.id === account);
-  if (!conn || conn.broker !== 'oanda' || !conn.active) {
+  if (!conn || conn.broker !== 'oanda' || !conn.active || conn.credentialState !== 'ready') {
     throw new Error('That account cannot be synced — connect an active OANDA account to sync from');
   }
   const patch: CapitalPatch =
@@ -707,6 +707,7 @@ export async function backfillCapitalAccounts(): Promise<void> {
         inArray(brokerConnections.userId, todo.map((r) => r.id)),
         eq(brokerConnections.broker, 'oanda'),
         eq(brokerConnections.active, true),
+        eq(brokerConnections.credentialState, 'ready'),
       ),
     );
 

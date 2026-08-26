@@ -149,7 +149,7 @@ async function createLegacyFixture(file: string, orphan = false): Promise<void> 
     const journal = JSON.parse(fs.readFileSync(JOURNAL, 'utf8')) as {
       entries: Array<{ when: number; tag: string }>;
     };
-    assert.equal(journal.entries.length, 137);
+    assert.equal(journal.entries.length, 138);
     await client.batch(
       journal.entries.slice(0, 135).map((entry) => ({
         sql: 'INSERT INTO __drizzle_migrations (hash, created_at) VALUES (?, ?)',
@@ -198,7 +198,7 @@ function options(files: CaseFiles, overrides: Record<string, unknown> = {}) {
     manifestPath: files.manifest,
     reportPath: files.report,
     from: 135,
-    to: 137,
+    to: 138,
     destinationCredentialKeyId: 'deadbeef',
     env: SAFE_ENV,
     ...overrides,
@@ -260,7 +260,7 @@ async function main(): Promise<void> {
     assert.doesNotMatch(blockedOutput, /\[db\]|listening on port|Invalid environment configuration/);
     console.log('  ok   rehearsal exits before importing the normal server');
 
-    console.log('\n135 → 137 fixture rehearsal');
+    console.log('\n135 → 138 fixture rehearsal');
     const success = await makeCase('success');
     roots.push(success.root);
     const sourceHash = fs.readFileSync(success.source);
@@ -280,6 +280,7 @@ async function main(): Promise<void> {
     assert.deepEqual(report.migrationsApplied, [
       '0136_password_reset_credentials',
       '0137_terminal_email_2fa',
+      '0138_broker_credential_state',
     ]);
     assert.equal(report.safetyBoundary.credentialDecryptionAttempted, false);
     assert.equal(report.safetyBoundary.externalNetworkAllowed, false);
@@ -288,12 +289,22 @@ async function main(): Promise<void> {
 
     const candidate = createClient({ url: pathToFileURL(success.destination).href });
     try {
-      assert.equal(await count(candidate, '__drizzle_migrations'), 137);
+      assert.equal(await count(candidate, '__drizzle_migrations'), 138);
       assert.equal(await count(candidate, 'users'), 2);
       assert.equal(await count(candidate, 'business_trades'), 2);
       assert.equal(await count(candidate, 'memberships'), 2);
       assert.equal(await count(candidate, 'app_settings'), 2);
       assert.equal(await count(candidate, 'broker_connections'), 1);
+      const brokerStates = await candidate.execute(
+        'SELECT credential_state, COUNT(*) AS count FROM broker_connections GROUP BY credential_state',
+      );
+      assert.deepEqual(
+        brokerStates.rows.map((row) => ({
+          state: String((row as Record<string, unknown>).credential_state),
+          count: Number((row as Record<string, unknown>).count),
+        })),
+        [{ state: 'ready', count: 1 }],
+      );
       assert.equal(await count(candidate, 'sessions'), 0);
       assert.equal(await count(candidate, 'employee_sessions'), 0);
       for (const table of [

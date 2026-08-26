@@ -1,49 +1,40 @@
-# Offline broker credential re-key
+# Offline broker credential re-key and quarantine
 
-This procedure is only for an approved, isolated copy of the legacy SQLite
-database. It does not authorize attaching a candidate to a service, changing a
-Railway variable, deploying, calling a broker, or writing a live database.
+This procedure applies only to an approved, isolated copy of the legacy SQLite
+database. It does not authorize attachment, deployment, a Railway change, a
+live-database write, a broker call, or credential entry in chat.
 
-## Custody and prerequisites
+## Preconditions
 
-Stop unless all of the following are true:
+Stop unless all of these are true:
 
-1. The exact re-key commit is green in GitHub Actions.
-2. A fresh application-consistent production checkpoint was created through the
-   proven online SQLite backup path without changing the source.
-3. One access-controlled Railway copy and one separately controlled off-Railway
-   copy were authenticated-encrypted, permission-restricted, and restore-tested.
-4. Backup verification recorded only safe metadata: time, copy count, restore
-   result, encryption/authentication result, and shortened hash fingerprints.
-5. The production and private-staging credential keys remain in the approved OS
-   credential store. Neither key, either full key identifier, or any broker
-   credential appears in a file, shell argument, shell history, log, report, or
-   clipboard.
-6. The isolated source is a regular non-symlink file ending in
-   `.snapshot.db` or `.snapshot.sqlite`, has no WAL/SHM neighbor, and is not
-   on a mounted service volume.
-7. The external reconciliation manifest lists all 100 approved business tables,
-   their expected counts, safe hash columns, and the nine required application
-   setting keys. Sensitive columns are forbidden from hash selections.
+1. The exact branch commit is green in GitHub Actions.
+2. Both fresh authenticated-encrypted backups remain retained, access-controlled,
+   restore-tested, and unchanged.
+3. The exact green GitHub archive is unpacked only inside an encrypted temporary
+   execution volume. It is not a checkout and is not edited.
+4. Execution is inside a Linux network namespace or equivalent sandbox with only
+   loopback interfaces and routes. The command verifies this before reading any
+   key descriptor; a failure means no key may be read.
+5. Source and target credential keys are supplied only by the audited
+   non-disclosing inherited-file-descriptor path.
+6. The source is a native read-only regular snapshot, the candidate and report
+   are new files in a distinct directory, and no WAL/SHM sidecar exists.
+7. The private manifest is access-controlled and names exactly the expected
+   historical row by connection identity, owner identity, provider category, and
+   the source-envelope digest. These values never appear in output.
+8. The manifest reconciles all 100 business tables and the nine required
+   application-setting keys using non-sensitive columns only.
 
-If production health changes, restore the prior operational state and stop. Do
-not use the re-key batch as a production repair mechanism.
+If production or staging health changes, stop. This operation is not a repair or
+cutover procedure.
 
-## Secure invocation
+## Invocation
 
-The command accepts keys and expected key identifiers only through inherited
-file descriptors. The descriptor producers must read directly from an approved
-credential store; never substitute `echo`, a repository file, an environment
-variable, a command-line secret, or a pasted value.
-
-Establish four read-only descriptors in the operator's secured shell:
-
-- source credential key;
-- private-staging target credential key;
-- expected source key identifier;
-- expected target key identifier.
-
-Then clear inherited application and hosting variables and execute:
+Run the command only inside the verified network-disabled sandbox. Clear
+application and hosting variables, disable shell tracing, and inherit four
+read-only descriptors: source key, target key, expected source key identifier,
+and expected target key identifier.
 
 ```sh
 unset DATABASE_URL PRIVATE_DATABASE_URL
@@ -52,88 +43,78 @@ export NODE_ENV=test
 export VTS_RUNTIME_BOUNDARY=offline-broker-credential-rekey-v1
 
 npm run db:rekey-offline -- \
-  --source /isolated/source/legacy.snapshot.db \
-  --destination /isolated/candidate/private.candidate.db \
-  --manifest /isolated/control/reconciliation.json \
-  --report /isolated/candidate/rekey-report.json \
+  --source SOURCE_SNAPSHOT \
+  --destination PRIVATE_CANDIDATE \
+  --manifest PRIVATE_MANIFEST \
+  --report REDACTED_REPORT \
   --expected-business-tables 100 \
-  --source-key-fd SOURCE_FD_NUMBER \
-  --target-key-fd TARGET_FD_NUMBER \
-  --source-id-fd SOURCE_ID_FD_NUMBER \
-  --target-id-fd TARGET_ID_FD_NUMBER
+  --source-key-fd SOURCE_KEY_FD \
+  --target-key-fd TARGET_KEY_FD \
+  --source-id-fd SOURCE_ID_FD \
+  --target-id-fd TARGET_ID_FD
 ```
 
-Descriptor numbers are not secrets. Close all four descriptors immediately
-after the process exits. Do not enable shell tracing. Do not capture stderr in a
-shared log.
+Close every descriptor immediately after exit. Do not capture stderr in shared
+logs. The CLI accepts no row override and no literal credential or key flag.
 
-The entrypoint checks the exact offline boundary before dynamically importing
-database or credential code. It refuses production/Railway/database
-environments, URLs, symlinks, SQLite sidecars, in-place or same-directory output,
-existing output, literal key arguments, incomplete reconciliation manifests,
-sensitive hash columns, and equal or mismatched keys.
+## Candidate policy
 
-## What the command does
+The source remains native read-only and byte-identical. A permission-restricted
+partial copy is migrated only through 135→138.
 
-The source is opened with Node's native SQLite handle using `readOnly: true`.
-A permission-restricted random partial copy is created in the destination
-directory. For each broker row, the tool:
+- The two expected current envelopes must authenticate with the source key. Each
+  plaintext buffer is immediately re-encrypted with the target key and cleared.
+- The manifest-approved row must be a credential-bearing OANDA or Kraken
+  historical-v1 envelope, and it must fail authenticated recovery. Its unreadable
+  payload is replaced in the candidate with an empty non-credential value and
+  `credential_state='reconnect_required'`.
+- The quarantined row keeps its ID, owner, provider, label, summary, historical
+  enabled/paused bit, health fields, history cutoff, and timestamps.
+- Any unsupported format, mismatched manifest identity/provider/digest, an
+  approved row that authenticates, or any second/unexpected authentication
+  failure aborts atomically and publishes no candidate or report.
+- Reconnect-required rows are refused before runtime decryption and before any
+  broker/client/watcher/order/status/reconciliation call.
 
-1. accepts only the current v2 envelope or the exact repository-proven
-   historical v1 AES-256-GCM envelope;
-2. validates the source and target identifiers without emitting either;
-3. authenticated-decrypts with the source key;
-4. immediately encrypts the plaintext into current v2 form with the target key
-   and row-bound additional authenticated data;
-5. clears the plaintext buffer;
-6. preserves every connection field other than `secret_enc`.
+The command then clears only the fixed ephemeral-auth allowlist, requires the new
+authentication and remediation schema, reconciles counts and preserved metadata,
+checks foreign keys, authenticates the two re-keyed envelopes with the target key
+offline, and verifies exactly two `ready` rows plus one
+`reconnect_required` row with no credential payload.
 
-The same audited migration implementation applies only 135→137. The fixed
-ephemeral-auth allowlist is cleared, the new authentication tables are required
-and empty, all manifest counts and safe hashes are reconciled, broker metadata
-is hashed independently of ciphertext, foreign keys must pass, every new
-envelope must authenticate with the target key, and the source checksum must be
-unchanged. Only then are candidate and report renamed into place.
+The redacted report contains counts, provider categories, credential
+dispositions, migration levels, and boolean reconciliation results only. It
+contains no path, identity, ciphertext, secret, nonce, tag, digest, full hash, or
+key identifier.
 
-The report contains counts, provider categories, authenticated-format counts,
-remediation status, safe deterministic hashes, and boolean safety results. It
-contains no path, identity, credential, ciphertext, nonce, tag, key, or full key
-identifier.
+## Validation and retention
 
-## Refusal and user re-entry
+Require the expected business reconciliation: 100 legacy business tables; 5
+users; 11 trading trades; 84 funded trades with the 76/8 ownership split; 3
+funded accounts; 3 broker metadata rows; exactly 2 re-keyed and 1
+reconnect-required; 9 application-setting keys; 3 member/permission rows; 4
+membership/tier rows; all IDs, ownership, inactive states, and foreign keys
+preserved; new auth/remediation schema present; ephemeral auth empty; and zero
+seed, backfill, demo refresh, content rewrite, watcher, mail, integration, market,
+notification, broker, order, or trade side effects.
 
-A v1 envelope is recoverable only when its GCM tag authenticates with the exact
-historical derivation proven by commit history. The tool never guesses a format,
-tries alternate keys, brute-forces, fabricates, drops, or overwrites a row.
+Retain a successful candidate only after authenticated encryption and access
+control are applied outside the temporary volume. Keep it unattached. Destroy the
+temporary encrypted execution volume and retain only approved encrypted artifacts
+and redacted reports.
 
-If any envelope is malformed, truncated, forged, from a mixed key set, or fails
-authenticated decryption, the tool reports only the safe provider category and
-that user credential re-entry is required. No candidate or report is published.
-Retain the encrypted source and both encrypted backups. Never test the credential
-with a provider login.
+Rollback means discarding an unpublished partial or the unattached candidate and
+its redacted report. Never delete or overwrite either retained encrypted backup.
 
-Any count, hash, ownership/metadata, application-setting, migration, source-file,
-target-authentication, or foreign-key mismatch is also a hard stop.
+## Authorized user re-entry later
 
-## Candidate retention and rollback
+The owning authorized user uses the private portal's reconnect form after a
+separate staging validation and deployment decision. The existing signed session,
+workspace-write authorization, owner-scoped row lookup, and same-origin CSRF
+guard apply. A complete replacement credential is normalized, encrypted with the
+current key, and stored in the same database update that changes the state to
+`ready`. Label, pause/resume, or admin metadata edits cannot clear quarantine.
 
-After success, independently verify the redacted report shows:
-
-- 100 business tables reconciled;
-- three broker rows retained with provider-category counts only;
-- 5 users, 11 trading trades, 84 funded trades, 3 funded accounts, 9
-  application-setting keys, 3 member/permission rows, and 4 membership/tier rows;
-- zero foreign-key violations;
-- new authentication tables present and empty;
-- all three envelopes authenticated with the target key;
-- zero external side effects.
-
-Encrypt the successful candidate with approved authenticated encryption before
-moving or retaining it. Keep restrictive permissions and key custody outside the
-candidate location. The retained candidate must remain unattached.
-
-Rollback is to discard an unpublished partial or the isolated candidate and its
-redacted report while retaining the immutable encrypted backups. Never delete,
-replace, attach, or write a live database. Deployment, attachment, cutover,
-variable changes, broker calls, and main-branch merge are separate operations
-and are explicitly out of scope.
+Saving replacement credentials does not place, modify, close, validate, or
+simulate a trade and does not contact a broker. Connectivity validation, if ever
+authorized, is a separate later action.

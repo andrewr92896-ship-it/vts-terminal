@@ -397,7 +397,7 @@ export type TradingPositionRow = typeof tradingPositions.$inferSelect;
 // and History are driven by the calling user's active connections.
 export const BROKER_CONNECTION_KINDS = ['oanda', 'kraken', 'manual'] as const;
 export type BrokerConnectionKind = (typeof BROKER_CONNECTION_KINDS)[number];
-export const BROKER_CREDENTIAL_STATES = ['active', 'reconnect_required'] as const;
+export const BROKER_CREDENTIAL_STATES = ['ready', 'reconnect_required'] as const;
 export type BrokerCredentialState = (typeof BROKER_CREDENTIAL_STATES)[number];
 
 export const brokerConnections = sqliteTable('broker_connections', {
@@ -412,7 +412,7 @@ export const brokerConnections = sqliteTable('broker_connections', {
   // enabled flag, but every runtime path refuses it before decryption.
   credentialState: text('credential_state', { enum: BROKER_CREDENTIAL_STATES })
     .notNull()
-    .default('active'),
+    .default('ready'),
   summary: text('summary'), // non-secret hint, e.g. "Practice · 001-…-001"
   active: integer('active', { mode: 'boolean' }).notNull().default(true),
   lastStatus: text('last_status', { enum: ['unknown', 'ok', 'error'] })

@@ -226,7 +226,7 @@ function createFixture(file: string, envelopes: string[]): void {
     const journal = JSON.parse(fs.readFileSync(JOURNAL, 'utf8')) as {
       entries: Array<{ when: number; tag: string }>;
     };
-    assert.equal(journal.entries.length, 137);
+    assert.equal(journal.entries.length, 138);
     const migration = db.prepare(
       'INSERT INTO __drizzle_migrations (hash, created_at) VALUES (?, ?)',
     );
@@ -238,11 +238,11 @@ function createFixture(file: string, envelopes: string[]): void {
   }
 }
 
-function manifest(): Record<string, unknown> {
+function manifest(envelopes: string[]): Record<string, unknown> {
   return {
-    version: 1,
+    version: 2,
     sourceMigrationLevel: 135,
-    destinationMigrationLevel: 137,
+    destinationMigrationLevel: 138,
     expectedCounts: {
       users: 3,
       business_trades: 1,
@@ -252,6 +252,12 @@ function manifest(): Record<string, unknown> {
       side_effect_audit: 1,
     },
     requiredAppSettingKeys: ['feature.synthetic'],
+    credentialQuarantine: {
+      connectionId: 'connection-three',
+      ownerUserId: USERS[2],
+      provider: 'kraken',
+      sourceEnvelopeSha256: crypto.createHash('sha256').update(envelopes[2]).digest('hex'),
+    },
     hashTables: {
       users: ['id', 'username'],
       business_trades: ['id', 'owner_id', 'instrument'],
@@ -287,7 +293,7 @@ function makeCase(label: string, envelopes: string[]): CaseFiles {
   const manifestPath = path.join(root, 'manifest.json');
   const report = path.join(candidates, 'reconciliation.json');
   createFixture(source, envelopes);
-  fs.writeFileSync(manifestPath, JSON.stringify(manifest()), { mode: 0o600 });
+  fs.writeFileSync(manifestPath, JSON.stringify(manifest(envelopes)), { mode: 0o600 });
   return { root, source, destination, manifest: manifestPath, report };
 }
 
@@ -323,6 +329,7 @@ async function run(
       expectedSourceKeyIdFd: fds[2],
       expectedTargetKeyIdFd: fds[3],
       env: SAFE_ENV,
+      assertNetworkIsolation: () => {},
       ...overrides,
     });
   } finally {
@@ -335,6 +342,14 @@ function validEnvelopes(sourceKey: string): string[] {
     currentEnvelope(PLAINTEXTS[0], sourceKey, USERS[0], 'connection-one'),
     currentEnvelope(PLAINTEXTS[1], sourceKey, USERS[1], 'connection-two'),
     historicalEnvelope(PLAINTEXTS[2], sourceKey),
+  ];
+}
+
+function quarantineEnvelopes(sourceKey: string, unreadableKey: string): string[] {
+  return [
+    currentEnvelope(PLAINTEXTS[0], sourceKey, USERS[0], 'connection-one'),
+    currentEnvelope(PLAINTEXTS[1], sourceKey, USERS[1], 'connection-two'),
+    historicalEnvelope(PLAINTEXTS[2], unreadableKey),
   ];
 }
 
@@ -363,7 +378,7 @@ async function main(): Promise<void> {
   const otherKey = crypto.randomBytes(32).toString('base64');
   try {
     console.log('\nOffline credential re-key success');
-    const envelopes = validEnvelopes(sourceKey);
+    const envelopes = quarantineEnvelopes(sourceKey, otherKey);
     const success = makeCase('success', envelopes);
     roots.push(success.root);
     const sourceBefore = fs.readFileSync(success.source);
@@ -371,13 +386,19 @@ async function main(): Promise<void> {
     assert.deepEqual(fs.readFileSync(success.source), sourceBefore);
     assert.equal(result.credentialRows.total, 3);
     assert.equal(result.credentialRows.formats.currentAuthenticated, 2);
-    assert.equal(result.credentialRows.formats.historicalAuthenticated, 1);
-    assert.equal(result.credentialRows.userReentryRequired, 0);
+    assert.equal(result.credentialRows.formats.historicalAuthenticated, 0);
+    assert.equal(result.credentialRows.formats.historicalReconnectRequired, 1);
+    assert.equal(result.credentialRows.rekeyed, 2);
+    assert.equal(result.credentialRows.userReentryRequired, 1);
     assert.equal(result.reconciliation.businessTableCount, 6);
     assert.equal(result.reconciliation.foreignKeyViolations, 0);
     assert.equal(result.reconciliation.authenticationTablesPresentAndEmpty, true);
     const reportText = fs.readFileSync(success.report, 'utf8');
     assertNoLeaks(reportText, [sourceKey, targetKey, otherKey], envelopes);
+    assert.doesNotMatch(reportText, /[0-9a-f]{64}/i);
+    for (const protectedPath of [success.root, success.source, success.destination, success.report]) {
+      assert.equal(reportText.includes(protectedPath), false);
+    }
 
     const candidate = new DatabaseSync(success.destination, { readOnly: true });
     try {
@@ -389,10 +410,10 @@ async function main(): Promise<void> {
               .get() as Record<string, unknown>
           ).count,
         ),
-        137,
+        138,
       );
       const rows = candidate
-        .prepare('SELECT id, user_id, secret_enc FROM broker_connections ORDER BY id')
+        .prepare('SELECT id, user_id, secret_enc, credential_state, active FROM broker_connections ORDER BY id')
         .all() as Array<Record<string, unknown>>;
       const targetInput = Buffer.from(targetKey, 'utf8');
       const target = createOfflineCredentialKey(targetInput);
@@ -401,9 +422,15 @@ async function main(): Promise<void> {
         const expectedByConnection: Record<string, string> = {
           'connection-one': PLAINTEXTS[0],
           'connection-two': PLAINTEXTS[1],
-          'connection-three': PLAINTEXTS[2],
         };
         rows.forEach((row) => {
+          if (String(row.id) === 'connection-three') {
+            assert.equal(String(row.credential_state), 'reconnect_required');
+            assert.equal(String(row.secret_enc), '');
+            assert.equal(Number(row.active), 1);
+            return;
+          }
+          assert.equal(String(row.credential_state), 'ready');
           const opened = decryptOfflineCredential(
             String(row.secret_enc),
             { userId: String(row.user_id), connectionId: String(row.id) },
@@ -453,7 +480,7 @@ async function main(): Promise<void> {
     } finally {
       candidate.close();
     }
-    console.log('  ok   current v2 and exact historical v1 authenticate and re-key');
+    console.log('  ok   two current v2 envelopes re-key and one historical v1 is quarantined');
     console.log('  ok   metadata, counts, hashes, foreign keys and zero side effects reconcile');
     console.log('  ok   report contains no key, key id, plaintext, ciphertext or identity');
 
@@ -471,7 +498,15 @@ async function main(): Promise<void> {
     console.log('  ok   completed retries refuse overwrite and leave the candidate unchanged');
 
     console.log('\nFail-closed cases');
-    const wrongSource = makeCase('wrong-source', validEnvelopes(sourceKey));
+    const authenticExpected = makeCase('approved-authentic', validEnvelopes(sourceKey));
+    roots.push(authenticExpected.root);
+    const authenticExpectedError = await rejection(() =>
+      run(authenticExpected, sourceKey, targetKey),
+    );
+    assert.match(authenticExpectedError, /unexpectedly authenticated/);
+    assert.equal(fs.existsSync(authenticExpected.destination), false);
+
+    const wrongSource = makeCase('wrong-source', quarantineEnvelopes(sourceKey, otherKey));
     roots.push(wrongSource.root);
     const correctSourceIdFd = channel(
       wrongSource.root,
@@ -492,7 +527,7 @@ async function main(): Promise<void> {
     assert.equal(fs.existsSync(wrongSource.destination), false);
     assertNoLeaks(wrongSourceError, [sourceKey, targetKey, otherKey], validEnvelopes(sourceKey));
 
-    const wrongTarget = makeCase('wrong-target', validEnvelopes(sourceKey));
+    const wrongTarget = makeCase('wrong-target', quarantineEnvelopes(sourceKey, otherKey));
     roots.push(wrongTarget.root);
     const wrongTargetFd = channel(wrongTarget.root, 'wrong-target-id', keyId(otherKey));
     try {
@@ -525,12 +560,12 @@ async function main(): Promise<void> {
       historicalEnvelope(PLAINTEXTS[0], otherKey),
     ];
     for (const [index, malformed] of malformedCases.entries()) {
-      const set = validEnvelopes(sourceKey);
+      const set = quarantineEnvelopes(sourceKey, otherKey);
       set[0] = malformed;
       const files = makeCase('malformed-' + index, set);
       roots.push(files.root);
       const message = await rejection(() => run(files, sourceKey, targetKey));
-      assert.match(message, /user credential re-entry is required|unsupported/);
+      assert.match(message, /unsupported|unexpected|historical broker credential/);
       assert.equal(fs.existsSync(files.destination), false);
       assert.equal(fs.existsSync(files.report), false);
       assert.equal(
@@ -541,7 +576,7 @@ async function main(): Promise<void> {
     }
     console.log('  ok   malformed, truncated, forged, mixed-key and unauthenticated v1 inputs publish nothing');
 
-    const retry = makeCase('retry', validEnvelopes(sourceKey));
+    const retry = makeCase('retry', quarantineEnvelopes(sourceKey, otherKey));
     roots.push(retry.root);
     fs.writeFileSync(retry.report, 'occupied', { flag: 'wx' });
     await rejection(() => run(retry, sourceKey, targetKey));
@@ -551,7 +586,7 @@ async function main(): Promise<void> {
     assert.equal(fs.existsSync(retry.destination), true);
     console.log('  ok   a clean retry after refusal succeeds without in-place state');
 
-    const paths = makeCase('paths', validEnvelopes(sourceKey));
+    const paths = makeCase('paths', quarantineEnvelopes(sourceKey, otherKey));
     roots.push(paths.root);
     const inPlace = await rejection(() =>
       run(paths, sourceKey, targetKey, { destination: paths.source }),
@@ -571,6 +606,67 @@ async function main(): Promise<void> {
     assert.match(liveEnv, /Railway service environment/);
     assertNoLeaks(inPlace + live + liveEnv, [sourceKey, targetKey, otherKey], validEnvelopes(sourceKey));
     console.log('  ok   in-place, live URL and hosted-service paths are refused');
+
+    const connectionSource = fs.readFileSync(
+      path.join(API_ROOT, 'src', 'trading', 'connections.ts'),
+      'utf8',
+    );
+    for (const functionName of ['getActiveDecrypted', 'getAllActiveDecrypted']) {
+      const start = connectionSource.indexOf('export async function ' + functionName);
+      const end = connectionSource.indexOf('\nexport ', start + 1);
+      const body = connectionSource.slice(start, end < 0 ? undefined : end);
+      assert.ok(start >= 0);
+      assert.ok(body.indexOf("credentialState === 'reconnect_required'") >= 0);
+      assert.ok(
+        body.indexOf("credentialState === 'reconnect_required'") <
+          body.indexOf('decryptSecret('),
+      );
+    }
+    const updateStart = connectionSource.indexOf('export async function updateConnection');
+    const updateEnd = connectionSource.indexOf('\nexport async function removeConnection', updateStart);
+    const updateBody = connectionSource.slice(updateStart, updateEnd);
+    assert.match(updateBody, /eq\(brokerConnections\.userId, userId\)/);
+    assert.match(updateBody, /patch\.secretEnc = encryptSecret/);
+    assert.match(updateBody, /patch\.credentialState = 'ready'/);
+    assert.ok(updateBody.indexOf('patch.credentialState') > updateBody.indexOf('input.creds !== undefined'));
+
+    const routeSource = fs.readFileSync(path.join(API_ROOT, 'src', 'routes', 'trading.ts'), 'utf8');
+    assert.match(routeSource, /connectionOwnerWrite/);
+    assert.match(routeSource, /requireSameOrigin/);
+    const panelSource = fs.readFileSync(
+      path.join(API_ROOT, '..', 'web', 'src', 'workspaces', 'trading', 'BrokerConnectionsPanel.tsx'),
+      'utf8',
+    );
+    assert.match(panelSource, /Saved credentials could not be migrated/);
+    assert.match(panelSource, /credentialState === 'reconnect_required'/);
+    console.log('  ok   runtime decrypt, owner replacement, CSRF and private UI boundaries are pinned');
+
+    const isolationCase = makeCase(
+      'network-isolation',
+      quarantineEnvelopes(sourceKey, otherKey),
+    );
+    roots.push(isolationCase.root);
+    const isolationError = await rejection(() =>
+      rekeyOfflineCandidate({
+        source: isolationCase.source,
+        destination: isolationCase.destination,
+        manifestPath: isolationCase.manifest,
+        reportPath: isolationCase.report,
+        expectedBusinessTableCount: 6,
+        sourceKeyFd: -1,
+        targetKeyFd: -1,
+        expectedSourceKeyIdFd: -1,
+        expectedTargetKeyIdFd: -1,
+        env: SAFE_ENV,
+        assertNetworkIsolation: () => {
+          throw new Error('synthetic network isolation refusal');
+        },
+      }),
+    );
+    assert.match(isolationError, /network isolation refusal/);
+    assert.doesNotMatch(isolationError, /file descriptor|channel/);
+    assert.equal(fs.existsSync(isolationCase.destination), false);
+    console.log('  ok   network isolation is verified before any key channel is read');
 
     const cliSource = fs.readFileSync(path.join(API_ROOT, 'src', 'db', 'offlineRekeyCli.ts'), 'utf8');
     const dynamicImport = cliSource.indexOf("await import('./offlineRekey.js')");

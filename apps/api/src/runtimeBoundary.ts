@@ -1,3 +1,6 @@
+import fs from 'node:fs';
+import os from 'node:os';
+
 // One auditable process boundary for normal service startup versus offline tools.
 //
 // The offline values are intentionally long and exact: loose booleans are too
@@ -89,4 +92,65 @@ export function assertOfflineRekeyBoundary(env: NodeJS.ProcessEnv = process.env)
     'Offline credential re-key',
     env,
   );
+}
+
+
+export interface OfflineNetworkProbe {
+  platform: NodeJS.Platform;
+  interfaces: ReturnType<typeof os.networkInterfaces>;
+  readText(path: string): string;
+}
+
+function defaultOfflineNetworkProbe(): OfflineNetworkProbe {
+  return {
+    platform: process.platform,
+    interfaces: os.networkInterfaces(),
+    readText(file) {
+      return fs.readFileSync(file, 'utf8');
+    },
+  };
+}
+
+// A real re-key run is accepted only inside a Linux network namespace whose
+// visible interfaces and routes are loopback-only. This executes before any key
+// file descriptor is read. Tests may inject a synthetic probe through the
+// re-key service seam; the CLI exposes no bypass.
+export function assertOfflineNetworkIsolation(
+  probe: OfflineNetworkProbe = defaultOfflineNetworkProbe(),
+): void {
+  if (probe.platform !== 'linux') {
+    throw new RuntimeBoundaryError(
+      'Offline credential re-key refused: network isolation is not verifiable on this host.',
+    );
+  }
+  for (const addresses of Object.values(probe.interfaces)) {
+    for (const address of addresses ?? []) {
+      if (!address.internal) {
+        throw new RuntimeBoundaryError(
+          'Offline credential re-key refused: a non-loopback network interface is visible.',
+        );
+      }
+    }
+  }
+  for (const file of ['/proc/net/route', '/proc/net/ipv6_route']) {
+    let text: string;
+    try {
+      text = probe.readText(file);
+    } catch {
+      throw new RuntimeBoundaryError(
+        'Offline credential re-key refused: network routes could not be verified.',
+      );
+    }
+    const lines = text.trim().split(/\r?\n/).filter(Boolean);
+    for (const line of lines) {
+      if (/^Iface\s/.test(line)) continue;
+      const fields = line.trim().split(/\s+/);
+      const device = fields[fields.length - 1];
+      if (device && device !== 'lo') {
+        throw new RuntimeBoundaryError(
+          'Offline credential re-key refused: a non-loopback network route is visible.',
+        );
+      }
+    }
+  }
 }

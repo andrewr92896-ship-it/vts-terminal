@@ -6,6 +6,7 @@ import {
   requireWorkspace,
   requireWorkspaceWrite,
   requirePremium,
+  requireSameOrigin,
 } from '../auth/middleware.js';
 import type { UserRow } from '../db/schema.js';
 import { hasEntitlement } from '../memberships/service.js';
@@ -212,7 +213,14 @@ export async function tradingRoutes(app: FastifyInstance) {
   // stay on `read`/`write` above so a lapsed member can still see and remove a
   // connection they already made; what they cannot do is add another.
   const connectionWrite = {
-    preHandler: [requireWorkspaceWrite('trading'), requirePremium('brokerConnections')],
+    preHandler: [
+      requireWorkspaceWrite('trading'),
+      requirePremium('brokerConnections'),
+      requireSameOrigin,
+    ],
+  };
+  const connectionOwnerWrite = {
+    preHandler: [requireWorkspaceWrite('trading'), requireSameOrigin],
   };
   // Saving your own Live Wall arrangement — paid. Reading boards is deliberately
   // NOT gated: a free account still gets the preset boards, which is a working
@@ -1216,7 +1224,7 @@ export async function tradingRoutes(app: FastifyInstance) {
     return { connections: await listConnections(uid) };
   });
 
-  app.patch('/api/trading/connections/:id', write, async (request, reply) => {
+  app.patch('/api/trading/connections/:id', connectionOwnerWrite, async (request, reply) => {
     const parsed = editConnSchema.safeParse(request.body);
     if (!parsed.success) {
       return reply.code(400).send({ error: 'Check the connection details and try again' });
@@ -1231,7 +1239,7 @@ export async function tradingRoutes(app: FastifyInstance) {
     return { connections: await listConnections(uid) };
   });
 
-  app.delete('/api/trading/connections/:id', write, async (request) => {
+  app.delete('/api/trading/connections/:id', connectionOwnerWrite, async (request) => {
     const uid = request.currentUser!.id;
     const id = (request.params as { id: string }).id;
     await removeConnection(uid, id);

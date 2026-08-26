@@ -5,6 +5,7 @@ import { pathToFileURL } from 'node:url';
 import { DatabaseSync } from 'node:sqlite';
 import { createClient, type Client } from '@libsql/client';
 import {
+  assertOfflineNetworkIsolation,
   assertOfflineRekeyBoundary,
   OFFLINE_REKEY_DISABLED_SIDE_EFFECTS,
   OFFLINE_REKEY_BOUNDARY,
@@ -27,13 +28,21 @@ import {
 const PROVIDERS = ['oanda', 'kraken', 'manual'] as const;
 type Provider = (typeof PROVIDERS)[number];
 
+interface QuarantineAuthorization {
+  connectionId: string;
+  ownerUserId: string;
+  provider: 'oanda' | 'kraken';
+  sourceEnvelopeSha256: string;
+}
+
 interface Manifest {
-  version: 1;
+  version: 2;
   sourceMigrationLevel: number;
   destinationMigrationLevel: number;
   expectedCounts: Record<string, number>;
   requiredAppSettingKeys: string[];
   hashTables: Record<string, string[]>;
+  credentialQuarantine: QuarantineAuthorization;
 }
 
 export interface OfflineRekeyOptions {
@@ -47,6 +56,9 @@ export interface OfflineRekeyOptions {
   expectedSourceKeyIdFd: number;
   expectedTargetKeyIdFd: number;
   env?: NodeJS.ProcessEnv;
+  // Synthetic tests inject a probe; the CLI has no bypass and always performs
+  // the in-process Linux network-namespace verification.
+  assertNetworkIsolation?: () => void;
 }
 
 interface QueryClient {
@@ -162,12 +174,12 @@ function parseManifest(file: string, expectedTableCount: number): Manifest {
   }
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) fail('manifest must be an object');
   const value = raw as Record<string, unknown>;
-  if (value.version !== 1) fail('manifest.version must be 1');
+  if (value.version !== 2) fail('manifest.version must be 2');
   if (
     value.sourceMigrationLevel !== EXPECTED_SOURCE_LEVEL ||
     value.destinationMigrationLevel !== EXPECTED_DESTINATION_LEVEL
   ) {
-    fail('manifest must describe only the audited 135 to 137 transition');
+    fail('manifest must describe only the audited migration transition');
   }
   if (!Number.isInteger(expectedTableCount) || expectedTableCount < 1) {
     fail('expected business table count must be a positive integer');
@@ -240,13 +252,33 @@ function parseManifest(file: string, expectedTableCount: number): Manifest {
     fail('hashTables must exactly cover the business table set');
   }
 
+  const quarantineRaw = value.credentialQuarantine;
+  if (!quarantineRaw || typeof quarantineRaw !== 'object' || Array.isArray(quarantineRaw)) {
+    fail('credentialQuarantine must identify exactly one expected historical row');
+  }
+  const quarantine = quarantineRaw as Record<string, unknown>;
+  const connectionId = typeof quarantine.connectionId === 'string' ? quarantine.connectionId.trim() : '';
+  const ownerUserId = typeof quarantine.ownerUserId === 'string' ? quarantine.ownerUserId.trim() : '';
+  const provider = quarantine.provider;
+  const sourceEnvelopeSha256 =
+    typeof quarantine.sourceEnvelopeSha256 === 'string'
+      ? quarantine.sourceEnvelopeSha256.trim().toLowerCase()
+      : '';
+  if (!connectionId || !ownerUserId || (provider !== 'oanda' && provider !== 'kraken')) {
+    fail('credentialQuarantine identity or provider is invalid');
+  }
+  if (!/^[0-9a-f]{64}$/.test(sourceEnvelopeSha256)) {
+    fail('credentialQuarantine envelope digest is invalid');
+  }
+
   return {
-    version: 1,
+    version: 2,
     sourceMigrationLevel: EXPECTED_SOURCE_LEVEL,
     destinationMigrationLevel: EXPECTED_DESTINATION_LEVEL,
     expectedCounts,
     requiredAppSettingKeys,
     hashTables,
+    credentialQuarantine: { connectionId, ownerUserId, provider, sourceEnvelopeSha256 },
   };
 }
 
@@ -314,7 +346,7 @@ async function brokerMetadataColumns(client: QueryClient): Promise<string[]> {
   const info = await client.execute('PRAGMA table_info("broker_connections")');
   const columns = info.rows
     .map((row) => String((row as Record<string, unknown>).name))
-    .filter((column) => column !== 'secret_enc');
+    .filter((column) => column !== 'secret_enc' && column !== 'credential_state');
   if (columns.length === 0 || columns.includes('secret_enc')) {
     fail('broker connection schema could not be reconciled safely');
   }
@@ -442,6 +474,7 @@ function equalRecord(a: Record<string, unknown>, b: Record<string, unknown>): bo
 
 export async function rekeyOfflineCandidate(options: OfflineRekeyOptions): Promise<unknown> {
   assertOfflineRekeyBoundary(options.env);
+  (options.assertNetworkIsolation ?? assertOfflineNetworkIsolation)();
   const source = requireSource(options.source);
   const destination = requireDestination(source, options.destination);
   const reportPath = requireReport(options.reportPath, destination);
@@ -475,22 +508,36 @@ export async function rekeyOfflineCandidate(options: OfflineRekeyOptions): Promi
       if (sourceRows.length !== manifest.expectedCounts.broker_connections) {
         fail('broker connection count did not reconcile');
       }
+      let approvedHistoricalRows = 0;
       for (const row of sourceRows) {
         let format: OfflineEnvelopeFormat;
         try {
           format = envelopeFormat(row.envelope);
-          if (format === 'current-v2' && storedCurrentKeyId(row.envelope) !== expectedSourceId) {
-            fail('broker rows contain a mixed or unexpected credential key set');
-          }
-        } catch (err) {
-          if (err instanceof Error && err.message.startsWith('Offline credential re-key refused:')) {
-            throw err;
-          }
-          fail(
-            'an envelope in provider category ' + row.provider +
-              ' is unsupported; user credential re-entry is required',
-          );
+        } catch {
+          fail('an unsupported broker credential envelope was found');
         }
+        const digest = crypto.createHash('sha256').update(row.envelope).digest('hex');
+        const approved =
+          row.id === manifest.credentialQuarantine.connectionId &&
+          row.userId === manifest.credentialQuarantine.ownerUserId &&
+          row.provider === manifest.credentialQuarantine.provider &&
+          digest === manifest.credentialQuarantine.sourceEnvelopeSha256;
+        if (approved) {
+          if (row.provider === 'manual' || format !== 'historical-v1') {
+            fail('the manifest-approved row is not the expected historical credential format');
+          }
+          approvedHistoricalRows++;
+          continue;
+        }
+        if (format !== 'current-v2') {
+          fail('an unexpected historical broker credential envelope was found');
+        }
+        if (storedCurrentKeyId(row.envelope) !== expectedSourceId) {
+          fail('broker rows contain a mixed or unexpected credential key set');
+        }
+      }
+      if (approvedHistoricalRows !== 1) {
+        fail('the manifest-approved historical credential row did not match exactly once');
       }
     } finally {
       sourceClient.close();
@@ -510,17 +557,56 @@ export async function rekeyOfflineCandidate(options: OfflineRekeyOptions): Promi
 
       const candidate = createClient({ url: pathToFileURL(partial).href });
       let currentV2 = 0;
-      let historicalV1 = 0;
       let providerCounts: Record<Provider, number> = { oanda: 0, kraken: 0, manual: 0 };
       let destinationReconciliation: Reconciliation;
       let clearedRows: Record<string, number>;
       try {
         await candidate.execute('PRAGMA foreign_keys = ON');
+        await applyIntendedMigrations(
+          candidate,
+          EXPECTED_SOURCE_LEVEL,
+          EXPECTED_DESTINATION_LEVEL,
+        );
         const rows = await brokerRows(candidate);
         const updates: Array<{ sql: string; args: unknown[] }> = [];
+        let quarantined = 0;
         for (const row of rows) {
           providerCounts[row.provider] += 1;
+          const digest = crypto.createHash('sha256').update(row.envelope).digest('hex');
+          const approved =
+            row.id === manifest.credentialQuarantine.connectionId &&
+            row.userId === manifest.credentialQuarantine.ownerUserId &&
+            row.provider === manifest.credentialQuarantine.provider &&
+            digest === manifest.credentialQuarantine.sourceEnvelopeSha256;
           let plaintext: Buffer | null = null;
+          if (approved) {
+            try {
+              plaintext = decryptOfflineCredential(
+                row.envelope,
+                { userId: row.userId, connectionId: row.id },
+                sourceKey,
+              ).plaintext;
+              fail('the manifest-approved historical credential unexpectedly authenticated');
+            } catch (err) {
+              if (
+                err instanceof Error &&
+                err.message.startsWith('Offline credential re-key refused:')
+              ) {
+                throw err;
+              }
+              quarantined++;
+              updates.push({
+                sql:
+                  "UPDATE broker_connections SET secret_enc='', credential_state='reconnect_required' " +
+                  "WHERE id=? AND user_id=? AND credential_state='ready'",
+                args: [row.id, row.userId],
+              });
+            } finally {
+              plaintext?.fill(0);
+            }
+            continue;
+          }
+
           try {
             const opened = decryptOfflineCredential(
               row.envelope,
@@ -528,53 +614,78 @@ export async function rekeyOfflineCandidate(options: OfflineRekeyOptions): Promi
               sourceKey,
             );
             plaintext = opened.plaintext;
-            if (opened.format === 'current-v2') currentV2++;
-            else historicalV1++;
+            if (opened.format !== 'current-v2') {
+              fail('an unexpected historical credential authenticated');
+            }
+            currentV2++;
             const replacement = encryptOfflineCredential(
               plaintext,
               { userId: row.userId, connectionId: row.id },
               targetKey,
             );
             updates.push({
-              sql: 'UPDATE broker_connections SET secret_enc=? WHERE id=? AND user_id=?',
+              sql:
+                "UPDATE broker_connections SET secret_enc=?, credential_state='ready' " +
+                'WHERE id=? AND user_id=?',
               args: [replacement, row.id, row.userId],
             });
-          } catch {
-            fail(
-              'authenticated decryption failed for provider category ' + row.provider +
-                '; user credential re-entry is required and no candidate was published',
-            );
+          } catch (err) {
+            if (
+              err instanceof Error &&
+              err.message.startsWith('Offline credential re-key refused:')
+            ) {
+              throw err;
+            }
+            fail('authenticated decryption failed for an unexpected broker credential');
           } finally {
             plaintext?.fill(0);
           }
         }
-        if (updates.length !== rows.length) fail('not every broker credential was re-keyed');
+        if (quarantined !== 1 || currentV2 !== rows.length - 1) {
+          fail('credential quarantine counts did not match the manifest policy');
+        }
+        if (updates.length !== rows.length) fail('not every broker row received a candidate disposition');
         if (updates.length > 0) await candidate.batch(updates as any, 'write');
 
-        const updated = await brokerRows(candidate);
-        for (const row of updated) {
-          if (storedCurrentKeyId(row.envelope) !== expectedTargetId) {
+        const updated = await candidate.execute(
+          'SELECT id, user_id, broker, secret_enc, credential_state FROM broker_connections ORDER BY id',
+        );
+        let reconnectRequired = 0;
+        for (const raw of updated.rows) {
+          const row = raw as Record<string, unknown>;
+          const state = String(row.credential_state);
+          if (state === 'reconnect_required') {
+            reconnectRequired++;
+            if (
+              String(row.secret_enc) !== '' ||
+              String(row.id) !== manifest.credentialQuarantine.connectionId ||
+              String(row.user_id) !== manifest.credentialQuarantine.ownerUserId ||
+              String(row.broker) !== manifest.credentialQuarantine.provider
+            ) {
+              fail('the quarantined candidate row did not match the approved empty disposition');
+            }
+            continue;
+          }
+          if (state !== 'ready') fail('a candidate broker credential state is invalid');
+          const envelope = String(row.secret_enc);
+          if (storedCurrentKeyId(envelope) !== expectedTargetId) {
             fail('a candidate envelope does not use the expected target key');
           }
-          let plaintext: Buffer | null = null;
+          let opened: Buffer | null = null;
           try {
-            plaintext = decryptOfflineCredential(
-              row.envelope,
-              { userId: row.userId, connectionId: row.id },
+            opened = decryptOfflineCredential(
+              envelope,
+              { userId: String(row.user_id), connectionId: String(row.id) },
               targetKey,
             ).plaintext;
           } catch {
             fail('a candidate envelope failed target-key authentication');
           } finally {
-            plaintext?.fill(0);
+            opened?.fill(0);
           }
         }
+        if (reconnectRequired !== 1) fail('candidate reconnect-required state did not reconcile');
 
-        await applyIntendedMigrations(
-          candidate,
-          EXPECTED_SOURCE_LEVEL,
-          EXPECTED_DESTINATION_LEVEL,
-        );
         clearedRows = await clearEphemeralAuth(candidate);
         for (const table of [
           'password_reset_credentials',
@@ -613,29 +724,32 @@ export async function rekeyOfflineCandidate(options: OfflineRekeyOptions): Promi
       if (sha256File(source) !== sourceHash) fail('source snapshot changed during re-key');
 
       const report = {
-        version: 1,
+        version: 2,
         ok: true,
         credentialRows: {
-          total: currentV2 + historicalV1,
+          total: currentV2 + 1,
           providerCategories: providerCounts,
           formats: {
             currentAuthenticated: currentV2,
-            historicalAuthenticated: historicalV1,
+            historicalAuthenticated: 0,
+            historicalReconnectRequired: 1,
           },
-          remediationStatus: 'all-envelopes-rekeyed',
-          userReentryRequired: 0,
+          remediationStatus: 'manifest-approved-reconnect-required',
+          rekeyed: currentV2,
+          userReentryRequired: 1,
         },
         reconciliation: {
           sourceMigrationLevel: EXPECTED_SOURCE_LEVEL,
           destinationMigrationLevel: EXPECTED_DESTINATION_LEVEL,
           businessTableCount: Object.keys(destinationReconciliation.counts).length,
           counts: destinationReconciliation.counts,
-          nonSecretHashes: destinationReconciliation.hashes,
-          brokerMetadataHash: destinationReconciliation.brokerMetadataHash,
-          requiredSettingKeyHash: destinationReconciliation.requiredSettingKeyHash,
+          businessHashesMatched: true,
+          brokerMetadataMatched: true,
+          requiredSettingKeysMatched: true,
           foreignKeyViolations: destinationReconciliation.foreignKeyViolations,
           authenticationTablesPresentAndEmpty: true,
           clearedAuthenticationRows: clearedRows,
+          credentialStates: { ready: currentV2, reconnectRequired: 1 },
         },
         safety: {
           runtimeBoundary: OFFLINE_REKEY_BOUNDARY,

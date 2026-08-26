@@ -6237,11 +6237,18 @@ Broker credential re-keying uses a second, mutually exclusive boundary:
 `VTS_RUNTIME_BOUNDARY=offline-broker-credential-rekey-v1`. Its only entrypoint
 is `apps/api/src/db/offlineRekeyCli.ts`, via `npm run db:rekey-offline`.
 It accepts key material and expected key identifiers only through inherited file
-descriptors, opens the source with a native read-only SQLite handle, writes a
-distinct partial candidate, supports only authenticated current v2 and the
-repository-proven historical v1 envelopes, applies only the audited 135→137
-migration path, and publishes nothing until target-key authentication and full
-redacted reconciliation pass. It must never import the server, shared database,
+descriptors, verifies a loopback-only Linux network namespace before reading
+them, opens the source with a native read-only SQLite handle, and writes a
+distinct partial candidate. The private manifest may authorize exactly one
+credential-bearing historical-v1 row to become `reconnect_required` only after
+authenticated recovery fails; every other failure aborts. The candidate retains
+that row's non-secret metadata and historical enabled state, replaces its
+unreadable payload with no credential, and re-keys every `ready` row. Runtime
+credential access checks this state before decryption, and only an owner-scoped,
+same-origin replacement write may atomically store a current-key envelope and
+return the row to `ready`. The tool applies only the audited 135→138 migration
+path and reports counts/categories/status without identities, paths, hashes, key
+identifiers, or envelope data. It must never import the server, shared database,
 bootstrap, mail, broker, or watcher modules. Run `npm run verify:offline-rekey`
 after changing this boundary or its crypto, database, report, or CLI code. The
 operator procedure is

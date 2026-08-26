@@ -13,10 +13,11 @@ import {
 } from '../runtimeBoundary.js';
 
 export const EXPECTED_SOURCE_LEVEL = 135;
-export const EXPECTED_DESTINATION_LEVEL = 137;
+export const EXPECTED_DESTINATION_LEVEL = 138;
 export const INTENDED_MIGRATION_TAGS = [
   '0136_password_reset_credentials',
   '0137_terminal_email_2fa',
+  '0138_broker_credential_state',
 ] as const;
 
 export const EPHEMERAL_AUTH_TABLES = [
@@ -310,12 +311,18 @@ async function foreignKeyViolations(client: QueryClient): Promise<number> {
 
 async function brokerKeyIds(client: QueryClient): Promise<string[]> {
   if (!(await tableExists(client, 'broker_connections'))) return [];
+  const info = await client.execute('PRAGMA table_info("broker_connections")');
+  const hasCredentialState = info.rows.some(
+    (row) => String((row as Record<string, unknown>).name) === 'credential_state',
+  );
   const result = await client.execute(
     "SELECT DISTINCT CASE " +
       "WHEN secret_enc LIKE 'v2:%:%' THEN " +
       "substr(secret_enc, 4, instr(substr(secret_enc, 4), ':') - 1) " +
       "ELSE '__incompatible__' END AS key_id " +
-      "FROM broker_connections WHERE broker <> 'manual' ORDER BY key_id",
+      "FROM broker_connections WHERE broker <> 'manual'" +
+      (hasCredentialState ? " AND credential_state='ready'" : '') +
+      ' ORDER BY key_id',
   );
   return result.rows.map((row) => String((row as Record<string, unknown>).key_id));
 }

@@ -369,13 +369,21 @@ export async function setFounderPrefs(
 async function assertOwnConnection(userId: string, connectionId: string): Promise<string> {
   const row = (
     await db
-      .select({ id: brokerConnections.id, broker: brokerConnections.broker, active: brokerConnections.active })
+      .select({
+        id: brokerConnections.id,
+        broker: brokerConnections.broker,
+        active: brokerConnections.active,
+        credentialState: brokerConnections.credentialState,
+      })
       .from(brokerConnections)
       .where(and(eq(brokerConnections.id, connectionId), eq(brokerConnections.userId, userId)))
       .limit(1)
   )[0];
   // 404 rather than 403: an id the caller does not own must not be probeable.
   if (!row) throw new FounderTradeError('That broker connection is not on your account', 404);
+  if (!row.active || row.credentialState === 'reconnect_required') {
+    throw new FounderTradeError('That broker connection is not available on your account', 404);
+  }
   if (row.broker === 'manual') {
     throw new FounderTradeError('A hand-kept book cannot place an order — pick a live broker account');
   }
@@ -496,11 +504,12 @@ export async function founderAccounts(userId: string): Promise<FounderAccount[]>
       broker: brokerConnections.broker,
       summary: brokerConnections.summary,
       active: brokerConnections.active,
+      credentialState: brokerConnections.credentialState,
     })
     .from(brokerConnections)
     .where(eq(brokerConnections.userId, userId));
   return rows
-    .filter((r) => r.active && r.broker !== 'manual')
+    .filter((r) => r.active && r.credentialState === 'ready' && r.broker !== 'manual')
     .map((r) => ({
       connectionId: r.id,
       label: r.label,

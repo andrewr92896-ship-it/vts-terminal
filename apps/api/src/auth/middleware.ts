@@ -100,6 +100,33 @@ export const requireRealFounder: preHandlerHookHandler = async (
   }
 };
 
+// Reject browser credential writes that did not originate from this exact
+// application origin. The signed SameSite session remains required separately;
+// this closes the explicit CSRF boundary for broker credential replacement.
+export const requireSameOrigin: preHandlerHookHandler = async (
+  request: FastifyRequest,
+  reply: FastifyReply,
+) => {
+  const fetchSite = request.headers['sec-fetch-site'];
+  if (typeof fetchSite === 'string' && fetchSite !== 'same-origin') {
+    return reply.code(403).send({ error: 'Request origin was not accepted' });
+  }
+  const origin = request.headers.origin;
+  const host = request.headers.host;
+  if (!origin || !host) {
+    return reply.code(403).send({ error: 'Request origin was not accepted' });
+  }
+  let normalized: string;
+  try {
+    normalized = new URL(origin).origin;
+  } catch {
+    return reply.code(403).send({ error: 'Request origin was not accepted' });
+  }
+  if (normalized !== request.protocol + '://' + host) {
+    return reply.code(403).send({ error: 'Request origin was not accepted' });
+  }
+};
+
 // Reject unless the logged-in user can access the given workspace.
 //
 // Trading is opt-in (My Terminal ▸ Premium Features), so the workspace guard checks

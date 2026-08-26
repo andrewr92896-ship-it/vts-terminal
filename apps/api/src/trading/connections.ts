@@ -37,7 +37,7 @@ export interface BrokerConnection {
   // instead of silently defaulting a credential rotation back to practice.
   env: 'practice' | 'live' | null;
   active: boolean;
-  credentialState: 'active' | 'reconnect_required';
+  credentialState: 'ready' | 'reconnect_required';
   lastStatus: ConnStatus;
   lastError: string | null;
   lastCheckedAt: number | null;
@@ -301,14 +301,12 @@ const UNREADABLE_CREDENTIAL_MESSAGE =
   'Stored credentials could not be read. Re-enter them to reconnect this account.';
 
 async function noteUnreadable(row: BrokerConnectionRow, err: unknown): Promise<void> {
-  // The class, not err.name — an Error subclass inherits the name "Error", and
-  // which failure it was (retired format / wrong key / failed authentication) is
-  // the only thing this line is for.
-  const reason = err instanceof Error ? `${err.constructor.name}: ${err.message}` : 'unknown error';
-  // Never the ciphertext and never the credential — the secretbox errors are
-  // written to carry neither, and nothing else from the row belongs in a log.
+  // Logs carry only a provider category and redacted disposition. Row/owner
+  // identities and crypto failure details belong neither in operational output
+  // nor in user-facing errors.
+  void err;
   console.error(
-    `[connections] ${row.broker} connection ${row.id} (owner ${row.userId}) could not be decrypted — ${reason}`,
+    `[connections] ${row.broker} credential could not be read; reconnect is required`,
   );
   if (row.lastStatus === 'error') return;
   await recordConnectionStatus(row.id, false, UNREADABLE_CREDENTIAL_MESSAGE);
@@ -578,7 +576,7 @@ export async function updateConnection(
     patch.lastError = null;
     // The new envelope and the state transition are one UPDATE: there is no
     // instant in which a quarantined row is usable with its old payload.
-    patch.credentialState = 'active';
+    patch.credentialState = 'ready';
   }
   await db
     .update(brokerConnections)
@@ -770,7 +768,7 @@ export async function repairManualConnectionSecrets(): Promise<void> {
         updatedAt: new Date(),
       })
       .where(eq(brokerConnections.id, r.id));
-    console.log(`[connections] re-sealed manual connection ${r.id} under the current credentials key`);
+    console.log('[connections] re-sealed one manual connection under the current credential policy');
   }
 }
 

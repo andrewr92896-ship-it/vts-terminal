@@ -894,7 +894,7 @@ export interface BrokerConnection {
   summary: string | null;
   env: 'practice' | 'live' | null; // OANDA environment, for restoring it on edit
   active: boolean;
-  credentialState: 'active' | 'reconnect_required';
+  credentialState: 'ready' | 'reconnect_required';
   lastStatus: 'unknown' | 'ok' | 'error';
   lastError: string | null;
   lastCheckedAt: number | null;
