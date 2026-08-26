@@ -6209,3 +6209,26 @@ with `!important` so it beats inline styles).
   applies on fine-pointer devices and is overridden to 16px only on touch.
 - If you ever change that global rule, keep the 16px floor — dropping below it
   reintroduces the zoom on every input at once.
+
+## Offline legacy-to-private migration rehearsal boundary
+
+Legacy migration rehearsal is a separate process boundary, not a server flag.
+`apps/api/src/start.ts` asserts normal mode before dynamically importing the
+server, so `VTS_RUNTIME_BOUNDARY=offline-migration-rehearsal-v1` exits before
+config, the shared database, HTTP setup, mail, brokers, or watchers can load.
+Default startup remains unchanged when the variable is unset.
+
+The only authorized offline entry is `apps/api/src/db/offlinePrepare.ts`, via
+`npm run db:prepare-offline` or `npm run db:migrate-only`. It requires the
+exact boundary value, refuses production/Railway/database environment variables,
+accepts local files only, and allows only the audited 135→137 transition.
+Preparation opens the source with a native read-only SQLite handle, writes a new
+candidate in a different directory, reconciles only approved counts/keys/hashes,
+blocks incompatible broker key identifiers without decrypting or re-keying, and
+clears only the fixed ephemeral-auth allowlist. It must never import server,
+seed, backfill, demo, mail, broker, content-sync, or watcher modules.
+
+Run `npm run verify:offline-migration` after changing this boundary, migrations
+0136–0137, the migration journal, or reconciliation behavior. The operator
+procedure and rollback checkpoints are in
+`docs/operations/offline-legacy-migration-rehearsal.md`.
