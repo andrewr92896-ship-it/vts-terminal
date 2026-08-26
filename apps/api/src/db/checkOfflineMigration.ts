@@ -346,6 +346,46 @@ async function main(): Promise<void> {
       /service URLs/,
     );
 
+    const ambiguous = await makeCase('same-directory');
+    roots.push(ambiguous.root);
+    await expectRefusal(
+      'non-isolated destination',
+      () =>
+        prepareOfflineCandidate(
+          options(ambiguous, {
+            destination: path.join(path.dirname(ambiguous.source), 'private.candidate.db'),
+          }),
+        ),
+      /isolated in a different directory/,
+    );
+
+    const wrongLevel = await makeCase('migration-level');
+    roots.push(wrongLevel.root);
+    const levelClient = createClient({ url: pathToFileURL(wrongLevel.source).href });
+    try {
+      await levelClient.execute(
+        'DELETE FROM __drizzle_migrations WHERE id = (SELECT MAX(id) FROM __drizzle_migrations)',
+      );
+    } finally {
+      levelClient.close();
+    }
+    await expectRefusal(
+      'unexpected source migration level',
+      () => prepareOfflineCandidate(options(wrongLevel)),
+      /migration level is 134; expected 135/,
+    );
+
+    const missingSetting = await makeCase('missing-setting');
+    roots.push(missingSetting.root);
+    const settingManifest = readManifest();
+    (settingManifest.requiredAppSettingKeys as string[]).push('feature.missing');
+    fs.writeFileSync(missingSetting.manifest, JSON.stringify(settingManifest, null, 2));
+    await expectRefusal(
+      'missing required app-setting key',
+      () => prepareOfflineCandidate(options(missingSetting)),
+      /required app-setting keys are missing/,
+    );
+
     const mismatch = await makeCase('key-mismatch');
     roots.push(mismatch.root);
     await expectRefusal(
