@@ -134,6 +134,54 @@ export const passwordResetCredentials = sqliteTable(
 );
 export type PasswordResetCredentialRow = typeof passwordResetCredentials.$inferSelect;
 
+
+// A password-valid sign-in that is waiting on its emailed second factor. The
+// browser holds the raw challenge token in a short-lived httpOnly cookie; only
+// its SHA-256 id and the code's SHA-256 hash are stored here.
+export const loginChallenges = sqliteTable(
+  'login_challenges',
+  {
+    id: text('id').primaryKey(),
+    userId: text('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    codeHash: text('code_hash').notNull(),
+    attempts: integer('attempts').notNull().default(0),
+    ip: text('ip'),
+    userAgent: text('user_agent'),
+    createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+    sentAt: integer('sent_at', { mode: 'timestamp_ms' }).notNull(),
+    expiresAt: integer('expires_at', { mode: 'timestamp_ms' }).notNull(),
+  },
+  (table) => [
+    index('login_challenges_user_idx').on(table.userId),
+    index('login_challenges_expiry_idx').on(table.expiresAt),
+  ],
+);
+export type LoginChallengeRow = typeof loginChallenges.$inferSelect;
+
+// Opt-in "remember this device" tokens. They skip only the emailed code, never
+// the password, and can be revoked independently of ordinary login sessions.
+export const terminalTrustedDevices = sqliteTable(
+  'terminal_trusted_devices',
+  {
+    id: text('id').primaryKey(),
+    userId: text('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    ip: text('ip'),
+    userAgent: text('user_agent'),
+    createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+    lastUsedAt: integer('last_used_at', { mode: 'timestamp_ms' }).notNull(),
+    expiresAt: integer('expires_at', { mode: 'timestamp_ms' }).notNull(),
+  },
+  (table) => [
+    index('terminal_trusted_devices_user_idx').on(table.userId),
+    index('terminal_trusted_devices_expiry_idx').on(table.expiresAt),
+  ],
+);
+export type TerminalTrustedDeviceRow = typeof terminalTrustedDevices.$inferSelect;
+
 // Per-user, revocable bearer tokens for the read-only mobile/home-screen widget
 // (`GET /api/widget/positions`). The terminal's own API is otherwise httpOnly
 // cookie-only, which a native iOS widget extension / Scriptable can't present.
