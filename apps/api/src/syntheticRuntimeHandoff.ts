@@ -230,7 +230,7 @@ async function main(): Promise<void> {
       displayName: 'Synthetic Owner',
       email: 'owner@synthetic.invalid',
       passwordHash: await hashPassword(ownerPassword),
-      roles: JSON.stringify(['founder']),
+      roles: JSON.stringify(['member']),
       teamId: deskId,
       active: true,
       termsAcceptedVersion: LEGAL_VERSION,
@@ -568,7 +568,7 @@ async function main(): Promise<void> {
     /Connection not found/,
   );
   const nonOwner = { status: 400 as const };
-  const nonAdminAll = await request(base, memberJar, '/api/trading/connections/all');
+  const nonAdminAll = await request(base, ownerJar, '/api/trading/connections/all');
   assert.equal(nonAdminAll.status, 403);
 
   assert.deepEqual(await credentialDistribution(), { ready: 2, reconnect: 1 });
