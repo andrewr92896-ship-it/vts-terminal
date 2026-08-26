@@ -2,7 +2,8 @@ import crypto from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { pathToFileURL } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
+import { DatabaseSync } from 'node:sqlite';
 import { createClient, type Client } from '@libsql/client';
 import { drizzle } from 'drizzle-orm/libsql';
 import { migrate } from 'drizzle-orm/libsql/migrator';
@@ -60,6 +61,10 @@ export interface MigrateOnlyOptions {
   from: number;
   to: number;
   env?: NodeJS.ProcessEnv;
+}
+
+interface QueryClient {
+  execute(statement: string | { sql: string; args: unknown[] }): Promise<{ rows: readonly unknown[] }>;
 }
 
 interface MigrationState {
@@ -246,7 +251,7 @@ function sha256File(file: string): string {
   return hash.digest('hex');
 }
 
-async function tableExists(client: Client, table: string): Promise<boolean> {
+async function tableExists(client: QueryClient, table: string): Promise<boolean> {
   const result = await client.execute({
     sql: "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ? LIMIT 1",
     args: [table],
@@ -254,7 +259,7 @@ async function tableExists(client: Client, table: string): Promise<boolean> {
   return result.rows.length === 1;
 }
 
-async function migrationState(client: Client): Promise<MigrationState> {
+async function migrationState(client: QueryClient): Promise<MigrationState> {
   if (!(await tableExists(client, '__drizzle_migrations'))) return { level: 0, createdAt: [] };
   const result = await client.execute(
     'SELECT created_at FROM "__drizzle_migrations" ORDER BY created_at',
@@ -264,7 +269,7 @@ async function migrationState(client: Client): Promise<MigrationState> {
   return { level: createdAt.length, createdAt };
 }
 
-async function countTable(client: Client, table: string): Promise<number> {
+async function countTable(client: QueryClient, table: string): Promise<number> {
   if (!(await tableExists(client, table))) fail('expected table is missing: ' + table);
   const result = await client.execute('SELECT COUNT(*) AS count FROM ' + assertIdentifier(table, 'table'));
   return Number((result.rows[0] as Record<string, unknown>).count);
@@ -282,7 +287,7 @@ function canonicalRows(rows: readonly unknown[]): string {
 }
 
 async function hashTable(
-  client: Client,
+  client: QueryClient,
   table: string,
   columns: string[],
 ): Promise<string> {
@@ -295,12 +300,12 @@ async function hashTable(
   return crypto.createHash('sha256').update(canonicalRows(result.rows)).digest('hex');
 }
 
-async function foreignKeyViolations(client: Client): Promise<number> {
+async function foreignKeyViolations(client: QueryClient): Promise<number> {
   const result = await client.execute('PRAGMA foreign_key_check');
   return result.rows.length;
 }
 
-async function brokerKeyIds(client: Client): Promise<string[]> {
+async function brokerKeyIds(client: QueryClient): Promise<string[]> {
   if (!(await tableExists(client, 'broker_connections'))) return [];
   const result = await client.execute(
     "SELECT DISTINCT CASE " +
@@ -313,7 +318,7 @@ async function brokerKeyIds(client: Client): Promise<string[]> {
 }
 
 async function validateSnapshot(
-  client: Client,
+  client: QueryClient,
   manifest: ReconciliationManifest,
   expectedLevel: number,
   destinationCredentialKeyId: string,
@@ -402,7 +407,7 @@ async function validateSnapshot(
 }
 
 function apiRoot(): string {
-  return path.resolve(path.dirname(new URL(import.meta.url).pathname), '..', '..');
+  return path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 }
 
 function journalEntries(): JournalEntry[] {
@@ -481,11 +486,31 @@ async function clearEphemeralAuth(client: Client): Promise<Record<string, number
   return cleared;
 }
 
-async function openReadOnly(file: string): Promise<Client> {
-  const url = pathToFileURL(file).href + '?mode=ro';
-  const client = createClient({ url });
-  await client.execute('PRAGMA query_only = ON');
-  return client;
+class ReadOnlySnapshot implements QueryClient {
+  private readonly database: DatabaseSync;
+
+  constructor(file: string) {
+    // The native handle enforces read-only at open time. No SQL statement can
+    // promote it, and no libSQL sidecar or write transaction is created.
+    this.database = new DatabaseSync(file, { readOnly: true });
+  }
+
+  async execute(
+    statement: string | { sql: string; args: unknown[] },
+  ): Promise<{ rows: readonly unknown[] }> {
+    const sql = typeof statement === 'string' ? statement : statement.sql;
+    const args = typeof statement === 'string' ? [] : statement.args;
+    const prepared = this.database.prepare(sql);
+    return { rows: prepared.all(...(args as Array<string | number | bigint | null>)) };
+  }
+
+  close(): void {
+    this.database.close();
+  }
+}
+
+async function openReadOnly(file: string): Promise<ReadOnlySnapshot> {
+  return new ReadOnlySnapshot(file);
 }
 
 function assertKeyId(value: string): string {
@@ -605,7 +630,7 @@ export async function prepareOfflineCandidate(options: PrepareOfflineOptions): P
         file: path.basename(source),
         migrationLevel: options.from,
         sha256: sourceHashBefore,
-        access: 'sqlite-uri-mode=ro+PRAGMA-query_only',
+        access: 'node:sqlite DatabaseSync readOnly=true',
       },
       destination: {
         file: path.basename(destination),
