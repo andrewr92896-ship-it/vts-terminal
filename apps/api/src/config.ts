@@ -32,6 +32,14 @@ const envSchema = z.object({
   PRIVATE_BOOTSTRAP_ADMIN_ID: blankAsUnset.pipe(z.string().uuid().optional()),
   SESSION_SECRET: z.string().min(16, 'SESSION_SECRET must be at least 16 characters'),
   SESSION_TTL_DAYS: z.coerce.number().int().positive().default(14),
+  // Main terminal email second factor. Off until a deployment has a verified
+  // mail provider; private and public deployments enable it independently.
+  AUTH_REQUIRE_2FA: z
+    .enum(['true', 'false'])
+    .default('false')
+    .transform((v) => v === 'true'),
+  AUTH_2FA_CODE_TTL_MINUTES: z.coerce.number().int().min(5).max(30).default(10),
+  AUTH_2FA_REMEMBER_DAYS: z.coerce.number().int().min(1).max(90).default(30),
   COOKIE_SECURE: z
     .enum(['true', 'false'])
     .default('false')
