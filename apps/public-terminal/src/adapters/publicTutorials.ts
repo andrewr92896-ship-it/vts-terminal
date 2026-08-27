@@ -24,6 +24,12 @@ export const TUTORIALS:Record<string,Tutorial>={
   {title:'Logging a trade',body:'Enter the instrument, side, entry and exit, size and realized P/L. Every record is entered by you — nothing is imported from a broker.'},
   {title:'The metrics',body:'Trades, win rate, realized P/L, gross profit and loss and profit factor, scored over whatever the filters have narrowed to.'},
   {title:'Narrowed figures',body:'When a filter is excluding trades the screen says so, so a narrowed number is never read as a complete one.'}]},
+ // Says what is coming without implying it is here. Deliberately TRACKING
+ // only — nothing here suggests the terminal will place an order.
+ connections:{title:'Broker connections',intro:'Not available yet.',steps:[
+  {title:'Today',body:'Every trade in the public terminal is entered by you — typed in, or read off a screenshot you paste.'},
+  {title:'What is planned',body:'Connecting a broker so closed trades import themselves, for TRACKING only. It is not built yet and is not enabled here.'},
+  {title:'What it will not do',body:'It will not place, change or close an order, and it will not move money.'}]},
  funded:{title:'Manual Trades',intro:'A hand-kept book for positions the terminal cannot read.',steps:[
   {title:'Adding a position',body:'Type the instrument, side, size and fill. The stop and target here are a record of what you are holding — nothing is sent anywhere.'},
   {title:'Closing one',body:'Enter the exit and it moves into your closed trades and counts toward the metrics.'}]},
@@ -52,6 +58,7 @@ export const HOWTO_TOPICS:{key:string;label:string}[]=[
  {key:'data',label:'Market Data'},
  {key:'desk',label:'Closed Trades & Metrics'},
  {key:'funded',label:'Manual Trades'},
+ {key:'connections',label:'Broker connections'},
  {key:'deleted',label:'Deleted Trades'},
  {key:'notes',label:'Trading Notes & Predictions'},
  {key:'news',label:'Market News'},

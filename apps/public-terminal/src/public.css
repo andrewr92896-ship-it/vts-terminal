@@ -71,3 +71,41 @@
   .vts-public-main { padding:12px 9px 22px; }
   .vts-public-footer span:first-child { display:none; }
 }
+
+/* ---- Demo mode, the entry warning, and the early-access door ---- */
+
+.vts-public-demo-bar {
+  display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+  margin: 0 0 16px; padding: 9px 14px; border-radius: 9px;
+  border: 1px solid rgba(235, 203, 116, .35); background: rgba(235, 203, 116, .08);
+  color: #dfe7fa; font-size: 12px; line-height: 1.5;
+}
+.vts-public-demo-bar strong {
+  flex: none; padding: 2px 8px; border-radius: 5px;
+  background: linear-gradient(180deg, #EBCB74, #C9A24B); color: #2a1f06;
+  font-family: var(--vts-mono, ui-monospace, monospace); font-size: 10px; letter-spacing: 1.2px;
+}
+.vts-public-warning {
+  margin-top: 16px; padding: 12px 14px; border-radius: 9px;
+  border: 1px solid rgba(224, 162, 58, .45); background: rgba(224, 162, 58, .09);
+  color: #f2e3c6; font-size: 12px; line-height: 1.55;
+}
+.vts-public-warning strong { display: block; margin-bottom: 4px; color: #f6d79a; }
+.vts-public-warning p { margin: 0; }
+.vts-public-demo-door, .vts-public-early-access {
+  margin-top: 16px; padding: 13px 14px; border-radius: 9px;
+  border: 1px solid #1c3a7a; background: rgba(9, 22, 51, .55);
+  color: #cbd7ef; font-size: 12px; line-height: 1.55;
+}
+.vts-public-demo-door strong, .vts-public-early-access strong { display: block; margin-bottom: 4px; color: #eef3ff; font-size: 12.5px; }
+.vts-public-demo-door p, .vts-public-early-access p { margin: 0 0 10px; }
+.vts-public-early-access em { color: #EBCB74; font-style: normal; font-weight: 700; }
+.vts-public-demo-door button {
+  width: 100%; margin: 0; padding: 9px 14px; border: 0; border-radius: 7px;
+  background: linear-gradient(180deg, #EBCB74, #C9A24B); color: #2a1f06;
+  font-weight: 700; font-size: 12.5px; cursor: pointer;
+}
+.vts-public-early-access a {
+  display: block; padding: 8px 14px; border: 1px solid #1c3a7a; border-radius: 7px;
+  color: #9fb0d6; text-align: center; text-decoration: none; font-weight: 600; font-size: 12.5px;
+}

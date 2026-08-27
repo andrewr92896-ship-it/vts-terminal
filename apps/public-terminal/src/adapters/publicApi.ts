@@ -1,7 +1,8 @@
 type MarketDataLayout={pinned:string[];hidden:string[];custom:Array<Record<string,unknown>>};
 type MarketDataPayload={groups:Array<{key:string;label:string}>;series:Array<Record<string,unknown>>;periods:string[];defaultPins:string[];meetings:string[];meetingYear:number;sampleValues:boolean};
 type MarketNewsData={aiTagging:boolean;headlines:Array<Record<string,unknown>>;calendar:Array<Record<string,unknown>>};
-import { publicEvidence, publicRequest } from '../../../web/src/public/PublicRuntime';
+import { isDemo, publicRequest } from '../../../web/src/public/PublicRuntime';
+import { demoCall } from '../demo/demoStore';
 
 export class ApiError extends Error { constructor(public status:number,message:string){super(message)} }
 
@@ -36,10 +37,10 @@ const marketNewsData:MarketNewsData={aiTagging:false,headlines:[
 let layout:MarketDataLayout={pinned:[...marketDataPayload.defaultPins],hidden:[],custom:[]};
 
 const baseApi={
-  async marketData(){return publicEvidence?structuredClone(marketDataPayload):publicRequest<MarketDataPayload>('/market-data')},
-  async marketNews(){return publicEvidence?structuredClone(marketNewsData):publicRequest<MarketNewsData>('/market-news')},
-  async marketDataLayout(){return publicEvidence?{layout:structuredClone(layout)}:publicRequest<{layout:MarketDataLayout}>('/market-data/layout')},
-  async saveMarketDataLayout(next:MarketDataLayout){if(publicEvidence){layout=structuredClone(next);return {layout:structuredClone(layout)}}return publicRequest<{layout:MarketDataLayout}>('/market-data/layout',{method:'PUT',body:JSON.stringify(next)})},
+  async marketData(){return isDemo()?structuredClone(marketDataPayload):publicRequest<MarketDataPayload>('/market-data')},
+  async marketNews(){return isDemo()?structuredClone(marketNewsData):publicRequest<MarketNewsData>('/market-news')},
+  async marketDataLayout(){return isDemo()?{layout:structuredClone(layout)}:publicRequest<{layout:MarketDataLayout}>('/market-data/layout')},
+  async saveMarketDataLayout(next:MarketDataLayout){if(isDemo()){layout=structuredClone(next);return {layout:structuredClone(layout)}}return publicRequest<{layout:MarketDataLayout}>('/market-data/layout',{method:'PUT',body:JSON.stringify(next)})},
   // The whole MarketNewsStreams shape, not just the catalog: the screen reads
   // `watching`, `notify` and `cols` straight off it and a missing array is a
   // render crash rather than an empty wall.
@@ -75,7 +76,10 @@ const evidenceEmpty=(name:string):any=>{
  };return structuredClone(table[name]??{ok:true,items:[],records:[]});
 };
 export const api:any=new Proxy(baseApi as any,{get(target,key:string){if(key in target)return target[key];return async(...args:any[])=>{
- if(publicEvidence){if(/(import|extract|chat|generate|ai)/i.test(key))throw new ApiError(501,'Public AI is not available.');return evidenceEmpty(key)}
+ // AI fails closed EVERYWHERE until the separate provider migration, demo
+ // included: a showcase must never imply a capability that is not wired.
+ if(/(import|extract|chat|generate|analyze|audit|categorize|preview|fixture|tutor)/i.test(key)||/^ai/i.test(key))throw new ApiError(501,'AI actions are not available in this build.');
+ if(isDemo()){const answered=demoCall(key,args);return answered.handled?answered.value:evidenceEmpty(key)}
  const write=/^(add|create|update|save|remove|delete|restore|toggle|send|reply|archive|unarchive|withdraw|submit|respond|share|revoke)/.test(key);
  return publicRequest('/records/'+encodeURIComponent(key),{method:write?'POST':'GET',body:write?JSON.stringify({args}):undefined});
 }}});

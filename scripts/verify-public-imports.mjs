@@ -11,6 +11,7 @@ const ALLOWED_PORTAL_IMPORTS=[
   /^\.\.\/(components\/(Icon|Clock)|theme\/(tokens|themes)|workspaces\/trading\/(MarketData|CalendarTile|NewsTile|WatchlistTile|TvWidget)|api\/types)$/,
   /^\.\.\/(hooks\/useNowTick|lib\/timezone|workspaces\/trading\/(etClock|tvChart)|workspaces\/trading\/tiles\/TileFrame)$/,
   /^\.\/((Public(App|ClockTile|LiveWall|Login|Runtime|Sidebar|TopBar|Screens|AccountPages)|publicNav))$/,
+  /^\.\.\/demo\/demo(Store|Seed)$/,
   /^\.\.\/(api\/client|auth\/AuthContext|theme\/(tokens|themes))$/,
   /^\.\.\/workspaces\/(trading\/(MarketData|TradeLog|FundedScreen|DeletedTrades|TradingTodo|MarketNews|notesFormat)|news\/GeneralNews|studies\/(StudyCreation|StudyLibrary|StudyGameHub|FlashcardsHub|StudyGuides)|help\/(HelpScreens|LegalScreens)|myportal\/(Preferences|NetWorth)|finances\/Budget|investments)$/,
 

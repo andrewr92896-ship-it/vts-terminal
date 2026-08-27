@@ -569,8 +569,8 @@ export function TradeLog() {
 
       {/* Summary */}
       <div style={{ fontSize: 11, color: FAINT, marginBottom: 8, letterSpacing: '0.3px' }}>
-        {selectedTraderName ? `Individual stats — @${selectedTraderName}` : 'Whole desk — combined stats'}
-        {filterActive ? ' · closed trades only, for the selected day/month' : ''}
+        {traders.length > 1 && (selectedTraderName ? `Individual stats — @${selectedTraderName}` : 'Whole desk — combined stats')}
+        {filterActive ? `${traders.length > 1 ? ' · ' : ''}Closed trades only, for the selected day/month` : ''}
       </div>
       {/* What these figures leave out. Replaces a note that said the test-trade
           floor was on without saying whether it had actually caught anything,
