@@ -4,7 +4,7 @@ import { useAlertSound } from './alertSound';
 
 // Polls the desk-wide trading signal and plays the user's chosen alert sound
 // when a new TradingView alert arrives. Render this only for users who can
-// access the Trading workspace (full traders and viewers) so nobody else hears
+// access the Trading workspace so nobody else hears
 // it. It renders nothing.
 //
 // This watcher runs on every screen, so it shares the Live Wall's 30s cadence

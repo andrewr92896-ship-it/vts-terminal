@@ -1043,7 +1043,7 @@ export const api = {
   analyzeChallengeBalance(id: string, image: { imageBase64: string; mediaType: string }): Promise<AnalyzeAccountResult> {
     return request(`/api/trading/challenge/${id}/analyze`, { method: 'POST', body: JSON.stringify(image) });
   },
-  // Live OANDA account capital (full traders only — 403 for view-only).
+  // Live OANDA account capital.
   oandaCapital(): Promise<OandaCapital> {
     return request('/api/trading/oanda-capital');
   },

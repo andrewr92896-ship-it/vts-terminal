@@ -104,7 +104,7 @@ export function FundedChallengeScreen() {
         <div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
             <h2 style={{ margin: 0, fontSize: 19, fontWeight: 700, color: '#fff' }}>{"Funded"}</h2>
-            <span style={privatePill} title="Private section — visible only to accounts an admin has granted the Funded role">{"Private"}</span>
+            <span style={privatePill} title="Private section — visible only to accounts that have switched Funded Trades on">{"Private"}</span>
           </div>
           <div style={{ fontSize: 12, color: MUTED, marginTop: 6 }}>
             {theirs.length > 0
@@ -164,8 +164,9 @@ export function FundedChallengeScreen() {
 
       {/* The funded book: its own stats, its open positions, and its completed
           trades — shared across the desk the same way the accounts above are.
-          Only for full traders — the funded book is write-gated, so a read-only
-          viewer would get a 403 and an empty card. */}
+          Skipped for a read-only viewer, who would get a 403 and an empty card.
+          Nobody holds a read-only role today; the seam is kept for a future
+          tier. */}
       {!readOnly && <FundedBook showMoney={showMoney} readOnly={readOnly} />}
 
       {!canSee && (

@@ -119,7 +119,7 @@ export const TUTORIALS: Record<string, Tutorial> = {
 
   funded: {
     title: 'Manual Trades',
-    intro: 'Your own book of accounts, kept entirely by hand — nothing here connects to an outside platform. Add an account, place trades by typing them in or reading them off a screenshot, and track open positions live on the Live Wall, with each account’s balance and Today / This week / 30-day P/L. Capital figures are shown to full traders only.',
+    intro: 'Your own book of accounts, kept entirely by hand — nothing here connects to an outside platform. Add an account, place trades by typing them in or reading them off a screenshot, and track open positions live on the Live Wall, with each account’s balance and Today / This week / 30-day P/L.',
     steps: [
       {
         title: 'Add an account',
@@ -142,7 +142,7 @@ export const TUTORIALS: Record<string, Tutorial> = {
 
   prop: {
     title: 'Funded',
-    intro: 'A private prop-firm challenge dashboard — equity vs. target plus daily / max drawdown buffers. This section is only visible to accounts an admin has granted the Funded role; it never appears in the demo or to the public. Hand-logged trades live on the separate Manual Trades tab.',
+    intro: 'A private prop-firm challenge dashboard — equity vs. target plus daily / max drawdown buffers. You switch this section on yourself in My Terminal ▸ Premium Features; it never appears in the demo or to the public. Hand-logged trades live on the separate Manual Trades tab.',
     steps: [
       {
         title: 'Set up the challenge',
@@ -154,7 +154,7 @@ export const TUTORIALS: Record<string, Tutorial> = {
       },
       {
         title: 'Who can see it',
-        body: 'An admin grants the Funded role per account under Admin → Users. Without it, the section is hidden from the sidebar entirely.',
+        body: 'Switch Funded Trades on yourself in My Terminal ▸ Premium Features. It sits under Advanced Trading, so that has to be on first, and it is part of Premium.',
       },
       {
         title: 'Hide dollar details',
@@ -165,7 +165,7 @@ export const TUTORIALS: Record<string, Tutorial> = {
 
   metrics: {
     title: 'Live Brokers',
-    intro: 'Your live broker capital, pulled from the broker API so it updates as trades are placed. Capital figures are shown to full traders only; hand-kept accounts live on the Manual Trades tab.',
+    intro: 'Your live broker capital, read from the broker so it updates as trades are placed. Hand-kept accounts live on Manual Trades.',
     steps: [
       {
         title: 'Live brokers (OANDA)',
@@ -173,7 +173,7 @@ export const TUTORIALS: Record<string, Tutorial> = {
       },
       {
         title: 'Connect a broker',
-        body: 'No broker connected yet? Connect an OANDA account from Admin → Broker connections and your live capital will appear here automatically.',
+        body: 'No broker connected yet? Connect an OANDA account from My Terminal ▸ Settings and its capital appears here.',
       },
       {
         title: 'Hide dollar details',

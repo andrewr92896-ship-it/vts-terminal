@@ -11,9 +11,19 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 7.39';
+export const APP_VERSION = 'Beta V 7.40';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 7.40',
+    date: 'August 27, 2026',
+    notes: [
+      'Connecting a broker pointed at an “Admin → Broker connections panel” that does not exist, in three places — and an ordinary account cannot open the Admin workspace at all. It now names the screen the control is actually on: My Terminal ▸ Settings.',
+      'Funded Trades said an admin had to grant a role for it. That role was retired a while ago — you switch the section on yourself under Premium Features — so the help and the tooltip said to go and ask for something nobody can give.',
+      'Live Brokers no longer claims to show capital “across your group” on an account that is in no group, and no longer refers to “full traders”, which is not a thing any account is.',
+      'The health check reports which commit the running terminal was built from, so “did my deploy actually land?” is one link rather than guesswork.',
+    ],
+  },
   {
     version: 'Beta V 7.39',
     date: 'August 27, 2026',

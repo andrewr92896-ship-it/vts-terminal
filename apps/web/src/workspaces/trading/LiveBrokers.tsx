@@ -35,9 +35,10 @@ export function LiveBrokers() {
   const [loaded, setLoaded] = useState(false);
   const [hideMoney, setHideMoney] = useState(false);
 
-  // Live OANDA capital — full traders only (the endpoint 403s for view-only, so
-  // skip the call entirely for read-only users). Errors are swallowed: a missing
-  // OANDA connection just means no capital card.
+  // Live OANDA capital. `readOnly` resolves to false for everybody today — no
+  // account holds a read-only role — but the seam is kept deliberately as the
+  // place a future read-only tier lands, so the call is still skipped for it.
+  // Errors are swallowed: a missing OANDA connection just means no capital card.
   useEffect(() => {
     if (readOnly) {
       setLoaded(true);
@@ -63,7 +64,7 @@ export function LiveBrokers() {
         <div>
           <h2 style={{ margin: 0, fontSize: 19, fontWeight: 700, color: '#fff' }}>{"Live Brokers"}</h2>
           <div style={{ fontSize: 12, color: MUTED, marginTop: 6 }}>
-            {"Live brokerage capital across your group, each account tagged with its trader, pulled from the broker API so it updates as trades are placed. Hand-kept accounts are in Manual Trades."}
+            {"Read from the broker, so it updates as trades are placed. Hand-kept accounts are in Manual Trades."}
           </div>
         </div>
         {!readOnly && oanda?.configured && (
@@ -75,13 +76,13 @@ export function LiveBrokers() {
         <div style={{ color: MUTED, padding: 20, fontSize: 13 }}>{"Loading live brokers…"}</div>
       ) : readOnly ? (
         <div style={{ ...panel, fontSize: 12, color: MUTED }}>
-          {"Live broker capital is available to full traders only."}
+          {"Live broker capital is not available on this account."}
         </div>
       ) : oanda?.configured ? (
         <OandaCapitalCard oanda={oanda} showMoney={showMoney} isPhone={isPhone} />
       ) : (
         <div style={{ ...panel, fontSize: 12.5, color: MUTED }}>
-          {"No live broker connected yet. Connect an OANDA account from the Admin → Broker connections panel and your live capital (NAV, balance, open P/L) will appear here."}
+          {"No live broker connected yet. Connect an OANDA account from My Terminal ▸ Settings and its capital appears here."}
         </div>
       )}
     </div>
