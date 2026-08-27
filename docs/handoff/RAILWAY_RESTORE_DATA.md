@@ -112,20 +112,71 @@ Run it against each `.db` you find. The one reporting ~207 trades is the target.
 
 ### If `ls /data` shows only the database already in use
 
-Then the real data is not on this service's volume, and the likely locations are:
+Then the real data is not on this service's volume, and **the most likely place
+is another Railway PROJECT.** The account holds six:
 
-1. **Another Railway service** in the same project with its own volume — the
-   "old portal". Check the project's service list.
-2. **A Railway backup** of this volume from before the split. Backups tab.
+| Project | State | Note |
+| --- | --- | --- |
+| **VTS Terminal** | production, 1/1 online | where `@vts/api` runs today — the empty one |
+| **extraordinary-vitality** | production, 1/1 online | Railway auto-generated name — **prime suspect** |
+| **daring-appreciation** | production, 1/1 online | Railway auto-generated name — **prime suspect** |
+| vts-public-demo-staging-0827 | staging, 2/2 online | recent, public-terminal work |
+| vts-synthetic-isolated-0826 | 4/5 crashed | disposable synthetic runtime |
+| vitalis-bot | production, 1/1 online | separate bot |
 
-Report which of these you find rather than acting on it — restoring a backup
-replaces the current volume contents and needs Andrew's say-so.
+`extraordinary-vitality` and `daring-appreciation` are the two to open. Railway
+generates that name style automatically, which is what an earlier deployment of
+this app would have been called before anyone renamed a project. Each runs one
+service.
 
-### If it is remote (`libsql://`)
+For each of those two: open the service → **Variables** → read `DATABASE_URL`,
+then **Console** and run the same read-only survey against it:
 
-There is no volume to list. The other database's URL has to come from wherever it
-was recorded (another service's variables, or Turso's own dashboard). Report what
-you find.
+    ls -la /data
+    DATABASE_URL="file:/data/<candidate>.db" npm run db:inspect
+
+The one reporting **~207 trades and 3 broker connections** is Andrew's real
+history. Report which project and service it is in.
+
+*(If `db:inspect` is not available there because the service runs an older build,
+`ls -la /data` plus the file sizes and dates is still enough to identify the
+candidate — the real one will be substantially larger and older.)*
+
+Also worth checking while there: a **Railway backup** of this service's volume
+from before the split (Backups tab).
+
+---
+
+## STEP 2b — If the data is in a DIFFERENT project
+
+This is the case the whole plan hinges on, so read it before acting.
+
+A Railway volume attaches to exactly one service. If the 207 trades are a
+`file:` database on another project's volume, **`DATABASE_URL` on `@vts/api`
+cannot be pointed at it** — there is no path from one service to another
+service's disk. Three real options, best first:
+
+1. **Move the domain to the service that already has the data.** Deploy the
+   current repo to that service (same `main` branch), copy across the variables
+   it is missing, and move `portal.vitalistradingsystems.com` onto it. Nothing is
+   copied or merged, so no trade can be duplicated or lost — the data never
+   moves, the traffic does. **This is the preferred route.**
+
+2. **Copy the database file across.** Console on the source service to locate it,
+   Railway's file transfer or a one-off upload to get it onto the `@vts/api`
+   volume, then point `DATABASE_URL` at the copy. Acceptable, but it is a copy —
+   take a backup on both sides first, and never merge two databases together.
+
+3. **Restore a backup** onto the `@vts/api` volume, if one from before the split
+   exists. This **replaces** the current volume contents, so take a backup of
+   what is there now first.
+
+**If the other database is remote** (`libsql://…` rather than `file:`), none of
+the above applies and the fix is trivial: set `DATABASE_URL` on `@vts/api` to
+that same URL. Two services can share a remote database.
+
+Report what you find and which option applies **before** doing 2 or 3 — Andrew
+should decide, and option 1 avoids touching data entirely.
 
 ---
 
