@@ -61,6 +61,28 @@ const envSchema = z.object({
   // million tokens against Opus's $5/$25. Env-overridable, so going back to Opus
   // is a variable change on the host rather than a redeploy.
   ANTHROPIC_MODEL_ANALYSIS: z.string().default('claude-sonnet-5'),
+  // WHICH PROVIDER SERVES THE SIX MODEL CALLS. Defaults to `anthropic`, which
+  // is exactly what the terminal did before OpenAI existed here — so deploying
+  // this changes nothing until somebody sets the variable. Switching is a host
+  // variable and a restart rather than a redeploy, and so is switching back,
+  // which is the property that makes the migration testable one flow at a time.
+  AI_PROVIDER: z.enum(['anthropic', 'openai']).default('anthropic'),
+  OPENAI_API_KEY: z.string().optional(),
+  // gpt-4.1-mini for BOTH text and screenshots, deliberately.
+  //
+  // It reads a broker screenshot at roughly a seventh of the input cost and a
+  // ninth of the output cost of the Sonnet tier above, and the extraction work
+  // here is structured reading rather than hard reasoning. More importantly it
+  // supports the API's own JSON mode, so a screenshot parse can no longer come
+  // back as prose the parser has to dig JSON out of — which is the failure the
+  // owner actually hit: a trade pasted the same way as always, suddenly unread.
+  //
+  // gpt-4.1-nano is cheaper again and is a reasonable thing to try once this is
+  // proven, which is why the model is its own variable rather than a literal.
+  OPENAI_MODEL_DEFAULT: z.string().default('gpt-4.1-mini'),
+  OPENAI_MODEL_ANALYSIS: z.string().default('gpt-4.1-mini'),
+  // Points at a compatible gateway or a proxy when one is in front of OpenAI.
+  OPENAI_BASE_URL: z.string().default('https://api.openai.com/v1'),
   // AI usage guardrails (per user). Text keeps a durable monthly cap that resets
   // at the start of each Eastern-Time month. Screenshot-to-trade calls are
   // metered but not monthly-capped; the shared per-minute limiter bounds bursts

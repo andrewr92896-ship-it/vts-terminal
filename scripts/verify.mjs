@@ -7,6 +7,7 @@ const STEPS = [
   ['public API authentication and migration security', 'verify:public-api'],
   ['migrations', 'verify:migrations'],
   ['credential encryption', 'verify:secretbox'],
+  ['AI provider seam', 'verify:ai-provider'],
   ['market data macro', 'verify:market-macro'],
   ['investments math', 'verify:investments'],
   ['position sizing (web ↔ server)', 'verify:sizing'],
