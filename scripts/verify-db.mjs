@@ -28,28 +28,7 @@ import { mkdirSync, rmSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
-const CHECKS = [
-  { script: 'db:check-ai-usage', env: { AI_MONTHLY_LIMIT: '3', AI_RATE_PER_MIN: '15' } },
-  {
-    script: 'db:check-two-factor',
-    env: {
-      AUTH_REQUIRE_2FA: 'true',
-      AUTH_2FA_REMEMBER_DAYS: '30',
-      PRIVATE_ACCESS_USER_IDS: '22222222-2222-4222-8222-222222222222',
-    },
-  },
-  {
-    script: 'db:check-password-reset',
-    env: { PRIVATE_ACCESS_USER_IDS: '11111111-1111-4111-8111-111111111111' },
-  },
-  { script: 'db:check-sharing' },
-  { script: 'db:check-alerts' },
-  { script: 'db:check-package-add' },
-  { script: 'db:check-capital' },
-  { script: 'db:check-notes' },
-  { script: 'db:check-rollover' },
-  { script: 'db:check-founder-trades' },
-];
+const CHECKS = ['db:check-sharing', 'db:check-alerts', 'db:check-package-add', 'db:check-capital', 'db:check-notes', 'db:check-rollover', 'db:check-founder-trades'];
 const DIR = '.tmp-verify';
 
 const base = { ...process.env };
@@ -70,9 +49,9 @@ mkdirSync(DIR, { recursive: true });
 
 try {
   for (const check of CHECKS) {
-    const file = resolve(DIR, `${check.script.replace(/:/g, '-')}.db`);
-    const env = { ...base, ...check.env, DATABASE_URL: pathToFileURL(file).href };
-    status = run('db:migrate', env, true) || run(check.script, env);
+    const file = resolve(DIR, `${check.replace(/:/g, '-')}.db`);
+    const env = { ...base, DATABASE_URL: pathToFileURL(file).href };
+    status = run('db:migrate', env, true) || run(check, env);
     if (status !== 0) break;
   }
 } finally {

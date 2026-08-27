@@ -84,7 +84,6 @@ export function AdminUsers({ theme }: { theme: Theme }) {
   const [resetPw, setResetPw] = useState('');
 
   // Inline display-name edit state: holds the id of the user being renamed.
-  const [copiedId, setCopiedId] = useState<string | null>(null);
   const [editNameFor, setEditNameFor] = useState<string | null>(null);
   const [nameDraft, setNameDraft] = useState('');
 
@@ -371,24 +370,6 @@ export function AdminUsers({ theme }: { theme: Theme }) {
                       </button>
                     </div>
                   )}
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 4 }}>
-                    <code
-                      title="Account ID — what PRIVATE_ACCESS_USER_IDS admits"
-                      style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 10.5, color: '#6f84b0', wordBreak: 'break-all' }}
-                    >
-                      {u.id}
-                    </code>
-                    <button
-                      onClick={() => void navigator.clipboard?.writeText(u.id).then(
-                        () => setCopiedId(u.id),
-                        () => setCopiedId(null),
-                      )}
-                      title="Copy account ID"
-                      style={{ ...ghostBtn, minHeight: 0, padding: '2px 7px' }}
-                    >
-                      <Icon name={copiedId === u.id ? 'check' : 'copy'} size={11} />
-                    </button>
-                  </div>
                   {editEmailFor === u.id ? (
                     <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', marginTop: 4 }}>
                       <input

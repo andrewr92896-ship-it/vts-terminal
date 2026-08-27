@@ -1,10 +1,11 @@
 import nodemailer, { type Transporter } from 'nodemailer';
 import { config } from '../config.js';
 
-// Shared transactional email for Employee Portal sign-in codes and main
-// terminal password recovery. It deliberately stays narrow: no templating
-// layer, no queue, and no retry policy. Each credential is worth one bounded
-// delivery attempt at the moment it is requested.
+// Outbound email. Today this exists for exactly one thing — delivering the
+// Employee Portal's sign-in codes — and it is written to stay that narrow: no
+// templating layer, no queue, no retry policy. A code is worth one attempt at
+// the moment it is asked for, and if that attempt fails the employee asks for
+// another one.
 //
 // Two ways out, tried in this order:
 //
@@ -17,12 +18,15 @@ import { config } from '../config.js';
 //   2. **SMTP** (`SMTP_HOST`) — kept for local development against a catcher
 //      like MailHog, and for anyone hosting somewhere that permits it.
 //
-// With neither configured, delivery fails closed. Message bodies, recipients,
-// reset credentials, and sign-in codes are never written to application logs.
+// With neither configured the code is written to the server log, the same
+// "printed once to logs" fallback the first-boot admin password uses. That is
+// deliberately not a silent no-op: a misconfigured deploy must not be able to
+// lock every employee out of the portal, and an operator with log access is
+// already trusted with far more than a one-time sign-in code.
 
-// Every send is bounded. Employee sign-in awaits delivery so it can report
-// honestly whether the code went out; password recovery completes privately in
-// the background and always gives the browser the same generic response.
+// Every send is bounded. The sign-in path awaits delivery so it can report
+// honestly whether the code went out, which means an unbounded send is an
+// unbounded sign-in — see the note on the transport below.
 const MAIL_TIMEOUT_MS = 10_000;
 
 let transporter: Transporter | null = null;
@@ -94,27 +98,33 @@ async function sendViaResend(mail: Mail): Promise<boolean> {
       signal: AbortSignal.timeout(MAIL_TIMEOUT_MS),
     });
     if (!res.ok) {
-      // Provider response bodies can echo recipients or request metadata. Keep
-      // the operational status, but never copy that body into application logs.
-      console.error(`[mail] send failed: Resend returned ${res.status}`);
+      // Resend answers a rejection with JSON explaining it — an unverified
+      // sending domain being much the most likely. Surface that text verbatim:
+      // it is the difference between "fix your DNS" and "fix your API key",
+      // and the sign-in screen can only ever say "could not be emailed".
+      const detail = await res.text().catch(() => '');
+      console.error(`[mail] send failed: Resend returned ${res.status} ${detail}`);
       return false;
     }
     return true;
-  } catch {
-    // Includes the AbortSignal timeout firing. Provider errors can carry request details.
-    console.error('[mail] provider request failed');
+  } catch (err) {
+    // Includes the AbortSignal timeout firing.
+    console.error('[mail] send failed:', err);
     return false;
   }
 }
 
-// Returns whether the message actually went out. The caller handles `false`
-// without exposing the code or provider details.
+// Returns whether the message actually went out. `false` means it was logged
+// instead (or the send failed) — the caller decides what to tell the user, and
+// must never leak the code itself into a response.
 export async function sendMail(mail: Mail): Promise<boolean> {
   if (config.RESEND_API_KEY) return sendViaResend(mail);
 
   const transport = getTransport();
   if (!transport) {
-    console.warn('[mail] no mail transport configured; message not sent');
+    console.warn(
+      `[mail] no mail transport configured (set RESEND_API_KEY, or SMTP_HOST) — not sending "${mail.subject}" to ${mail.to}. Body:\n${mail.text}`,
+    );
     return false;
   }
   try {
@@ -126,9 +136,10 @@ export async function sendMail(mail: Mail): Promise<boolean> {
       ...(mail.html ? { html: mail.html } : {}),
     });
     return true;
-  } catch {
-    // Never rethrow or log provider detail: it can contain the recipient.
-    console.error('[mail] SMTP delivery failed');
+  } catch (err) {
+    // Never rethrow into a sign-in path: a bounced code is a "try again",
+    // not a 500 that tells an attacker the address exists.
+    console.error('[mail] send failed:', err);
     return false;
   }
 }
