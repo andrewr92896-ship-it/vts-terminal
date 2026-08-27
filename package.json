@@ -16,6 +16,7 @@
     "verify": "node scripts/verify.mjs",
     "verify:db": "node scripts/verify-db.mjs",
     "db:migrate": "npm --workspace @vts/api run db:migrate",
+    "db:inspect": "npm --workspace @vts/api run db:inspect",
     "db:seed": "npm --workspace @vts/api run db:seed",
     "db:verify-positions": "npm --workspace @vts/api run db:verify-positions --",
     "db:check-sharing": "npm --workspace @vts/api run db:check-sharing",
