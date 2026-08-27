@@ -171,6 +171,96 @@ The public builds must never import or contain private portal, partner/team, adm
 
 The code scaffolds separate deployments, private admission, cookies and configuration, but physical Railway services, public authentication, public/private databases, DNS, TLS and private MFA remain manual deployment blockers. Read `docs/architecture/public-private-separation.md` and `docs/implementation/public-private-migration-status.md` before changing this boundary. Never weaken it with a runtime feature flag or role-based redirect between applications.
 
+## The public terminal (`apps/public-terminal`) and demo mode
+
+The public terminal is the **same React app as the private portal, with a
+different set of screens allowlisted and the risky halves replaced at the build
+boundary**. It is not a rebuild and must not become one — a second design system
+is the thing this arrangement exists to avoid.
+
+### How the reuse works: seams, not forks
+
+`apps/web/vite.public.config.ts` replaces a small list of private modules with
+public adapters in `apps/public-terminal/src/adapters/` — `api/client`,
+`auth/AuthContext`, `auth/access`, `privacy/privacy`, `legal/content`,
+`meta/version`, `help/tutorials`, `auth/reviewMarks`, and `TvWidget`. Everything
+else is the portal's own component, imported unchanged.
+
+**Replace at the seam rather than filtering at render.** Two of those adapters
+exist because a render-time gate is not the same as not shipping:
+
+- **`publicTutorials.ts`** — the portal's How-to guides describe order
+  placement, broker connections and strategy sessions. Filtering the topic list
+  would still ship every body string in the bundle.
+- **`publicReviewMarks.ts`** — the portal's `risk` notes are the owner's own
+  compliance judgments, gated on `isFounder` at render. That is enough on the
+  portal and is **not** enough in a bundle served to the public, where every one
+  of those sentences is readable in the JavaScript. The public file carries no
+  `risk` entry at all.
+
+`scripts/verify-public-imports.mjs` holds the import allowlist, the adapter-seam
+list, and the built-bundle denylist. **The denylist matches phrases, not
+proximity**: the bundle is minified, so `/broker.{0,8}key/` fires on
+`{key:'',label:'No broker'}`, which is a trade form and not a credential. A
+guard that cries wolf is one people widen until it catches nothing. It runs
+twice in `verify` — before the build for the source allowlist, and **after** it,
+because on a clean checkout there is no `dist` for the first pass to read.
+
+### Demo mode
+
+**The demo is the showcase**, and it is a runtime mode rather than a build flag:
+`?demo=1`, or "Explore the demo" on the sign-in card. One deployed bundle serves
+both the demo and real accounts.
+
+- **Nothing is saved, because there is nothing to save.** The data is module
+  state in `apps/public-terminal/src/demo/`. Leaving or reloading re-imports the
+  module, so the reset is a property of where the data lives rather than a
+  cleanup somebody has to remember.
+- **`demoStore.ts` DERIVES every read from the seeded state** rather than
+  storing payloads beside it, so a write and the figure it changes cannot
+  disagree: log a trade and the win rate above it moves, because both come from
+  one array.
+- **The seed is plausible, not flattering** — a losing month, a prediction that
+  did not come true, one that could not be settled at all, and a holding no
+  provider can price. That last one is the terminal's own rule: a figure nobody
+  could measure is counted and named, never valued at zero.
+- **There is no evidence-only build.** There was, and it meant CI screenshotted
+  a bundle nobody is served — it auto-entered the terminal, so the sign-in card
+  was never captured and the demo data could not ship at all. The CI bundle and
+  the deployed bundle are the same bundle; only the URL differs.
+- **AI fails closed everywhere, the demo included**, until the provider
+  migration. `publicApi.ts` refuses every AI-shaped method by name before the
+  demo store is consulted, so a showcase never implies a capability that is not
+  wired.
+
+### The screenshot test is the evidence, so it has to assert something
+
+`scripts/public-terminal.visual.spec.mjs` captures every retained page family at
+1440 / 768 / 390. It asserts **no page error and real content**, not merely that
+`#root` exists — a page whose tree threw still has a root, and a thrown render
+leaves the root dead for every later hash navigation, so one broken screen
+blanks every capture after it. That is not hypothetical: it shipped, and eight
+screens were blank behind a passing test.
+
+### What the public terminal does not have
+
+Groups in every form (creation, invitations, chat, shared books, signals,
+publishing, named-user routing), broker connections, order placement, live
+balances, Funded Trades, Admin and Developer. Absent from the routes, imports
+and bundle — not hidden by a role. Trading Notes stays, as a **personal record
+with no control that can publish one**.
+
+### The public API (`apps/public-api`)
+
+Its own service, database, cookies (`vts_public_session_v1`, path `/public`) and
+secrets. Today it serves **auth, market data, the market-data layout and
+early-access requests only**; every other record family is demo-only, so the
+storage contract for them is unbuilt. Early access is unauthenticated by
+necessity — the person asking has no account — so it is rate limited, bounded in
+what it stores, and answered identically whether or not the address is already
+on the list. The server listens only when it is the process being run, so a
+route can be tested by importing it.
+
 ## Architecture
 
 Monorepo, **npm workspaces**:
