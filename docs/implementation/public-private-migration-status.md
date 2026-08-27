@@ -1,6 +1,6 @@
 # Public/private migration status
 
-Updated: 2026-08-25.
+Updated: 2026-08-27.
 
 ## Completed in code
 
@@ -23,6 +23,26 @@ Updated: 2026-08-25.
   vision usage metering, the shared per-minute burst limiter, 12 MB request
   bodies, accepted image MIME validation and existing route permissions.
 
+- Built demo mode as a runtime mode (`?demo=1`) over module state: nothing is
+  saved, leaving resets it, and one bundle serves both the demo and real
+  accounts. Proven across every retained page family at three widths, including
+  that a write in the demo reaches no service and sets no cookie.
+- Replaced the marketing holding page with a sales landing page carrying the
+  demo, early access and an explicit "what it deliberately does not do".
+- Built public early access end to end: route, migration, rate limit, bounded
+  storage, and the same answer whether or not the address is already on the
+  list.
+- Added the AI provider seam with OpenAI behind it, switched off; public AI
+  still fails closed by name before the demo store is consulted.
+- Made the public API's auth service INJECTABLE. It was not, and it held the
+  module-level Postgres store, so every authenticated route resolved its session
+  against a database no test could reach — the authenticated half of the API was
+  untestable, which is the half that most needs testing.
+- Gave the public terminal its first record family with real storage: personal
+  budgeting, on the same contract the private portal settled on (integer cents,
+  positive amounts with `kind` carrying the sign, Eastern months, archive keeps
+  history and delete removes it, `source` server-owned as the aggregator seam).
+
 ## Partially completed
 
 - `PRIVATE_DATABASE_URL` is supported, but the physical existing database has not been moved or renamed.
@@ -39,10 +59,10 @@ Updated: 2026-08-25.
 ## Blocked/manual
 
 - Provision separate Railway services.
-- Provision a public database and public API.
+- Provision a public database and public API (the API exists and has auth, market data, layout, early access and budget; the remaining record families are still demo-only).
 - Configure separate public authentication.
 - Configure private MFA.
-- Populate `PRIVATE_ACCESS_USER_IDS` with approved stable IDs.
+- Populate `PRIVATE_ACCESS_USER_IDS`. Since 7.42 an entry may be an ID, a username or an email — a username survives the database changing, which an ID does not.
 - Set separate secrets and logging destinations.
 - Attach domains, create DNS records and wait for TLS.
 - Design any production data migration.

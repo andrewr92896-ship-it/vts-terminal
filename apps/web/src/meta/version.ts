@@ -11,9 +11,16 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 7.42';
+export const APP_VERSION = 'Beta V 7.43';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 7.43',
+    date: 'August 27, 2026',
+    notes: [
+      'The public terminal has its first feature that actually saves something: personal budgeting. Everything else outside market data is still demo-only, where nothing is kept.',
+    ],
+  },
   {
     version: 'Beta V 7.42',
     date: 'August 27, 2026',
