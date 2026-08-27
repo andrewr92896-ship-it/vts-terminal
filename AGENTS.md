@@ -6161,6 +6161,20 @@ and each discovery was another outage. A single-fault environment behaves
 identically either way, which is why this needs `verify:config` rather than a
 passing boot to protect it.
 
+**An allowlist entry may be an account ID, a username, or an email**
+(`auth/privateAccess.ts`, checked by `npm run verify:private-access`). It matched
+on ID alone, and **an ID belongs to one database** — so a deployment pointed at a
+different one (a restore, a migration, the service rebuilt during the
+public/private split) holds the same person under a different ID, the allowlist
+silently stops admitting them, and the terminal refuses the only person who
+should be let in. The 401 is deliberately generic, so it reads as a wrong
+password from the outside and said nothing on the server either until 7.41.
+The gate is **not wider**: the admitted set is still exactly what is enumerated,
+keyed on something that survives the storage changing. The tradeoff is stated
+rather than hidden — an ID is immutable, a username or email can be changed by an
+admin — so prefer an ID once the database is settled, and a username while it is
+not.
+
 **What is fatal is a judgment, not a list.** `PRIVATE_ACCESS_USER_IDS` missing in
 production exits, because without it the private portal admits every account in
 the database — missing security beats broken uptime. `PRIVATE_BOOTSTRAP_ADMIN_ID`

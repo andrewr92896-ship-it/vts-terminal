@@ -110,7 +110,7 @@ export async function requestPasswordReset(
   if (
     !user ||
     user.username === DEMO_USERNAME ||
-    !isPrivateUserAllowed(user.id) ||
+    !isPrivateUserAllowed(user) ||
     normalizePasswordResetEmail(user.email ?? '') !== email
   ) {
     return 'ineligible';

@@ -71,7 +71,7 @@ export async function getUserForToken(
     .where(eq(users.id, session.userId))
     .limit(1);
   const user = userRows[0];
-  if (!user || !user.active || !isPrivateUserAllowed(user.id)) return null;
+  if (!user || !user.active || !isPrivateUserAllowed(user)) return null;
 
   // Touch last-seen without blocking the request.
   void db
