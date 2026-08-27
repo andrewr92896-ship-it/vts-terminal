@@ -22,14 +22,32 @@ const types = new Map([
   ['.png', 'image/png'],
   ['.ico', 'image/x-icon'],
 ]);
+const securityHeaders = {
+  'X-Content-Type-Options': 'nosniff',
+  'Referrer-Policy': 'strict-origin-when-cross-origin',
+  'Permissions-Policy': 'camera=(), microphone=(), geolocation=()',
+  'Content-Security-Policy': "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'none'; frame-src 'none'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'none'",
+};
 
-createServer((request, response) => {
+const server = createServer((request, response) => {
+  for (const [name, value] of Object.entries(securityHeaders)) response.setHeader(name, value);
+
+  if (request.method !== 'GET' && request.method !== 'HEAD') {
+    response.writeHead(405, {
+      Allow: 'GET, HEAD',
+      'Content-Type': 'text/plain; charset=utf-8',
+    });
+    response.end('Method not allowed');
+    return;
+  }
+
   const host = String(request.headers.host || '').split(':')[0].toLowerCase();
   if (canonical && host.startsWith('www.')) {
     response.writeHead(308, { Location: canonical + (request.url || '/') });
     response.end();
     return;
   }
+
   let urlPath;
   try {
     urlPath = decodeURIComponent((request.url || '/').split('?')[0]);
@@ -38,23 +56,31 @@ createServer((request, response) => {
     response.end('Bad request');
     return;
   }
-  const candidate = path.resolve(root, '.' + (urlPath === '/' ? '/index.html' : urlPath));
-  if (!candidate.startsWith(root + path.sep) || !existsSync(candidate) || !statSync(candidate).isFile()) {
-    response.writeHead(404, {
-      'Content-Type': 'text/plain; charset=utf-8',
-      'X-Content-Type-Options': 'nosniff',
-    });
+
+  if (urlPath === '/api' || urlPath.startsWith('/api/')) {
+    response.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' });
     response.end('Not found');
     return;
   }
+
+  const candidate = path.resolve(root, '.' + (urlPath === '/' ? '/index.html' : urlPath));
+  if (!candidate.startsWith(root + path.sep) || !existsSync(candidate) || !statSync(candidate).isFile()) {
+    response.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' });
+    response.end('Not found');
+    return;
+  }
+
   response.writeHead(200, {
     'Content-Type': types.get(path.extname(candidate)) || 'application/octet-stream',
-    'X-Content-Type-Options': 'nosniff',
-    'Referrer-Policy': 'strict-origin-when-cross-origin',
-    'Permissions-Policy': 'camera=(), microphone=(), geolocation=()',
-    'Content-Security-Policy': "default-src 'self'; style-src 'self'; img-src 'self' data:; base-uri 'none'; frame-ancestors 'none'; form-action 'self'",
   });
+  if (request.method === 'HEAD') {
+    response.end();
+    return;
+  }
   createReadStream(candidate).pipe(response);
-}).listen(port, '0.0.0.0', () => {
-  console.log(`Static app listening on ${port}`);
+});
+
+server.listen(port, '0.0.0.0', () => {
+  const address = server.address();
+  console.log(`Static app listening on ${typeof address === 'object' && address ? address.port : port}`);
 });
