@@ -1,4 +1,5 @@
-export const publicEvidence=import.meta.env.VITE_PUBLIC_EVIDENCE==='1';
+const publicBuildEnv=(import.meta as unknown as {env:Record<string,string|undefined>}).env;
+export const publicEvidence=publicBuildEnv.VITE_PUBLIC_EVIDENCE==='1';
 
 export async function publicRequest<T>(path:string,init:RequestInit={}):Promise<T>{
   const response=await fetch(`/public/v1${path}`,{...init,credentials:'include',headers:{'Content-Type':'application/json',...(init.headers??{})}});
