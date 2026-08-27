@@ -1,5 +1,5 @@
 import pg from 'pg';
-import type { Challenge, PublicAccount, PublicStore, RateLimitResult, Session, TrustedDevice } from './types.js';
+import type { BudgetCategory, BudgetEntry, Challenge, NewBudgetCategory, NewBudgetEntry, PublicAccount, PublicStore, RateLimitResult, Session, TrustedDevice } from './types.js';
 const {Pool}=pg;
 
 export class PostgresPublicStore implements PublicStore {
@@ -24,5 +24,58 @@ export class PostgresPublicStore implements PublicStore {
   async getLayout(id:string){const r=await this.pool.query('select layout from public_market_layouts where account_id=$1',[id]);return r.rows[0]?.layout}
   async saveLayout(id:string,layout:unknown){await this.pool.query('insert into public_market_layouts(account_id,layout) values($1,$2) on conflict(account_id) do update set layout=excluded.layout,updated_at=now()',[id,layout])}
   async recordEarlyAccessRequest(email:string,note:string|null){await this.pool.query(`insert into public_early_access_requests(email,note) values($1,$2) on conflict(lower(email)) do update set note=coalesce(excluded.note,public_early_access_requests.note),status='new',handled_at=null,created_at=now()`,[email,note])}
+  // ---- budget ---------------------------------------------------------------
+  //
+  // Every statement carries `account_id = $1`, including the ones that already
+  // match on a row id. Matching on the id alone would let a guessed id reach
+  // another account's row; matching on both means a wrong id simply affects
+  // nothing, and the caller is told it changed nothing.
+  async listBudgetCategories(accountId:string):Promise<BudgetCategory[]>{
+    const r=await this.pool.query('select id,name,kind,monthly_limit as "monthlyLimit",icon,sort_order as "sortOrder",archived from public_budget_categories where account_id=$1 order by sort_order,lower(name)',[accountId]);
+    return r.rows.map((v)=>({...v,monthlyLimit:v.monthlyLimit===null?null:Number(v.monthlyLimit),sortOrder:Number(v.sortOrder)})) as BudgetCategory[];
+  }
+  async addBudgetCategory(accountId:string,v:NewBudgetCategory):Promise<BudgetCategory>{
+    const r=await this.pool.query(
+      `insert into public_budget_categories(account_id,name,kind,monthly_limit,icon,sort_order)
+       values($1,$2,$3,$4,$5,coalesce((select max(sort_order)+1 from public_budget_categories where account_id=$1),0))
+       returning id,name,kind,monthly_limit as "monthlyLimit",icon,sort_order as "sortOrder",archived`,
+      [accountId,v.name,v.kind,v.monthlyLimit,v.icon]);
+    const row=r.rows[0];
+    return {...row,monthlyLimit:row.monthlyLimit===null?null:Number(row.monthlyLimit),sortOrder:Number(row.sortOrder)} as BudgetCategory;
+  }
+  async archiveBudgetCategory(accountId:string,id:string,archived:boolean):Promise<boolean>{
+    const r=await this.pool.query('update public_budget_categories set archived=$3,updated_at=now() where account_id=$1 and id=$2',[accountId,id,archived]);
+    return (r.rowCount??0)>0;
+  }
+  async deleteBudgetCategory(accountId:string,id:string):Promise<boolean>{
+    const r=await this.pool.query('delete from public_budget_categories where account_id=$1 and id=$2',[accountId,id]);
+    return (r.rowCount??0)>0;
+  }
+  // Bounded by the month rather than fetching a whole history and filtering in
+  // memory — a budget kept for years is a lot of rows to send nowhere.
+  async listBudgetEntries(accountId:string,month:string):Promise<BudgetEntry[]>{
+    const r=await this.pool.query(
+      `select id,category_id as "categoryId",amount_cents as "amountCents",note,to_char(occurred_on,'YYYY-MM-DD') as "occurredOn",source
+         from public_budget_entries
+        where account_id=$1 and to_char(occurred_on,'YYYY-MM')=$2
+        order by occurred_on desc,created_at desc`,[accountId,month]);
+    return r.rows.map((v)=>({...v,amountCents:Number(v.amountCents)})) as BudgetEntry[];
+  }
+  // The category is matched on the account too, so an entry can never be filed
+  // against a category belonging to somebody else. No match inserts nothing.
+  async addBudgetEntry(accountId:string,v:NewBudgetEntry):Promise<BudgetEntry|undefined>{
+    const r=await this.pool.query(
+      `insert into public_budget_entries(account_id,category_id,amount_cents,note,occurred_on)
+       select $1,$2,$3,$4,$5::date
+        where exists (select 1 from public_budget_categories where id=$2 and account_id=$1)
+       returning id,category_id as "categoryId",amount_cents as "amountCents",note,to_char(occurred_on,'YYYY-MM-DD') as "occurredOn",source`,
+      [accountId,v.categoryId,v.amountCents,v.note,v.occurredOn]);
+    const row=r.rows[0];
+    return row?{...row,amountCents:Number(row.amountCents)} as BudgetEntry:undefined;
+  }
+  async deleteBudgetEntry(accountId:string,id:string):Promise<boolean>{
+    const r=await this.pool.query('delete from public_budget_entries where account_id=$1 and id=$2',[accountId,id]);
+    return (r.rowCount??0)>0;
+  }
   async audit(event:string,accountId:string|undefined,metadata:Record<string,unknown>){await this.pool.query('insert into public_audit_events(event,account_id,metadata) values($1,$2,$3)',[event,accountId??null,metadata])}
 }

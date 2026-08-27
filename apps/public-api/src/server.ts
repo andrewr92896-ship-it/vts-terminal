@@ -4,7 +4,27 @@ import { loadPublicConfig } from './config.js';
 import { PublicAuthService, AuthError } from './auth.js';
 import { PostgresPublicStore } from './postgresStore.js';
 import { HttpPublicMarketProvider, SmtpPublicMailer } from './adapters.js';
-import type { PublicMarketProvider, PublicStore } from './types.js';
+import type { BudgetKind, PublicMarketProvider, PublicStore } from './types.js';
+
+// A month is YYYY-MM and a day is YYYY-MM-DD, both EASTERN — the same rule the
+// private portal's budget follows, and for the same reason: a month boundary
+// has to be one fact rather than a per-reader one, or December's spending moves
+// into November when somebody travels.
+const ET='America/New_York';
+const etToday=()=>new Intl.DateTimeFormat('en-CA',{timeZone:ET,year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
+const isMonthKey=(v:string)=>/^\d{4}-(0[1-9]|1[0-2])$/.test(v);
+// Round-tripping is what catches 2026-02-31, which the pattern alone accepts.
+const isDayKey=(v:string)=>{
+  if(!/^\d{4}-\d{2}-\d{2}$/.test(v))return false;
+  // Round-tripping catches 2026-02-31, which the pattern alone happily accepts.
+  // The NaN guard is not optional: toISOString THROWS on an invalid date, so
+  // without it a malformed day is a 500 rather than a refusal.
+  const d=new Date(`${v}T00:00:00Z`);
+  return !Number.isNaN(d.getTime())&&d.toISOString().slice(0,10)===v;
+};
+// Money arrives as cents and must be a whole positive number. A float here is
+// the one thing the integer-cents rule exists to keep out.
+const isCents=(v:unknown):v is number=>typeof v==='number'&&Number.isInteger(v)&&v>0&&v<=2_147_483_647;
 
 export const PUBLIC_SESSION_COOKIE='vts_public_session_v1';
 export const PUBLIC_TRUSTED_DEVICE_COOKIE='vts_public_trusted_device_v1';
@@ -26,24 +46,37 @@ const guardOrigin=(req:IncomingMessage)=>{if(!unsafe(req))return;const origin=re
 const route=(req:IncomingMessage)=>new URL(req.url||'/', 'http://public.invalid').pathname;
 const sessionCookie=(req:IncomingMessage)=>cookies(req)[PUBLIC_SESSION_COOKIE];
 
-async function authenticatedAccount(req:IncomingMessage){const current=await auth.session(sessionCookie(req));return current.user.id}
+// The auth service is injectable for the same reason the store is: it was not,
+// and it held the module-level Postgres store, so every authenticated route
+// resolved its session against a real database no test can reach. That made the
+// authenticated half of this API untestable — the routes that most need a check
+// are exactly the ones that could not have one.
+export type PublicDependencies={store:PublicStore;market:PublicMarketProvider;auth?:PublicAuthService};
 
-export async function handleRequest(req:IncomingMessage,res:ServerResponse,dependencies:{store:PublicStore;market:PublicMarketProvider}={store,market}) {
+async function authenticatedAccount(req:IncomingMessage,service:PublicAuthService){
+  const current=await service.session(sessionCookie(req));
+  return current.user.id;
+}
+
+export async function handleRequest(req:IncomingMessage,res:ServerResponse,dependencies:PublicDependencies={store,market}) {
+  // An injected store without an injected auth service would silently keep using
+  // the module-level one, so a test would appear wired up and quietly not be.
+  const authService=dependencies.auth??(dependencies.store===store?auth:new PublicAuthService(dependencies.store,{sendVerification:async()=>{},sendTemporaryPassword:async()=>{}},{session:config.sessionKey,challenge:config.challengePepper,trusted:config.trustedDeviceKey}));
   try {
     guardOrigin(req); const path=route(req); const method=req.method||'GET'; const jar=cookies(req);
     if(method==='GET'&&path==='/public/v1/health')return json(res,200,{ok:true,service:'vts-public-api'});
     if(method==='POST'&&path==='/public/v1/auth/login'){
-      const body=await readBody(req);const result=await auth.login(String(body.email||''),String(body.password||''),jar[PUBLIC_TRUSTED_DEVICE_COOKIE],ip(req));
+      const body=await readBody(req);const result=await authService.login(String(body.email||''),String(body.password||''),jar[PUBLIC_TRUSTED_DEVICE_COOKIE],ip(req));
       const set:string[]=[];if(result.sessionToken)set.push(cookie(PUBLIC_SESSION_COOKIE,result.sessionToken,12*60*60));if(result.trustedDeviceToken)set.push(cookie(PUBLIC_TRUSTED_DEVICE_COOKIE,result.trustedDeviceToken,30*24*60*60));
       const {sessionToken:_,trustedDeviceToken:__,...safe}=result;return json(res,200,safe,set.length?{'Set-Cookie':set}:{});
     }
     if(method==='POST'&&path==='/public/v1/auth/two-factor/verify'){
-      const body=await readBody(req);const result=await auth.verify(String(body.challengeId||''),String(body.code||''),body.remember===true,ip(req));
+      const body=await readBody(req);const result=await authService.verify(String(body.challengeId||''),String(body.code||''),body.remember===true,ip(req));
       const set=[cookie(PUBLIC_SESSION_COOKIE,result.sessionToken!,12*60*60)];if(result.trustedDeviceToken)set.push(cookie(PUBLIC_TRUSTED_DEVICE_COOKIE,result.trustedDeviceToken,30*24*60*60));
       const {sessionToken:_,trustedDeviceToken:__,...safe}=result;return json(res,200,{ok:true,...safe},{'Set-Cookie':set});
     }
     if(method==='POST'&&path==='/public/v1/auth/recovery'){
-      const body=await readBody(req);return json(res,202,await auth.recover(String(body.email||''),ip(req)));
+      const body=await readBody(req);return json(res,202,await authService.recover(String(body.email||''),ip(req)));
     }
     if(method==='POST'&&path==='/public/v1/early-access'){
       const body=await readBody(req);
@@ -58,16 +91,86 @@ export async function handleRequest(req:IncomingMessage,res:ServerResponse,depen
       // address is already on the list.
       return json(res,202,{message:'Request received. If a place opens up you will hear from us at that address.'});
     }
-    if(method==='GET'&&path==='/public/v1/auth/session')return json(res,200,await auth.session(sessionCookie(req)));
+    if(method==='GET'&&path==='/public/v1/auth/session')return json(res,200,await authService.session(sessionCookie(req)));
     if(method==='POST'&&path==='/public/v1/auth/change-password'){
-      const body=await readBody(req);const result=await auth.changePassword(sessionCookie(req),String(body.currentPassword||''),String(body.newPassword||''));
+      const body=await readBody(req);const result=await authService.changePassword(sessionCookie(req),String(body.currentPassword||''),String(body.newPassword||''));
       return json(res,200,{ok:true,passwordChangeRequired:false},{'Set-Cookie':cookie(PUBLIC_SESSION_COOKIE,result.sessionToken,12*60*60)});
     }
-    if(method==='POST'&&path==='/public/v1/auth/logout'){await auth.logout(sessionCookie(req),jar[PUBLIC_TRUSTED_DEVICE_COOKIE]);return json(res,200,{ok:true},{'Set-Cookie':[clearCookie(PUBLIC_SESSION_COOKIE),clearCookie(PUBLIC_TRUSTED_DEVICE_COOKIE)]});}
-    if(method==='GET'&&path==='/public/v1/market-data'){await authenticatedAccount(req);return json(res,200,await dependencies.market.marketData())}
-    if(method==='GET'&&path==='/public/v1/market-news'){await authenticatedAccount(req);return json(res,200,await dependencies.market.marketNews())}
-    if(method==='GET'&&path==='/public/v1/market-data/layout'){const id=await authenticatedAccount(req);return json(res,200,{layout:await dependencies.store.getLayout(id)??{pinned:[],hidden:[],custom:[]}})}
-    if(method==='PUT'&&path==='/public/v1/market-data/layout'){const id=await authenticatedAccount(req);const body=await readBody(req);await dependencies.store.saveLayout(id,body);return json(res,200,{layout:body})}
+    if(method==='POST'&&path==='/public/v1/auth/logout'){await authService.logout(sessionCookie(req),jar[PUBLIC_TRUSTED_DEVICE_COOKIE]);return json(res,200,{ok:true},{'Set-Cookie':[clearCookie(PUBLIC_SESSION_COOKIE),clearCookie(PUBLIC_TRUSTED_DEVICE_COOKIE)]});}
+    if(method==='GET'&&path==='/public/v1/market-data'){await authenticatedAccount(req,authService);return json(res,200,await dependencies.market.marketData())}
+    if(method==='GET'&&path==='/public/v1/market-news'){await authenticatedAccount(req,authService);return json(res,200,await dependencies.market.marketNews())}
+    if(method==='GET'&&path==='/public/v1/market-data/layout'){const id=await authenticatedAccount(req,authService);return json(res,200,{layout:await dependencies.store.getLayout(id)??{pinned:[],hidden:[],custom:[]}})}
+    if(method==='PUT'&&path==='/public/v1/market-data/layout'){const id=await authenticatedAccount(req,authService);const body=await readBody(req);await dependencies.store.saveLayout(id,body);return json(res,200,{layout:body})}
+    // ---- budget -------------------------------------------------------------
+    //
+    // Every route resolves the account from the SESSION and passes that id to
+    // the store. No route accepts a "whose" parameter, so there is no request
+    // that can be made for somebody else's budget.
+    if(path==='/public/v1/budget'&&method==='GET'){
+      const id=await authenticatedAccount(req,authService);
+      const asked=new URL(req.url||'/','http://public.invalid').searchParams.get('month')||etToday().slice(0,7);
+      if(!isMonthKey(asked))throw new AuthError(400,'Month must look like 2026-08.');
+      const [categories,entries]=await Promise.all([
+        dependencies.store.listBudgetCategories(id),
+        dependencies.store.listBudgetEntries(id,asked),
+      ]);
+      return json(res,200,{month:asked,categories,entries});
+    }
+    if(path==='/public/v1/budget/categories'&&method==='POST'){
+      const id=await authenticatedAccount(req,authService); const body=await readBody(req);
+      const name=String(body.name||'').trim();
+      const kind=String(body.kind||'') as BudgetKind;
+      if(!name||name.length>60)throw new AuthError(400,'Give the category a name of 60 characters or fewer.');
+      if(kind!=='income'&&kind!=='expense')throw new AuthError(400,'A category is either income or expense.');
+      // Null is "no target" and is NOT zero: a budget with no targets is a
+      // spending log, and a stored 0 would draw every bar at 0% instead.
+      const limit=body.monthlyLimit===null||body.monthlyLimit===undefined?null:body.monthlyLimit;
+      if(limit!==null&&(!Number.isInteger(limit)||(limit as number)<0))throw new AuthError(400,'A monthly target is a whole number of cents.');
+      const icon=typeof body.icon==='string'&&body.icon.trim()?body.icon.trim().slice(0,24):null;
+      try{
+        return json(res,201,await dependencies.store.addBudgetCategory(id,{name,kind,monthlyLimit:limit as number|null,icon}));
+      }catch(error){
+        // A duplicate name is the caller's to fix, not a server fault.
+        if((error as {code?:string}).code==='23505')throw new AuthError(409,'You already have a category with that name.');
+        throw error;
+      }
+    }
+    if(path.startsWith('/public/v1/budget/categories/')&&(method==='PATCH'||method==='DELETE')){
+      const id=await authenticatedAccount(req,authService);
+      const categoryId=decodeURIComponent(path.slice('/public/v1/budget/categories/'.length));
+      if(method==='DELETE'){
+        // Deleting removes the history with it. Archiving is the reversible
+        // one, which is why it is the separate, easier call.
+        const gone=await dependencies.store.deleteBudgetCategory(id,categoryId);
+        if(!gone)throw new AuthError(404,'No such category.');
+        return json(res,200,{ok:true});
+      }
+      const body=await readBody(req);
+      if(typeof body.archived!=='boolean')throw new AuthError(400,'Say whether the category is archived.');
+      const changed=await dependencies.store.archiveBudgetCategory(id,categoryId,body.archived);
+      if(!changed)throw new AuthError(404,'No such category.');
+      return json(res,200,{ok:true});
+    }
+    if(path==='/public/v1/budget/entries'&&method==='POST'){
+      const id=await authenticatedAccount(req,authService); const body=await readBody(req);
+      if(!isCents(body.amountCents))throw new AuthError(400,'An amount is a whole number of cents above zero.');
+      const occurredOn=String(body.occurredOn||'')||etToday();
+      if(!isDayKey(occurredOn))throw new AuthError(400,'A date looks like 2026-08-27.');
+      const note=typeof body.note==='string'&&body.note.trim()?body.note.trim().slice(0,200):null;
+      // `source` is deliberately not read from the body. It is the aggregator
+      // seam, and a hand-entered row must never be able to claim it came from a
+      // connected provider.
+      const entry=await dependencies.store.addBudgetEntry(id,{categoryId:String(body.categoryId||''),amountCents:body.amountCents,note,occurredOn});
+      if(!entry)throw new AuthError(404,'No such category.');
+      return json(res,201,entry);
+    }
+    if(path.startsWith('/public/v1/budget/entries/')&&method==='DELETE'){
+      const id=await authenticatedAccount(req,authService);
+      const entryId=decodeURIComponent(path.slice('/public/v1/budget/entries/'.length));
+      const gone=await dependencies.store.deleteBudgetEntry(id,entryId);
+      if(!gone)throw new AuthError(404,'No such entry.');
+      return json(res,200,{ok:true});
+    }
     if(path.startsWith('/public/v1/ai/'))return json(res,501,{message:'Public AI is not available.'});
     return json(res,404,{message:'Public route not found.'});
   } catch(error){const status=error instanceof AuthError?error.status:Number((error as {status?:number}).status)||500;const message=status>=500?'Public service unavailable.':error instanceof Error?error.message:'Request failed.';return json(res,status,{message});}
