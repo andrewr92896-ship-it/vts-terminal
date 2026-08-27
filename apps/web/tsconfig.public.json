@@ -1,0 +1,5 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": { "noEmit": true },
+  "include": ["src/public/**/*.ts", "src/public/**/*.tsx", "../public-terminal/src/**/*.ts", "../public-terminal/src/**/*.tsx", "vite.public.config.ts"]
+}

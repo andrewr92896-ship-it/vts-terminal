@@ -398,6 +398,14 @@ function groupBy(
     g.count += 1;
     // Pips are a price fact (not a balance), so they accrue for every closeable
     // forex trade regardless of whether realized P/L is known or visible.
+    //
+    // This sum covers the CURRENCY-PAIR legs only — gold, the indices and crypto
+    // speak points, not pips, and contribute nothing here. No screen reads these
+    // groups (the Trade Log computes its own breakdown client-side through
+    // `tradeBreakdown.ts`, which states both units), so the figure is not on any
+    // display; if you ever wire it to one, take the web's `netMovement` shape
+    // with it rather than printing this on its own, or a group made entirely of
+    // gold will report a measured zero it never measured.
     const pips = tradePips(r.side as TradeSide, r.entryPrice, r.exitPrice, r.instrument);
     if (pips != null) g.pips += pips;
     if (r.realizedPl != null) {

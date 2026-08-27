@@ -75,21 +75,110 @@ interface PipTrade {
   instrument: string;
 }
 
-// Net signed pips across a set of trades (forex trades with an exit only). Non-
-// forex/unpriced trades contribute nothing. Rounded to one decimal.
-export function netPips(trades: PipTrade[]): number {
-  let sum = 0;
-  for (const t of trades) {
-    const p = tradePips(t.side, t.entryPrice, t.exitPrice, t.instrument);
-    if (p != null) sum += p;
-  }
-  return Number(sum.toFixed(1));
+// `netPips` and `hasAnyPips` used to live here and are deliberately GONE rather
+// than left unused. Both summed a set of trades as `if (pips != null) sum += p`,
+// which drops gold, the indices and crypto without saying so — so the figure
+// described only the forex half of the money printed beside it, and a set with
+// no pair in it reported a measured zero. `netMovement` and `hasAnyMovement`
+// below are the replacements and answer in both units. Do not reintroduce a
+// pips-only aggregate: an unused-but-plausible helper is how this comes back.
+
+// ---- the other half of the desk's movement, and why it has to be here ----
+//
+// `tradePips` returns null for anything that is not a currency pair, and every
+// caller summed it as `if (p != null) sum += p`. That drops gold, the indices
+// and crypto from the total SILENTLY: a group made only of them reported
+// "(0 pips)" — a measured zero standing in for a figure that was never measured
+// — and a mixed group reported a pip figure describing a subset of the very
+// trades on its own row, with nothing saying so.
+//
+// The terminal already knows what those instruments speak: a POINT, one whole
+// unit of price, which is what the order ticket sizes them in. So the fix is not
+// to hide the figure, it is to state the other unit beside it. Pips and points
+// are different units and are never added.
+
+// The realized move of a non-pair trade, in points — one whole unit of price
+// (5,000 -> 5,001; a dollar of share price). Sign-adjusted for side like
+// `tradePips`. Null for a currency pair, which speaks pips instead, or when a
+// price is missing.
+//
+// Deliberately NOT that instrument's pip location, which OANDA reports as 0.01
+// for gold — reading that as a "point" would quote the figure in cents.
+export function tradePoints(
+  side: TradeSide,
+  entryPrice: number | null,
+  exitPrice: number | null,
+  instrument: string,
+): number | null {
+  if (entryPrice == null || exitPrice == null) return null;
+  if (forexPair(instrument)) return null;
+  const sign = side === 'short' ? -1 : 1;
+  return (exitPrice - entryPrice) * sign;
 }
 
-// Whether any trade in the set carries pip math — used to decide whether to show
-// a pip figure at all (an all-non-forex desk shows none).
-export function hasAnyPips(trades: PipTrade[]): boolean {
-  return trades.some((t) => tradePips(t.side, t.entryPrice, t.exitPrice, t.instrument) != null);
+// Format a point count, e.g. "24.3 pts". Matches `Movement.plural` so a closed
+// trade reads in the same unit the open position did.
+export function fmtPoints(n: number, signed = false): string {
+  const rounded = Number(n.toFixed(1));
+  const s = rounded.toLocaleString('en-US', { maximumFractionDigits: 1 });
+  return `${signed && rounded > 0 ? '+' : ''}${s} pts`;
+}
+
+// What a set of trades moved, in each unit that applies to it. A null leg means
+// no trade in the set speaks that unit — NEVER a zero, which is the whole point:
+// a desk with no gold on it has no point figure, and that is different from one
+// whose gold came out flat.
+export interface NetMovement {
+  pips: number | null;
+  points: number | null;
+}
+
+export function netMovement(trades: PipTrade[]): NetMovement {
+  let pips = 0;
+  let points = 0;
+  let anyPips = false;
+  let anyPoints = false;
+  for (const t of trades) {
+    const p = tradePips(t.side, t.entryPrice, t.exitPrice, t.instrument);
+    if (p != null) {
+      pips += p;
+      anyPips = true;
+      continue;
+    }
+    const pt = tradePoints(t.side, t.entryPrice, t.exitPrice, t.instrument);
+    if (pt != null) {
+      points += pt;
+      anyPoints = true;
+    }
+  }
+  return {
+    pips: anyPips ? Number(pips.toFixed(1)) : null,
+    points: anyPoints ? Number(points.toFixed(1)) : null,
+  };
+}
+
+// Flip the sign of both legs. Gross loss is accumulated positive and printed
+// negative, so the caller needs this rather than a second accumulation.
+export function negMovement(move: NetMovement): NetMovement {
+  return { pips: move.pips == null ? null : -move.pips, points: move.points == null ? null : -move.points };
+}
+
+// Whether a set of trades moved in ANY unit this desk can state — the successor
+// to `hasAnyPips`, which answered false for a desk that trades only gold or only
+// indices and so hid a figure that was perfectly measurable.
+export function hasAnyMovement(trades: PipTrade[]): boolean {
+  const move = netMovement(trades);
+  return move.pips != null || move.points != null;
+}
+
+// The parenthetical that sits under a money figure: "(+183 pips)", "(+24.3 pts)",
+// or both when the set holds each — "(+183 pips · -54 pts)". Empty string when
+// nothing could be measured, so a caller can render it unconditionally.
+export function fmtMovement(move: NetMovement, signed = false): string {
+  const parts: string[] = [];
+  if (move.pips != null) parts.push(fmtPips(move.pips, signed));
+  if (move.points != null) parts.push(fmtPoints(move.points, signed));
+  return parts.length ? `(${parts.join(' · ')})` : '';
 }
 
 // ---- what a unit of price movement is worth on an open position ----

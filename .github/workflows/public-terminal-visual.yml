@@ -1,0 +1,46 @@
+name: public-terminal-visual
+
+on:
+  push:
+    branches:
+      - 'codex/public-terminal-**'
+      - 'claude/**'
+  workflow_dispatch:
+
+concurrency:
+  group: public-terminal-visual-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  visual-evidence:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run build:public
+      - run: npm run verify:public-imports
+      - run: npm install --no-save --package-lock=false @playwright/test@1.55.0
+      - run: npx playwright install --with-deps chromium
+      - name: Start isolated candidate
+        run: PORT=4173 node scripts/serve-static-app.mjs apps/public-terminal > /tmp/vts-public-terminal.log 2>&1 &
+      - name: Wait for candidate
+        run: |
+          for attempt in {1..30}; do
+            curl --fail --silent http://127.0.0.1:4173/ >/dev/null && exit 0
+            sleep 1
+          done
+          cat /tmp/vts-public-terminal.log
+          exit 1
+      - run: npx playwright test scripts/public-terminal.visual.spec.mjs --reporter=line --workers=1
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: public-terminal-update-existing-pages-v1-${{ github.sha }}
+          path: test-results/public-terminal-update-existing-pages-v1
+          if-no-files-found: error
+          retention-days: 14

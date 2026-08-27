@@ -1,11 +1,12 @@
 import crypto from 'node:crypto';
-import { eq } from 'drizzle-orm';
+import { and, eq, ne } from 'drizzle-orm';
 import { db } from '../db/index.js';
 import { sessions, users } from '../db/schema.js';
 import { config } from '../config.js';
 import { applyPreview, type PreviewedUser } from '../dev/preview.js';
+import { isPrivateUserAllowed } from './privateAccess.js';
 
-export const SESSION_COOKIE = 'vts_session';
+export const SESSION_COOKIE = config.PRIVATE_SESSION_COOKIE;
 
 /** The session id a request is authenticated by — what a preview is stored on. */
 export function sessionIdForToken(token: string): string {
@@ -23,7 +24,7 @@ export function cookieOptions(maxAgeSeconds?: number) {
     path: '/',
     httpOnly: true,
     sameSite: 'lax' as const,
-    secure: config.COOKIE_SECURE,
+    secure: config.isProd || config.COOKIE_SECURE,
     signed: true,
     ...(maxAgeSeconds != null ? { maxAge: maxAgeSeconds } : {}),
   };
@@ -70,7 +71,7 @@ export async function getUserForToken(
     .where(eq(users.id, session.userId))
     .limit(1);
   const user = userRows[0];
-  if (!user || !user.active) return null;
+  if (!user || !user.active || !isPrivateUserAllowed(user.id)) return null;
 
   // Touch last-seen without blocking the request.
   void db
@@ -94,4 +95,16 @@ export async function destroySession(token: string | undefined): Promise<void> {
 // password or deactivates an account, so existing logins stop working.
 export async function destroyUserSessions(userId: string): Promise<void> {
   await db.delete(sessions).where(eq(sessions.userId, userId));
+}
+
+// Revoke every other login while preserving the request that just changed its
+// password. Deleting the current row would make the successful response arrive
+// in a browser that has already been signed out.
+export async function destroyOtherUserSessions(
+  userId: string,
+  keepSessionId: string,
+): Promise<void> {
+  await db
+    .delete(sessions)
+    .where(and(eq(sessions.userId, userId), ne(sessions.id, keepSessionId)));
 }

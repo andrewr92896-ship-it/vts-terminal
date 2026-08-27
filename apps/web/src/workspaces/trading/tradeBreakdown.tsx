@@ -1,6 +1,6 @@
 import type { CSSProperties } from 'react';
 import { classifyOutcome, type BreakEvenConfig } from './outcome';
-import { fmtPips, tradePips } from './pips';
+import { fmtMovement, tradePips, tradePoints, type NetMovement } from './pips';
 
 // The per-strategy / per-instrument breakdowns and the day/month filters that
 // used to live on the History screen. History was removed (owner decision,
@@ -76,7 +76,12 @@ export interface TradeGroup {
   losses: number;
   breakeven: number;
   realizedPl: number | null;
-  pips: number;
+  // What the group moved, in each unit that applies to it. A null leg means no
+  // trade in the group speaks that unit — never a zero. This was a plain
+  // `pips: number`, and a group made entirely of gold or index trades therefore
+  // rendered "(0 pips)": a measured zero standing in for a figure that was never
+  // measured, on rows where the money beside it was perfectly real.
+  move: NetMovement;
 }
 
 // Group closed trades the same way the server's groupBy does, so a filtered
@@ -89,14 +94,30 @@ export function groupTrades<T extends ScorableTrade>(
 ): TradeGroup[] {
   const map = new Map<
     string,
-    { count: number; wins: number; losses: number; breakeven: number; pl: number; pips: number }
+    {
+      count: number; wins: number; losses: number; breakeven: number; pl: number;
+      pips: number; points: number; anyPips: boolean; anyPoints: boolean;
+    }
   >();
   for (const t of trades) {
     const label = (pick(t) ?? '—').trim() || '—';
-    const g = map.get(label) ?? { count: 0, wins: 0, losses: 0, breakeven: 0, pl: 0, pips: 0 };
+    const g = map.get(label) ??
+      { count: 0, wins: 0, losses: 0, breakeven: 0, pl: 0, pips: 0, points: 0, anyPips: false, anyPoints: false };
     g.count += 1;
+    // Pips for a currency pair, points for everything else. The two are never
+    // added — they are different units — so each is tracked on its own and a
+    // mixed group states both rather than reporting the pair legs alone.
     const pips = tradePips(t.side, t.entryPrice, t.exitPrice, t.instrument);
-    if (pips != null) g.pips += pips;
+    if (pips != null) {
+      g.pips += pips;
+      g.anyPips = true;
+    } else {
+      const points = tradePoints(t.side, t.entryPrice, t.exitPrice, t.instrument);
+      if (points != null) {
+        g.points += points;
+        g.anyPoints = true;
+      }
+    }
     if (t.realizedPl != null) {
       g.pl += t.realizedPl;
       const outcome = classifyOutcome(t.side, t.entryPrice, t.exitPrice, t.realizedPl, t.instrument, config);
@@ -114,7 +135,10 @@ export function groupTrades<T extends ScorableTrade>(
       losses: g.losses,
       breakeven: g.breakeven,
       realizedPl: canSeeBalances ? g.pl : null,
-      pips: Number(g.pips.toFixed(1)),
+      move: {
+        pips: g.anyPips ? Number(g.pips.toFixed(1)) : null,
+        points: g.anyPoints ? Number(g.points.toFixed(1)) : null,
+      },
     }))
     .sort((a, b) => b.count - a.count);
 }
@@ -155,7 +179,9 @@ export function Breakdown({
                 <span style={{ fontSize: 12.5, fontWeight: 700, fontFamily: MONO, color: pl == null ? FAINT : pl >= 0 ? GREEN : RED, textAlign: 'right' }}>
                   {pl == null ? '—' : money(pl)}
                 </span>
-                {showPips && <span style={{ fontSize: 9.5, color: MUTED, fontFamily: MONO }}>{`(${fmtPips(g.pips, true)})`}</span>}
+                {showPips && fmtMovement(g.move, true) !== '' && (
+                  <span style={{ fontSize: 9.5, color: MUTED, fontFamily: MONO }}>{fmtMovement(g.move, true)}</span>
+                )}
               </span>
             </div>
           );

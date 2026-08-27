@@ -1,5 +1,5 @@
 import { useMemo, type CSSProperties } from 'react';
-import { fmtPips, hasAnyPips, netPips } from './pips';
+import { fmtMovement, hasAnyMovement, negMovement, netMovement } from './pips';
 import {
   profitFactorStats,
   profitFactorText,
@@ -83,8 +83,8 @@ export function FundedStats({
   const s = summarizeTrades(trades, config);
   const pf = profitFactorStats(trades, config);
   const ppf = projectedProfitFactorStats(trades, config);
-  const showPips = hasAnyPips(trades);
-  const netClosedPips = netPips(trades);
+  const showPips = hasAnyMovement(trades);
+  const netClosedMove = netMovement(trades);
   const beActive = configActive(config);
 
   // Accounts can be kept in different currencies, and a total across two of them
@@ -108,7 +108,7 @@ export function FundedStats({
       label: 'Realized P/L',
       val: cash(s.totalRealizedPl ?? 0),
       sub: 'closed trades',
-      pips: showPips ? `(${fmtPips(netClosedPips, true)})` : undefined,
+      pips: showPips ? fmtMovement(netClosedMove, true) || undefined : undefined,
     },
     {
       label: 'Unrealized P/L',
@@ -117,8 +117,8 @@ export function FundedStats({
         : `${(s.totalUnrealizedPl ?? 0) > 0 ? '+' : ''}${money(s.totalUnrealizedPl ?? 0, ccy)}`, // signed, so a green book reads as a gain
       sub: unmarked > 0 ? `${s.open} open · ${unmarked} unmarked` : `${s.open} open`,
     },
-    { label: 'Gross Profit', val: cash(pf.grossProfit), sub: 'winning trades', pips: showPips ? `(${fmtPips(pf.grossProfitPips)})` : undefined },
-    { label: 'Gross Loss', val: cash(-pf.grossLoss), sub: 'losing trades', pips: showPips ? `(${fmtPips(-pf.grossLossPips)})` : undefined },
+    { label: 'Gross Profit', val: cash(pf.grossProfit), sub: 'winning trades', pips: showPips ? fmtMovement(pf.grossProfitMove) || undefined : undefined },
+    { label: 'Gross Loss', val: cash(-pf.grossLoss), sub: 'losing trades', pips: showPips ? fmtMovement(negMovement(pf.grossLossMove)) || undefined : undefined },
     {
       label: 'Profit Factor',
       val: mixed ? '—' : profitFactorText(pf),

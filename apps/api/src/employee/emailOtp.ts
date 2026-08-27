@@ -8,7 +8,7 @@ import { sendMail } from './mailer.js';
 // What makes it a second factor rather than theatre:
 //   • The code is random, not derived — `crypto.randomInt` is uniform over the
 //     whole range, so there is no modulo bias to shave the search space with.
-//   • Only its SHA-256 is stored, on the one session that asked for it. The
+//   • Only a secret-keyed digest is stored, bound to the one session that asked for it. The
 //     plaintext exists in the employee's inbox and nowhere else on this server.
 //   • It expires (EMPLOYEE_OTP_TTL_MINUTES) and is single-use — the session's
 //     stored hash is cleared the instant it is accepted, so a code read off a
@@ -39,14 +39,19 @@ export function generateOtpCode(): string {
   return String(crypto.randomInt(0, 10 ** DIGITS)).padStart(DIGITS, '0');
 }
 
-export function hashOtpCode(code: string): string {
-  return crypto.createHash('sha256').update(code.replace(/\D/g, '')).digest('hex');
+export function hashOtpCode(sessionId: string, code: string): string {
+  return crypto
+    .createHmac('sha256', `vts-employee-otp:${config.SESSION_SECRET}`)
+    .update(sessionId)
+    .update(':')
+    .update(code.replace(/\D/g, ''))
+    .digest('hex');
 }
 
 // Compare a submitted code against the stored hash without leaking where they
 // diverge. Hashing first means both sides are always the same length.
-export function otpMatches(storedHash: string, submitted: string): boolean {
-  const presented = hashOtpCode(submitted);
+export function otpMatches(storedHash: string, submitted: string, sessionId: string): boolean {
+  const presented = hashOtpCode(sessionId, submitted);
   const a = Buffer.from(storedHash);
   const b = Buffer.from(presented);
   if (a.length !== b.length) return false;

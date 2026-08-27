@@ -11,9 +11,25 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 7.37';
+export const APP_VERSION = 'Beta V 7.38';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 7.38',
+    date: 'August 27, 2026',
+    notes: [
+      'A misconfigured bootstrap admin ID no longer stops the terminal from starting — it says so loudly instead. The account allowlist itself still refuses to start without it, which is the setting that actually protects the private terminal.',
+      'Gold, the indices and crypto now report what they moved. Every pips figure on Closed Trades & Metrics, the Funded stats and the Desk Metrics tile quietly left those trades out, so a row of gold trades read “0 pips” beside real money and a mixed row counted only its forex half. They read in points now, beside the pips, and nothing that could not be measured is shown as a zero.',
+      'The password box on the public sign-in card is styled like the one above it instead of a white box.',
+      'The public terminal is live, with a demo anyone can open without an account. It uses sample data, saves nothing, and resets when you leave — so it can be handed to somebody to click around in.',
+      'vitalistradingsystems.com is a proper landing page now rather than a holding page: what the terminal does, what it deliberately does not do, and a way into the demo and into early access.',
+      'Early access is a real request form with a route behind it, and it says what a pre-release place includes before it asks for an email.',
+      'Signing in to the public terminal now warns you that it is not the group terminal and that features are reduced, so landing on the wrong one is obvious.',
+      'Admin ▸ Users shows each account’s ID with a copy button — the value the private-access allowlist admits.',
+      'Closed Trades & Metrics no longer says “Whole desk — combined stats” on a book with one trader in it, and the To Do screen is called To Do in both places it is named.',
+      'Groundwork only, nothing switched on: every AI call now goes through one place, and moving to a different AI provider is a setting rather than a rewrite.',
+    ],
+  },
   {
     version: 'Beta V 7.37',
     date: 'August 24, 2026',

@@ -4,16 +4,16 @@ import { db } from '../db/index.js';
 import { aiUsage } from '../db/schema.js';
 import { config } from '../config.js';
 
-// Per-user AI guardrails: a per-minute burst limit (in memory) plus monthly
-// caps (counted from the ai_usage table). enforceAiLimit() is called by every
+// Per-user AI guardrails: a per-minute burst limit (in memory) plus the durable
+// monthly text cap counted from ai_usage. enforceAiLimit() is called by every
 // route that hits Claude — it throws AiLimitError (mapped to HTTP 429) when a
-// limit is reached, and otherwise records the call.
+// retained limit is reached, and otherwise records the call.
 //
-// **Two monthly budgets, not one.** A text question costs roughly 1.5–2¢ and a
-// screenshot read 5–10¢, so a single counter did not bound the worst case in any
-// useful way: a user who spent their whole allowance on screenshots cost several
-// times one who spent it on questions, and the cap could not tell the difference.
-// Vision calls are counted against their own, much smaller allowance.
+// Vision calls are deliberately metered but have no monthly product quota.
+// Screenshot-to-trade is an input workflow, so a lifetime-of-the-month counter
+// must not stop a trader from continuing to log legitimate trades. The shared
+// burst limiter still bounds request/provider pressure across text and vision,
+// and each route keeps its body-size and MIME validation.
 //
 // Deliberately NOT per-tier: there is no billing yet, and an allowance that
 // varies by what somebody paid belongs with the thing that takes the payment.
@@ -30,10 +30,10 @@ export class AiLimitError extends Error {
 // The four flows that send an image. Everything else — `ask`, `market_hours`,
 // `todo_command` and the eleven `studies_*` kinds — is text.
 //
-// A kind not listed here counts as text, which is the safe default in both
-// directions: a new text kind is classified correctly by doing nothing, and a
-// new *vision* kind that somebody forgets to add here is merely metered against
-// the larger budget rather than escaping metering altogether.
+// A kind not listed here counts as text, which is the safe default: new AI
+// behavior remains monthly-capped until it is explicitly reviewed as a vision
+// input workflow. Vision kinds are still recorded in ai_usage; this list only
+// determines whether the durable monthly text cap applies.
 export const VISION_KINDS = [
   'analyze',
   'position_screenshot',
@@ -41,14 +41,10 @@ export const VISION_KINDS = [
   'account_screenshot',
 ] as const;
 
-export type AiBudgetKind = 'text' | 'vision';
+export type AiUsageKind = 'text' | 'vision';
 
-export function budgetFor(kind: string): AiBudgetKind {
+export function budgetFor(kind: string): AiUsageKind {
   return (VISION_KINDS as readonly string[]).includes(kind) ? 'vision' : 'text';
-}
-
-function limitFor(budget: AiBudgetKind): number {
-  return budget === 'vision' ? config.AI_VISION_MONTHLY_LIMIT : config.AI_MONTHLY_LIMIT;
 }
 
 const RATE_WINDOW_MS = 60_000;
@@ -73,7 +69,7 @@ function etMonthStartMs(): number {
 // ?` does not match NULL in SQL. That is what keeps a news-tagging poll from
 // eating somebody's personal allowance — a property of the comparison rather
 // than of an exclusion somebody has to remember to write.
-export async function aiUsageThisMonth(userId: string, budget?: AiBudgetKind): Promise<number> {
+export async function aiUsageThisMonth(userId: string, budget?: AiUsageKind): Promise<number> {
   const since = new Date(etMonthStartMs());
   const kinds = [...VISION_KINDS];
   const rows = await db
@@ -109,6 +105,10 @@ export interface AiBudget {
   remaining: number;
 }
 
+export interface AiUsageCount {
+  used: number;
+}
+
 export interface AiUsageInfo {
   // The text budget, kept flat as well so the existing "N left" counter in the
   // Ask VTS AI panel keeps working unchanged — an ordinary question spends this
@@ -117,7 +117,8 @@ export interface AiUsageInfo {
   limit: number;
   remaining: number;
   text: AiBudget;
-  vision: AiBudget;
+  // Vision is metered for cost visibility, but it is not a monthly allowance.
+  vision: AiUsageCount;
   // Background AI (news tagging, calendar explainers) this month. Admins only,
   // null for everyone else. Not a budget: nothing caps it, and it is here to be
   // seen rather than enforced.
@@ -138,16 +139,16 @@ export async function getAiUsage(userId: string, includeSystem = false): Promise
   return {
     ...textBudget,
     text: textBudget,
-    vision: budget(vision, config.AI_VISION_MONTHLY_LIMIT),
+    vision: { used: vision },
     system,
   };
 }
 
-// Throws AiLimitError if the user is over the burst or the relevant monthly
-// limit; otherwise records the call and returns. Call this immediately before
-// invoking Claude.
-export async function enforceAiLimit(userId: string, kind: string): Promise<void> {
-  const now = Date.now();
+// Throws AiLimitError if the user is over the shared burst limit or, for text,
+// the monthly limit; otherwise records the call and returns. Vision calls are
+// recorded but never monthly-capped. Call this immediately before invoking
+// Claude. The optional clock makes the real policy testable without waiting.
+export async function enforceAiLimit(userId: string, kind: string, now = Date.now()): Promise<void> {
 
   const arr = (recentCalls.get(userId) ?? []).filter((t) => now - t < RATE_WINDOW_MS);
   if (arr.length >= config.AI_RATE_PER_MIN) {
@@ -155,19 +156,15 @@ export async function enforceAiLimit(userId: string, kind: string): Promise<void
     throw new AiLimitError('Too many AI requests right now — give it a few seconds.', retry);
   }
 
-  // Which allowance this call spends, and only that one — a screenshot read
-  // never touches the text budget or the reverse.
+  // Only text spends a durable monthly allowance. Vision remains classified so
+  // usage reporting can count it separately, but repeated screenshot imports do
+  // not turn into a product lockout later in the month.
   const which = budgetFor(kind);
-  const used = await aiUsageThisMonth(userId, which);
-  if (used >= limitFor(which)) {
-    // Name the budget that was hit. "AI limit reached" leaves somebody who has
-    // used forty screenshot imports believing every AI feature is gone, when
-    // asking a question would have worked perfectly well.
-    throw new AiLimitError(
-      which === 'vision'
-        ? 'Monthly screenshot allowance reached — that is the budget for reading images, and it is separate from asking questions. It resets at the start of next month.'
-        : 'Monthly AI limit reached. It resets at the start of next month.',
-    );
+  if (which === 'text') {
+    const used = await aiUsageThisMonth(userId, which);
+    if (used >= config.AI_MONTHLY_LIMIT) {
+      throw new AiLimitError('Monthly AI limit reached. It resets at the start of next month.');
+    }
   }
 
   arr.push(now);

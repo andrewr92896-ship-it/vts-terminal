@@ -159,6 +159,108 @@ Agreed **lowest-liability** shape for that public launch (research done 2026-07)
   (potential RIA/CFTC-CTA exposure). Consider E&O/tech/cyber **insurance** to
   transfer residual liability. (None of this is legal advice.)
 
+## Public/private deployment boundary
+
+The product is being separated into three deployments:
+
+- `apps/marketing` → `vitalistradingsystems.com`
+- `apps/public-terminal` → `app.vitalistradingsystems.com`
+- `apps/web` + `apps/api` → the private portal at `portal.vitalistradingsystems.com`
+
+The public builds must never import or contain private portal, partner/team, administration, broker execution, private signal, or trade-distribution code. `npm run verify:boundaries` enforces the initial source/artifact boundary. The existing web/API application is private. Treat its trading, team, founder, admin and employee modules as **INTERNAL ONLY — PENDING LEGAL AND COMPLIANCE REVIEW**.
+
+The code scaffolds separate deployments, private admission, cookies and configuration, but physical Railway services, public authentication, public/private databases, DNS, TLS and private MFA remain manual deployment blockers. Read `docs/architecture/public-private-separation.md` and `docs/implementation/public-private-migration-status.md` before changing this boundary. Never weaken it with a runtime feature flag or role-based redirect between applications.
+
+## The public terminal (`apps/public-terminal`) and demo mode
+
+The public terminal is the **same React app as the private portal, with a
+different set of screens allowlisted and the risky halves replaced at the build
+boundary**. It is not a rebuild and must not become one — a second design system
+is the thing this arrangement exists to avoid.
+
+### How the reuse works: seams, not forks
+
+`apps/web/vite.public.config.ts` replaces a small list of private modules with
+public adapters in `apps/public-terminal/src/adapters/` — `api/client`,
+`auth/AuthContext`, `auth/access`, `privacy/privacy`, `legal/content`,
+`meta/version`, `help/tutorials`, `auth/reviewMarks`, and `TvWidget`. Everything
+else is the portal's own component, imported unchanged.
+
+**Replace at the seam rather than filtering at render.** Two of those adapters
+exist because a render-time gate is not the same as not shipping:
+
+- **`publicTutorials.ts`** — the portal's How-to guides describe order
+  placement, broker connections and strategy sessions. Filtering the topic list
+  would still ship every body string in the bundle.
+- **`publicReviewMarks.ts`** — the portal's `risk` notes are the owner's own
+  compliance judgments, gated on `isFounder` at render. That is enough on the
+  portal and is **not** enough in a bundle served to the public, where every one
+  of those sentences is readable in the JavaScript. The public file carries no
+  `risk` entry at all.
+
+`scripts/verify-public-imports.mjs` holds the import allowlist, the adapter-seam
+list, and the built-bundle denylist. **The denylist matches phrases, not
+proximity**: the bundle is minified, so `/broker.{0,8}key/` fires on
+`{key:'',label:'No broker'}`, which is a trade form and not a credential. A
+guard that cries wolf is one people widen until it catches nothing. It runs
+twice in `verify` — before the build for the source allowlist, and **after** it,
+because on a clean checkout there is no `dist` for the first pass to read.
+
+### Demo mode
+
+**The demo is the showcase**, and it is a runtime mode rather than a build flag:
+`?demo=1`, or "Explore the demo" on the sign-in card. One deployed bundle serves
+both the demo and real accounts.
+
+- **Nothing is saved, because there is nothing to save.** The data is module
+  state in `apps/public-terminal/src/demo/`. Leaving or reloading re-imports the
+  module, so the reset is a property of where the data lives rather than a
+  cleanup somebody has to remember.
+- **`demoStore.ts` DERIVES every read from the seeded state** rather than
+  storing payloads beside it, so a write and the figure it changes cannot
+  disagree: log a trade and the win rate above it moves, because both come from
+  one array.
+- **The seed is plausible, not flattering** — a losing month, a prediction that
+  did not come true, one that could not be settled at all, and a holding no
+  provider can price. That last one is the terminal's own rule: a figure nobody
+  could measure is counted and named, never valued at zero.
+- **There is no evidence-only build.** There was, and it meant CI screenshotted
+  a bundle nobody is served — it auto-entered the terminal, so the sign-in card
+  was never captured and the demo data could not ship at all. The CI bundle and
+  the deployed bundle are the same bundle; only the URL differs.
+- **AI fails closed everywhere, the demo included**, until the provider
+  migration. `publicApi.ts` refuses every AI-shaped method by name before the
+  demo store is consulted, so a showcase never implies a capability that is not
+  wired.
+
+### The screenshot test is the evidence, so it has to assert something
+
+`scripts/public-terminal.visual.spec.mjs` captures every retained page family at
+1440 / 768 / 390. It asserts **no page error and real content**, not merely that
+`#root` exists — a page whose tree threw still has a root, and a thrown render
+leaves the root dead for every later hash navigation, so one broken screen
+blanks every capture after it. That is not hypothetical: it shipped, and eight
+screens were blank behind a passing test.
+
+### What the public terminal does not have
+
+Groups in every form (creation, invitations, chat, shared books, signals,
+publishing, named-user routing), broker connections, order placement, live
+balances, Funded Trades, Admin and Developer. Absent from the routes, imports
+and bundle — not hidden by a role. Trading Notes stays, as a **personal record
+with no control that can publish one**.
+
+### The public API (`apps/public-api`)
+
+Its own service, database, cookies (`vts_public_session_v1`, path `/public`) and
+secrets. Today it serves **auth, market data, the market-data layout and
+early-access requests only**; every other record family is demo-only, so the
+storage contract for them is unbuilt. Early access is unauthenticated by
+necessity — the person asking has no account — so it is rate limited, bounded in
+what it stores, and answered identically whether or not the address is already
+on the list. The server listens only when it is the process being run, so a
+route can be tested by importing it.
+
 ## Architecture
 
 Monorepo, **npm workspaces**:
@@ -392,6 +494,14 @@ workspaces list** (see `theme/nav.ts` order).
       result screenshot is read. A **Kraken margin** row is neither and stays
       watch-only, which is what the desk's own `close`/`amend` refusals already
       say.
+    - **THE DESK BOOK MAY NOT SET THE PAGE HEIGHT.** On desktop and narrow
+      desktop, `Desk right now` keeps its heading fixed and scrolls the full
+      position list inside a viewport-bounded, keyboard-focusable region. On
+      tablet and phone it avoids a nested vertical scroller: the first three
+      positions stay in page flow with an explicit Show all / Show fewer
+      control. This keeps Holdings, Working orders, Sent orders and the later
+      Founder settings reachable however many current or sample positions the
+      feed returns, without dropping any row detail or action.
     - **`trading/sizing.ts` IS THE CANONICAL SIZING MATH, AND IT EXISTS TWICE ON
       PURPOSE** (`apps/api/src/trading/sizing.ts` and
       `apps/web/src/workspaces/trading/sizing.ts`, identical below their
@@ -491,7 +601,33 @@ workspaces list** (see `theme/nav.ts` order).
         as 0.01 for gold — reading that as a "point" would quote the figure in
         cents.
       Never label a non-pair's movement in pips; never size a point from
-      `pipLocation`. Sizes render through `fmtUnits`
+      `pipLocation`.
+      - **AND A SET OF TRADES REPORTS BOTH UNITS, NEVER ONE STANDING FOR THE
+        WHOLE** (`netMovement` / `fmtMovement` / `hasAnyMovement` in `pips.ts`).
+        Every aggregate on the desk used to be a pip sum written as
+        `if (pips != null) sum += p`, and `tradePips` returns null for anything
+        that is not a pair — so gold, the indices and crypto were dropped in
+        **silence**. A By Instrument row of pure gold printed **"(0 pips)"**, a
+        measured zero standing in for a figure never measured, beside perfectly
+        real money; a mixed strategy row printed a pip figure covering only its
+        forex legs, with nothing saying so. Same family of rule as the Live
+        Wall's `unavailable` source and Investments' `unpricedCount`: **a figure
+        that could not be measured must never be reported as a measured one.**
+        - **A null leg means "no trade here speaks that unit", and is never a
+          zero.** That is what separates a desk holding no gold from one whose
+          gold came out flat — and a break-even pair still correctly reads
+          `0 pips`, because that zero WAS measured.
+        - **The two are never added.** A mixed set reads
+          `(+183 pips · -40.9 pts)`; a set with no pair reads points alone,
+          which the old `hasAnyPips` gate hid entirely.
+        - **`netPips` and `hasAnyPips` are DELETED, not left unused** — an
+          unused-but-plausible pips-only aggregate is how this comes back. Do
+          not reintroduce one.
+        - Call sites: the Trade Log KPI cards and its CSV, the By Strategy / By
+          Instrument breakdowns, the tape's per-trade figure, Funded Trades'
+          stats, and the Live Wall's Desk Metrics tile. `history.ts`'s server
+          `groupBy` still sums pips only and is commented as such — **no screen
+          reads it**; wire it to one and it needs this shape first. Sizes render through `fmtUnits`
       (`TradeCard.tsx`), which keeps more decimals the smaller the size — the
       default locale format prints 0.00042 of a bitcoin as "0". Keep all of this
       when adding stocks or another broker.
@@ -4709,29 +4845,28 @@ control — the server is still the enforcer.
     so reverting is a host variable change and a restart, never a redeploy.
 - **Availability:** `aiConfigured()` = `!!ANTHROPIC_API_KEY`. When unset, AI
   endpoints return **503**.
-- **Usage caps: TWO monthly budgets, not one** (`ai/usage.ts`), both per-user,
-  both metered in `ai_usage`, both resetting at the start of each **Eastern-Time**
-  month, plus one in-memory burst limit `AI_RATE_PER_MIN` (default **15**, resets
-  on restart, shared across both). Over limit → **429**. `enforceAiLimit(userId,
-  kind)` runs before every call and picks the budget from the kind.
-  - `AI_MONTHLY_LIMIT` (default **1000**) — **text**: `ask`, `market_hours`,
-    `todo_command` and the eleven `studies_*` kinds. Name unchanged on purpose so
-    existing deployments are unaffected.
-  - `AI_VISION_MONTHLY_LIMIT` (default **40**) — the four **vision** kinds
-    (`analyze`, `position_screenshot`, `funded_screenshot`, `account_screenshot`),
-    listed in `VISION_KINDS`. A kind not in that list counts as text, which is
-    the safe default both ways: a new text kind needs no edit, and a forgotten
-    new vision kind is merely metered against the larger budget rather than
-    escaping metering.
-  - **Why they are separate:** a text question costs roughly 1.5–2¢ and a
-    screenshot read 5–10¢, so one counter did not bound the worst case usefully —
-    somebody spending their whole allowance on screenshots cost several times
-    somebody spending it on questions, and nothing could tell the difference.
-  - **The 429 names which budget was hit.** "AI limit reached" leaves a user who
-    has used forty screenshot imports believing every AI feature is gone when
-    asking a question would have worked. `getAiUsage` returns both budgets (and
-    the flat `used`/`limit`/`remaining` still mirror **text**, so the existing
-    counter keeps working).
+- **Usage controls: one monthly text budget, metered vision without a monthly
+  product cap** (`ai/usage.ts`), plus one in-memory burst limit
+  `AI_RATE_PER_MIN` (default **15**, resets on restart, shared across both).
+  Over a retained limit → **429**.
+  - `AI_MONTHLY_LIMIT` (default **1000**) — **text**: `ask`,
+    `market_hours`, `todo_command` and the eleven `studies_*` kinds.
+  - The four **vision** kinds (`analyze`, `position_screenshot`,
+    `funded_screenshot`, `account_screenshot`) are recorded in `ai_usage`
+    for cost visibility but have **no monthly product quota**. Screenshot trade
+    logging is an input workflow; a trader must not be locked out later in the
+    month merely because they kept logging legitimate trades.
+  - The shared per-minute burst limit remains the request/provider-pressure
+    boundary. Every screenshot route also retains its **12 MB request body**,
+    accepted image MIME list, authentication, workspace permissions and
+    parse/validation failures.
+  - A kind not in the vision list counts as text. That is the safe default: new
+    AI behavior stays monthly-capped until it is explicitly reviewed as a vision
+    input workflow.
+  - `getAiUsage` returns the text budget plus the current month's vision
+    **used** count. Vision has no `limit` or `remaining`, because presenting a
+    synthetic infinity as an allowance would imply a product cap that does not
+    exist.
   - Deliberately **not per-tier**: there is no billing yet, and an allowance that
     varies by what somebody paid belongs with the thing that takes the payment.
 - **Background AI is recorded, never capped** (`recordSystemAiUse`). The two
@@ -5304,12 +5439,24 @@ hardcoded" below.)
 - Login `POST /api/auth/login` by email (or username fallback), generic 401,
   constant-time-ish (always runs a verify) to resist enumeration. One-click demo
   via `POST /api/auth/demo`.
+- Password recovery `POST /api/auth/forgot-password` always returns the same
+  generic 202, including for malformed/missing/inactive/disallowed accounts,
+  throttling, absent mail configuration, and delivery failure. It creates a
+  separate 15-minute (configurable via `PASSWORD_RESET_TTL_MINUTES`) Argon2id
+  credential only for an active, private-admitted, non-demo account. The
+  plaintext exists only long enough to send through the shared employee mailer;
+  recovery must call `mailConfigured()` first because that mailer's development
+  fallback logs bodies. A successful temporary-password login atomically
+  promotes the hash, consumes the pending row, forces Change Password, and
+  revokes older sessions. The one-process IP/mailbox limiter is intentionally
+  suitable only while Railway runs one API replica.
 - Session cookie **`vts_session`**: random token, stored server-side in
   `sessions` (SHA-256 of the token; raw token only in the cookie), Fastify-signed
   with `SESSION_SECRET`, `httpOnly`, `sameSite: 'lax'`, `secure` per
   `COOKIE_SECURE`, TTL `SESSION_TTL_DAYS` (default 14). Admin password reset /
   deactivate revokes all of a user's sessions.
-- **No** login rate-limit, account lockout, or CSRF token — CSRF posture rests on
+- **No** login rate-limit, account lockout, or CSRF token — password recovery's
+  isolated anti-flood limiter is the exception. CSRF posture rests on
   `sameSite: 'lax'` + signed httpOnly cookie. AI usage cap and the broker poll
   throttle are the only rate limits. (The **Employee Portal** has all of these —
   lockout, CSRF token, idle timeout, emailed-code 2FA — on its own separate session; see its
@@ -5489,9 +5636,9 @@ defaults; the app runs locally with almost nothing set.
 - **AI:** `ANTHROPIC_API_KEY` (absent = AI off), `ANTHROPIC_MODEL_DEFAULT`,
   `ANTHROPIC_MODEL_ANALYSIS` (**`claude-sonnet-5`** — moved off Opus for cost;
   set it back to `claude-opus-4-8` to revert, which is a host variable change and
-  a restart, not a redeploy), `AI_MONTHLY_LIMIT` (1000, **text only**),
-  `AI_VISION_MONTHLY_LIMIT` (40, the four screenshot flows), `AI_RATE_PER_MIN`
-  (15, shared burst limit). See the AI section for why the budgets are split.
+  a restart, not a redeploy), `AI_MONTHLY_LIMIT` (1000, **text only**), and
+  `AI_RATE_PER_MIN` (15, shared burst limit across text and vision). Vision
+  calls are metered but have no monthly product quota; see the AI section.
 - **Webhooks:** `TRADINGVIEW_WEBHOOK_SECRET`, `TV_WEBHOOK_SECRET` (each unset =
   that webhook rejects everything).
 - **Brokers** (env-config path; also seedable per-user in the UI): `OANDA_API_TOKEN`,
@@ -5822,6 +5969,9 @@ fails it fails at one of them and that one is the fastest thing to re-run:
   app cannot show you: the draw is a proportion that only appears over hundreds
   of questions, and the breakdown's arithmetic is right or wrong in ways a
   screenshot cannot tell you.
+- **Trade movement: `npm run verify:movement`** after touching `pips.ts`,
+  `tradeBreakdown.tsx` or `tradeStats.ts`. See the rule below — the fault it
+  pins is invisible on a forex-only desk, which is the owner's own.
 - **Position sizing: `npm run verify:sizing`** after touching either
   `sizing.ts`. It is the only check that imports the web copy AND the server
   copy and runs both through the same fixtures, so it is what stops the two
@@ -5834,6 +5984,10 @@ fails it fails at one of them and that one is the fastest thing to re-run:
   fails *silently* in production: a ciphertext not bound to its row still
   decrypts, an unpinned tag length still verifies, a passphrase still encrypts.
   Nothing about the running terminal looks wrong — the guarantee is simply gone.
+- **Environment checks: `npm run verify:config`** after touching `config.ts` or
+  `configChecks.ts`. What it pins is not "does a bad environment get rejected" —
+  the old inline code did that. It is that **every** problem is reported in one
+  pass. See the boot guard below for why that is the property worth a check.
 
 Run `npm install` first in a fresh container.
 
@@ -5983,6 +6137,48 @@ Because of that:
   is the only deploy trigger.
 - **Squash merges only**, and always through a PR (see above), so `main` keeps
   one commit per release and every release has a PR page behind it.
+
+### A failed BUILD is harmless. A failed START is an outage.
+
+Worth stating plainly, because it has already cost one: Railway keeps the
+previous version live when a **build** fails — nothing is swapped, the site is
+untouched. But a build that **succeeds** and then exits at startup is different:
+the healthy container is replaced by a dead one and the service returns 502
+until somebody notices. `config.ts` exits on a missing variable, so a deploy
+that forgets one is exactly that case.
+
+**`apps/api/src/configChecks.ts` is the whole environment guard, and its rule is
+COLLECT, NEVER EXIT.** Nothing in it exits, throws on a bad environment, opens a
+connection or reads the database — it answers "would this environment boot, and
+what would it complain about?" and hands back every answer at once. `config.ts`
+prints the list and exits **once**; `preflight.ts` prints the same list and
+exits with a status. One module, so the two cannot drift.
+
+That matters more than it looks. The checks used to sit inline in `config.ts` as
+four sequential `process.exit(1)` calls, so an operator repairing production
+discovered the faults one at a time — set a variable, redeploy, hit the next —
+and each discovery was another outage. A single-fault environment behaves
+identically either way, which is why this needs `verify:config` rather than a
+passing boot to protect it.
+
+**What is fatal is a judgment, not a list.** `PRIVATE_ACCESS_USER_IDS` missing in
+production exits, because without it the private portal admits every account in
+the database — missing security beats broken uptime. `PRIVATE_BOOTSTRAP_ADMIN_ID`
+not appearing in that allowlist is only a **warning**, because `seedAdmin` reads
+it solely when no admin exists yet: on a running installation it has no effect at
+all, so exiting there would take a healthy service down over a setting that does
+nothing to it, and on the fresh install where it does apply the symptom (a seeded
+admin who cannot sign in) is visible and recoverable. Weigh any new check the same
+way — what does this actually break, and is that worse than the service being
+down?
+
+**Check before you deploy**, against the real service's own variables, without
+starting anything:
+
+    railway run --service <service> npm run preflight
+
+It prints every problem with the fix beside it, or says the environment would
+start.
 
 ## Frontend conventions
 

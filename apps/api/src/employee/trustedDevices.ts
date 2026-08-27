@@ -21,7 +21,7 @@ import { config } from '../config.js';
 // can be revoked from there; a portal admin can drop all of someone's at once,
 // and revoking employee access or suspending a record clears them too.
 
-export const EMPLOYEE_DEVICE_COOKIE = config.COOKIE_SECURE
+export const EMPLOYEE_DEVICE_COOKIE = config.isProd || config.COOKIE_SECURE
   ? '__Host-vts_employee_device'
   : 'vts_employee_device';
 
@@ -38,7 +38,7 @@ export function deviceCookieOptions(maxAgeSeconds?: number) {
     path: '/',
     httpOnly: true,
     sameSite: 'strict' as const,
-    secure: config.COOKIE_SECURE,
+    secure: config.isProd || config.COOKIE_SECURE,
     signed: true,
     ...(maxAgeSeconds != null ? { maxAge: maxAgeSeconds } : {}),
   };
