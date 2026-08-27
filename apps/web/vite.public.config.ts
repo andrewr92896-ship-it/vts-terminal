@@ -13,6 +13,7 @@ const replacements=new Map([
   [normalize(path.join(webRoot,'src/auth/AuthContext')),path.join(adapters,'publicAuth.ts')],
   [normalize(path.join(webRoot,'src/auth/access')),path.join(adapters,'publicAccess.ts')],
   [normalize(path.join(webRoot,'src/privacy/privacy')),path.join(adapters,'publicPrivacy.ts')],
+  [normalize(path.join(webRoot,'src/legal/content')),path.join(adapters,'publicLegal.ts')],
   [normalize(path.join(webRoot,'src/workspaces/trading/TvWidget')),path.join(adapters,'FixtureTvWidget.tsx')],
 ]);
 function publicBoundaryAliases():Plugin{return{name:'vts-public-boundary-aliases',enforce:'pre',resolveId(source,importer){if(!importer||!source.startsWith('.'))return null;const resolved=normalize(path.resolve(path.dirname(importer.split('?')[0]),source));return replacements.get(resolved)??null;}}}
