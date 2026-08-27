@@ -19,8 +19,9 @@ The public build consumes the portal's real source at source SHA
 - `apps/web/src/workspaces/trading/MarketData.tsx`, `etClock.ts`,
   `ScreenTitle.tsx`, and `lib/measure.ts` for the actual dense market board,
   countdown/calendar behavior, and responsive content-width measurement.
-- `WatchlistTile.tsx`, `CalendarTile.tsx`, `NewsTile.tsx`, `TvWidget.tsx`, and
-  `tiles/MarketTiles.tsx` for the actual Live Wall tile implementations.
+- `WatchlistTile.tsx`, `CalendarTile.tsx`, `NewsTile.tsx`, and `TvWidget.tsx`
+  for the actual Live Wall tile implementations. `PublicClockTile.tsx` is the
+  public-safe adaptation of the clock section from `tiles/MarketTiles.tsx`.
 - `PublicSidebar.tsx` and `PublicTopBar.tsx` are line-by-line public adaptations
   of the real `Sidebar.tsx` and `TopBar.tsx` geometry/styles. Private auth,
   membership, role preview, employee, privileged notification, and chat
