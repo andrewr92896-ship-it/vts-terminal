@@ -1,6 +1,7 @@
 import { readFile, readdir } from 'node:fs/promises';
 import { join } from 'node:path';
-const root=new URL('../apps/public-api/src/',import.meta.url);
+import { fileURLToPath } from 'node:url';
+const root=fileURLToPath(new URL('../apps/public-api/src/',import.meta.url));
 async function files(dir){const out=[];for(const entry of await readdir(dir,{withFileTypes:true})){const path=join(dir,entry.name);if(entry.isDirectory())out.push(...await files(path));else if(/\.ts$/.test(path))out.push(path)}return out}
 const source=(await Promise.all((await files(root)).map((file)=>readFile(file,'utf8')))).join('\n');
 for(const pattern of [/from ['"].*apps\/api/i,/process\.env\.(DATABASE_URL|SESSION_SECRET|COOKIE_NAME|SMTP_URL)\b/,/\/public\/v1\/(orders?|positions?|balances?|brokers?|admin|founder|groups?)/i])if(pattern.test(source))throw new Error(`Public API boundary violation: ${pattern}`);
