@@ -18,4 +18,4 @@ const replacements=new Map([
 ]);
 function publicBoundaryAliases():Plugin{return{name:'vts-public-boundary-aliases',enforce:'pre',resolveId(source,importer){if(!importer||!source.startsWith('.'))return null;const resolved=normalize(path.resolve(path.dirname(importer.split('?')[0]),source));return replacements.get(resolved)??null;}}}
 
-export default defineConfig({root:publicRoot,plugins:[publicBoundaryAliases(),react()],publicDir:path.join(publicRoot,'public'),build:{outDir:path.join(publicRoot,'dist'),emptyOutDir:true,sourcemap:false},server:{host:'127.0.0.1',port:4173}});
+export default defineConfig({root:publicRoot,plugins:[publicBoundaryAliases(),react()],resolve:{alias:[{find:/\\/src\\/legal\\/content(?:\\.ts)?$/,replacement:path.join(adapters,'publicLegal.ts')}]},publicDir:path.join(publicRoot,'public'),build:{outDir:path.join(publicRoot,'dist'),emptyOutDir:true,sourcemap:false},server:{host:'127.0.0.1',port:4173}});
