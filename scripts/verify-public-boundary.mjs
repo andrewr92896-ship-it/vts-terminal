@@ -33,7 +33,8 @@ const scan = (root) => {
     if (!/\.(html|css|js|mjs|ts|tsx|json|txt|svg)$/.test(file)) continue;
     const text = readFileSync(file, 'utf8');
     for (const pattern of FORBIDDEN) {
-      if (pattern.test(text)) fail(`${file} contains forbidden public-build identifier ${pattern}`);
+      const hit = text.match(pattern);
+      if (hit) fail(`${file} contains forbidden public-build identifier ${pattern} near ${JSON.stringify(text.slice(Math.max(0, (hit.index ?? 0) - 80), (hit.index ?? 0) + hit[0].length + 120))}`);
     }
   }
 };
