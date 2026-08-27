@@ -7,7 +7,8 @@ const PUBLIC_DIRS=['apps/public-terminal/src','apps/web/src/public'];
 const ALLOWED_PORTAL_IMPORTS=[
   /^\.\.\/\.\.\/web\/src\/styles\/global\.css$/,
   /^\.\.\/\.\.\/web\/src\/public\/PublicApp$/,
-  /^\.\.\/(components\/(Icon|Clock)|theme\/(tokens|themes)|workspaces\/trading\/(MarketData|CalendarTile|NewsTile|WatchlistTile|TvWidget)|workspaces\/trading\/tiles\/MarketTiles|api\/types)$/,
+  /^\.\.\/(components\/(Icon|Clock)|theme\/(tokens|themes)|workspaces\/trading\/(MarketData|CalendarTile|NewsTile|WatchlistTile|TvWidget)|api\/types)$/,
+  /^\.\.\/(hooks\/useNowTick|lib\/timezone|workspaces\/trading\/(etClock|tvChart)|workspaces\/trading\/tiles\/TileFrame)$/,
   /^\.\/((Public(App|ClockTile|LiveWall|Login|Sidebar|TopBar)|publicNav))$/,
 ];
 const PROHIBITED_SOURCE=[/Admin/i,/Developer/i,/Founder/i,/OrderTicket/i,/TradeDesk/i,/BrokerConnections/i,/Pushover/i,/TeamChat/i,/FounderTrade/i];
