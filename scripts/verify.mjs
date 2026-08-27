@@ -6,6 +6,7 @@ const STEPS = [
   ['typecheck', 'typecheck'],
   ['public API authentication and migration security', 'verify:public-api'],
   ['migrations', 'verify:migrations'],
+  ['environment checks', 'verify:config'],
   ['credential encryption', 'verify:secretbox'],
   ['AI provider seam', 'verify:ai-provider'],
   ['market data macro', 'verify:market-macro'],

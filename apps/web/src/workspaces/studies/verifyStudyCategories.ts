@@ -166,18 +166,42 @@ check('the round after a finished one is a full one', passRemaining(visit) === q
 
 // A question deleted from the deck drops out of a saved pass; the rest of the
 // pass is kept rather than thrown away with it.
+//
+// The two cases are separated deliberately, and the counts are EXACT. Deleting
+// question 0 and allowing a +/-1 slack looked equivalent and was flaky: the pass
+// is shuffled, so about one run in eighty had already served question 0, the
+// pool was a question longer than the slack allowed, and the check failed for a
+// reason that had nothing to do with the behaviour it names. A tolerance wide
+// enough to cover both cases would also stop distinguishing them. So pick the
+// question by whether it was served, and assert the exact figure.
 clearDraw(USER, DECK);
 let editing = loadDraw(USER, DECK, questions, CATS, WEIGHTS, 'even');
-for (let i = 0; i < 5; i++) drawNext(editing);
+const served = new Set<number>();
+for (let i = 0; i < 5; i++) served.add(drawNext(editing)!);
 saveDraw(USER, DECK, editing);
-const trimmed = questions.filter((_, i) => i !== 0);
+
+// Still in the pass: the pass loses that one question and keeps the rest.
+const pending = questions.find((q) => !served.has(q.seq))!;
+const trimmed = questions.filter((q) => q.seq !== pending.seq);
 const afterEdit = loadDraw(USER, DECK, trimmed, CATS, WEIGHTS, 'even');
 check(
   'a deleted question leaves the saved pass without resetting it',
-  passRemaining(afterEdit) >= trimmed.length - 5 - 1 && passRemaining(afterEdit) <= trimmed.length - 5,
+  passRemaining(afterEdit) === trimmed.length - 5,
   passRemaining(afterEdit),
 );
-check('a deleted question is never served', !afterEdit.pool.includes(questions[0].seq));
+check('a deleted question is never served', !afterEdit.pool.includes(pending.seq));
+
+// Already served: it was not in the pass, so removing it takes nothing out of
+// it — and must not be read as a reason to reshuffle either.
+const alreadyAsked = questions.find((q) => served.has(q.seq))!;
+const withoutAsked = questions.filter((q) => q.seq !== alreadyAsked.seq);
+const afterAskedEdit = loadDraw(USER, DECK, withoutAsked, CATS, WEIGHTS, 'even');
+check(
+  'deleting an already-served question leaves the pass alone',
+  passRemaining(afterAskedEdit) === questions.length - 5,
+  passRemaining(afterAskedEdit),
+);
+check('a deleted served question is never served again', !afterAskedEdit.pool.includes(alreadyAsked.seq));
 
 // A pass saved in one mode is not carried into the other: a half-served even
 // pass says nothing about where a blueprint draw should be.

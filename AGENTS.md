@@ -5955,6 +5955,10 @@ fails it fails at one of them and that one is the fastest thing to re-run:
   fails *silently* in production: a ciphertext not bound to its row still
   decrypts, an unpinned tag length still verifies, a passphrase still encrypts.
   Nothing about the running terminal looks wrong — the guarantee is simply gone.
+- **Environment checks: `npm run verify:config`** after touching `config.ts` or
+  `configChecks.ts`. What it pins is not "does a bad environment get rejected" —
+  the old inline code did that. It is that **every** problem is reported in one
+  pass. See the boot guard below for why that is the property worth a check.
 
 Run `npm install` first in a fresh container.
 
@@ -6104,6 +6108,37 @@ Because of that:
   is the only deploy trigger.
 - **Squash merges only**, and always through a PR (see above), so `main` keeps
   one commit per release and every release has a PR page behind it.
+
+### A failed BUILD is harmless. A failed START is an outage.
+
+Worth stating plainly, because it has already cost one: Railway keeps the
+previous version live when a **build** fails — nothing is swapped, the site is
+untouched. But a build that **succeeds** and then exits at startup is different:
+the healthy container is replaced by a dead one and the service returns 502
+until somebody notices. `config.ts` exits on a missing variable, so a deploy
+that forgets one is exactly that case.
+
+**`apps/api/src/configChecks.ts` is the whole environment guard, and its rule is
+COLLECT, NEVER EXIT.** Nothing in it exits, throws on a bad environment, opens a
+connection or reads the database — it answers "would this environment boot, and
+what would it complain about?" and hands back every answer at once. `config.ts`
+prints the list and exits **once**; `preflight.ts` prints the same list and
+exits with a status. One module, so the two cannot drift.
+
+That matters more than it looks. The checks used to sit inline in `config.ts` as
+four sequential `process.exit(1)` calls, so an operator repairing production
+discovered the faults one at a time — set a variable, redeploy, hit the next —
+and each discovery was another outage. A single-fault environment behaves
+identically either way, which is why this needs `verify:config` rather than a
+passing boot to protect it.
+
+**Check before you deploy**, against the real service's own variables, without
+starting anything:
+
+    railway run --service <service> npm run preflight
+
+It prints every problem with the fix beside it, or says the environment would
+start.
 
 ## Frontend conventions
 
