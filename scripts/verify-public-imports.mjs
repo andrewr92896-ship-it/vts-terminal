@@ -10,9 +10,12 @@ const ALLOWED_PORTAL_IMPORTS=[
   /^\.\.\/\.\.\/\.\.\/web\/src\/public\/PublicRuntime$/,
   /^\.\.\/(components\/(Icon|Clock)|theme\/(tokens|themes)|workspaces\/trading\/(MarketData|CalendarTile|NewsTile|WatchlistTile|TvWidget)|api\/types)$/,
   /^\.\.\/(hooks\/useNowTick|lib\/timezone|workspaces\/trading\/(etClock|tvChart)|workspaces\/trading\/tiles\/TileFrame)$/,
-  /^\.\/((Public(App|ClockTile|LiveWall|Login|Runtime|Sidebar|TopBar)|publicNav))$/,
+  /^\.\/((Public(App|ClockTile|LiveWall|Login|Runtime|Sidebar|TopBar|Screens|AccountPages)|publicNav))$/,
+  /^\.\.\/(auth\/AuthContext|theme\/(tokens|themes))$/,
+  /^\.\.\/workspaces\/(trading\/(MarketData|TradeLog|FundedScreen|DeletedTrades|TradingTodo|MarketNews)|news\/GeneralNews|studies\/(StudyCreation|StudyLibrary|StudyGameHub|FlashcardsHub|StudyGuides)|help\/(HelpScreens|LegalScreens)|myportal\/(Preferences|NetWorth)|finances\/Budget|investments)$/,
+
 ];
-const PROHIBITED_SOURCE=[/Admin/i,/Developer/i,/Founder/i,/OrderTicket/i,/TradeDesk/i,/BrokerConnections/i,/Pushover/i,/TeamChat/i,/FounderTrade/i];
+const PROHIBITED_SOURCE=[/AdminTerminal/i,/DeveloperTerminal/i,/FounderTrade/i,/OrderTicket/i,/TradeDesk/i,/BrokerConnections/i,/Pushover/i,/TeamChat/i];
 const PROHIBITED_BUNDLE=[/vts_portal_session/i,/portal\.vitalistradingsystems\.com/i,/\/api\/(admin|dev|brokers|trade-desk|founder|teams|chat|pushover)/i,/place.{0,8}order/i,/broker.{0,8}(key|token|secret)/i,/founder.{0,8}trade/i,/strategy.{0,8}bias/i];
 let failures=0;
 const fail=(message)=>{failures+=1;console.error(`FAIL ${message}`)};

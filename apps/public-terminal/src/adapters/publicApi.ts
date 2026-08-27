@@ -35,10 +35,29 @@ const marketNewsData:MarketNewsData={aiTagging:false,headlines:[
 ]};
 let layout:MarketDataLayout={pinned:[...marketDataPayload.defaultPins],hidden:[],custom:[]};
 
-export const api={
+const baseApi={
   async marketData(){return publicEvidence?structuredClone(marketDataPayload):publicRequest<MarketDataPayload>('/market-data')},
   async marketNews(){return publicEvidence?structuredClone(marketNewsData):publicRequest<MarketNewsData>('/market-news')},
   async marketDataLayout(){return publicEvidence?{layout:structuredClone(layout)}:publicRequest<{layout:MarketDataLayout}>('/market-data/layout')},
   async saveMarketDataLayout(next:MarketDataLayout){if(publicEvidence){layout=structuredClone(next);return {layout:structuredClone(layout)}}return publicRequest<{layout:MarketDataLayout}>('/market-data/layout',{method:'PUT',body:JSON.stringify(next)})},
   async marketNewsStreams(){return {streams:{channels:[]},liveConfigured:false}},
 };
+
+const evidenceEmpty=(name:string):any=>{
+ const table:Record<string,any>={
+  tradeLog:{trades:[],excluded:[],removed:null,canDeleteAny:false,minTradeUnits:{},summary:{totalRealizedPl:0}},
+  deletedTrades:{trades:[],canDeleteAny:false},restoreDeletedTrade:{trades:[],canDeleteAny:false},
+  funded:{accounts:[],trades:[],summary:{}},investmentPortfolio:{accounts:[],holdings:[],allocation:[],performance:[],dividends:[],contributions:[],goals:[],projections:[],totals:{}},
+  generalNews:{headlines:[],source:null},getTodo:{sections:[{id:'public-todo',title:'To Do',tag:'trading',items:[]}]},
+  netWorth:{assets:[],liabilities:[],assetsTotal:0,liabilitiesTotal:0,netWorth:0,investmentValue:null,tradingValue:null},
+  budgetMonth:{month:new Date().toISOString().slice(0,7),categories:[],income:0,expenses:0,remaining:0},
+  listStudyPackages:{packages:[]},sharedStudyPackages:{pending:[],accepted:[]},browseStudyLibrary:{entries:[]},
+  teamFlashcardSets:{sets:[]},studyDecks:{decks:[]},studyGames:{decks:[]},siteContent:{howto:{}},patchNotes:{notes:[]},
+  announcements:{announcements:[],canManage:false},bugReports:{reports:[]}
+ };return structuredClone(table[name]??{ok:true,items:[],records:[]});
+};
+export const api:any=new Proxy(baseApi as any,{get(target,key:string){if(key in target)return target[key];return async(...args:any[])=>{
+ if(publicEvidence){if(/(import|extract|chat|generate|ai)/i.test(key))throw new ApiError(501,'Public AI is not available.');return evidenceEmpty(key)}
+ const write=/^(add|create|update|save|remove|delete|restore|toggle|send|reply|archive|unarchive|withdraw|submit|respond|share|revoke)/.test(key);
+ return publicRequest('/records/'+encodeURIComponent(key),{method:write?'POST':'GET',body:write?JSON.stringify({args}):undefined});
+}}});
