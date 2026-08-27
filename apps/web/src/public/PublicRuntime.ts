@@ -1,4 +1,4 @@
-export const publicEvidence=new URLSearchParams(location.search).get('evidence')==='1';
+export const publicEvidence=import.meta.env.VITE_PUBLIC_EVIDENCE==='1';
 
 export async function publicRequest<T>(path:string,init:RequestInit={}):Promise<T>{
   const response=await fetch(`/public/v1${path}`,{...init,credentials:'include',headers:{'Content-Type':'application/json',...(init.headers??{})}});
