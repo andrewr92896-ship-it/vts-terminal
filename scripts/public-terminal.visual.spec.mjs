@@ -56,13 +56,21 @@ test('candidate page-family evidence', async ({ page }) => {
   expect(blank, 'pages that captured with no content').toEqual([]);
 });
 
-test('public route and cookie contract', async ({ page, context }) => {
+test('the demo reaches no service and leaves nothing behind', async ({ page, context }) => {
   const requests = [];
   page.on('request', (request) => requests.push(request.url()));
-  await page.goto(base + '/?evidence=1#notes', { waitUntil: 'networkidle' });
+  await page.goto(base + '/?demo=1#notes', { waitUntil: 'networkidle' });
+
   const contract = await page.evaluate(() => window.__VTS_PUBLIC_BOUNDARY__);
   expect(contract.routes).toEqual(expect.arrayContaining(routes));
   expect(contract.sessionCookie).toBe('vts_public_session_v1');
-  expect(requests.filter((url) => url.includes('/api/'))).toEqual([]);
-  expect(await context.cookies()).toEqual([]);
+
+  await page.fill('input[placeholder="The call, in one line"]', 'A prediction made in the demo');
+  await page.getByRole('button', { name: 'Save private prediction' }).click();
+  await page.waitForTimeout(600);
+  await expect(page.getByText('A prediction made in the demo')).toBeVisible();
+
+  const offSite = requests.filter((url) => url.includes('/api/') || url.includes('/public/v1'));
+  expect(offSite, 'the demo must not call a service').toEqual([]);
+  expect(await context.cookies(), 'the demo must set no cookie').toEqual([]);
 });

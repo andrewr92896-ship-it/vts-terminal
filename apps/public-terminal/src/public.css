@@ -12,17 +12,15 @@
 .vts-public-main { min-height: 0; flex: 1; overflow: auto; padding: 20px 24px 30px; }
 .vts-public-footer { display:flex; justify-content:space-between; gap:16px; padding:9px 24px; border-top:1px solid var(--line); color:var(--faint); font:10px 'IBM Plex Mono',monospace; }
 .vts-public-footer a { color:var(--muted); text-decoration:none; }
-.vts-public-wall-grid { display:grid; grid-template-columns:minmax(0,1.8fr) minmax(290px,.8fr); grid-template-rows:minmax(340px,1fr) 230px; gap:10px; min-height:690px; }
+.vts-public-wall-grid { display:grid; grid-template-columns:minmax(0,1.8fr) minmax(290px,.8fr); grid-template-rows:104px minmax(340px,1fr) 230px; gap:10px; min-height:690px; }
 .vts-public-wall-grid > section { min-width:0; min-height:0; border:1px solid var(--line-2); border-radius:10px; background:var(--panel); overflow:hidden; }
-.vts-public-wall-grid .watchlist { grid-column:1 / -1; min-height:96px; }
-.vts-public-wall-grid .chart { min-height:380px; }
-.vts-public-wall-grid .news { min-height:380px; }
-.vts-public-wall-grid .calendar, .vts-public-wall-grid .clock { min-height:210px; }
+.vts-public-wall-grid .watchlist { grid-column:1 / -1; grid-row:1; min-height:96px; }
+.vts-public-wall-grid .chart { grid-row:2; min-height:380px; }
+.vts-public-wall-grid .news { grid-row:2; min-height:380px; }
+.vts-public-wall-grid .calendar, .vts-public-wall-grid .clock { grid-row:3; min-height:210px; }
 .vts-public-wall-head { display:flex; align-items:center; justify-content:space-between; gap:12px; margin:0 0 14px; }
 .vts-public-wall-head h1 { margin:0; font-size:20px; color:#fff; }
 .vts-public-wall-head p { margin:4px 0 0; color:var(--muted); font-size:12.5px; }
-.vts-public-board-label { display:flex; gap:8px; align-items:center; margin-bottom:12px; color:var(--faint); font:10px 'IBM Plex Mono',monospace; text-transform:uppercase; letter-spacing:.7px; }
-.vts-public-board-label span { padding:7px 12px; border:1px solid var(--line-2); border-radius:7px; color:var(--text); text-transform:none; letter-spacing:0; }
 .vts-public-chart-wrap { height:100%; min-height:380px; background:#071021; }
 .vts-public-chart-wrap > * { height:100%; }
 .vts-public-boundary-note { color:#f3e3b8; background:rgba(235,203,116,.08); border:1px solid rgba(235,203,116,.35); border-radius:8px; padding:9px 12px; font-size:12px; margin-bottom:12px; }
