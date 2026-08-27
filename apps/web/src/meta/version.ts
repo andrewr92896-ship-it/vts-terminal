@@ -11,9 +11,16 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 7.41';
+export const APP_VERSION = 'Beta V 7.42';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 7.42',
+    date: 'August 27, 2026',
+    notes: [
+      'The private access list can now name you by username or email, not only by account ID. An account ID belongs to one database, so pointing the terminal at a different one used to stop admitting the very people it was meant to let in — and it looked exactly like a wrong password. It admits the same people as before, identified by something that does not change when the storage does.',
+    ],
+  },
   {
     version: 'Beta V 7.41',
     date: 'August 27, 2026',

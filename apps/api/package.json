@@ -29,6 +29,7 @@
     "verify:investments": "tsx src/investments/verifyInvestments.ts",
     "verify:migrations": "tsx src/db/verifyMigrations.ts",
     "verify:config": "tsx src/verifyConfigChecks.ts",
+    "verify:private-access": "tsx src/auth/verifyPrivateAccess.ts",
     "verify:secretbox": "tsx src/security/verifySecretbox.ts",
     "verify:ai-provider": "tsx src/ai/verifyProvider.ts",
     "verify:study-packages": "tsx src/studies/verifyStudyPackages.ts",

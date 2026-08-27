@@ -34,6 +34,7 @@
     "verify:investments": "npm --workspace @vts/api run verify:investments",
     "verify:migrations": "npm --workspace @vts/api run verify:migrations",
     "verify:config": "npm --workspace @vts/api run verify:config",
+    "verify:private-access": "npm --workspace @vts/api run verify:private-access",
     "verify:secretbox": "npm --workspace @vts/api run verify:secretbox",
     "verify:ai-provider": "npm --workspace @vts/api run verify:ai-provider",
     "verify:study-packages": "npm --workspace @vts/api run verify:study-packages",

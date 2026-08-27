@@ -235,7 +235,7 @@ export async function authRoutes(app: FastifyInstance, options: AuthRouteOptions
       user?.passwordHash ?? DUMMY_PASSWORD_HASH,
       password,
     );
-    const admitted = !!user && isPrivateUserAllowed(user.id);
+    const admitted = !!user && isPrivateUserAllowed(user);
     let credentialsValid = !!user && user.active && permanentPasswordValid;
 
     // A reset credential is checked only after the normal password fails. On a
@@ -346,7 +346,7 @@ export async function authRoutes(app: FastifyInstance, options: AuthRouteOptions
     }
     const rawChallenge = signedCookie(request, LOGIN_CHALLENGE_COOKIE);
     const pendingUser = await challengeUser(rawChallenge);
-    if (!pendingUser || !pendingUser.active || !isPrivateUserAllowed(pendingUser.id)) {
+    if (!pendingUser || !pendingUser.active || !isPrivateUserAllowed(pendingUser)) {
       reply.clearCookie(LOGIN_CHALLENGE_COOKIE, loginChallengeCookieOptions());
       return reply.code(401).send({ error: 'Sign in again to continue' });
     }
@@ -379,7 +379,7 @@ export async function authRoutes(app: FastifyInstance, options: AuthRouteOptions
     }
 
     const user = (await db.select().from(users).where(eq(users.id, result.userId)).limit(1))[0];
-    if (!user || !user.active || !isPrivateUserAllowed(user.id)) {
+    if (!user || !user.active || !isPrivateUserAllowed(user)) {
       reply.clearCookie(LOGIN_CHALLENGE_COOKIE, loginChallengeCookieOptions());
       return reply.code(401).send({ error: 'Sign in again to continue' });
     }
@@ -415,7 +415,7 @@ export async function authRoutes(app: FastifyInstance, options: AuthRouteOptions
   app.post('/api/auth/two-factor/resend', async (request, reply) => {
     const rawChallenge = signedCookie(request, LOGIN_CHALLENGE_COOKIE);
     const user = await challengeUser(rawChallenge);
-    if (!user || !user.active || !isPrivateUserAllowed(user.id)) {
+    if (!user || !user.active || !isPrivateUserAllowed(user)) {
       return reply.code(401).send({ error: 'Sign in again to request a new code' });
     }
     const lock = await checkTerminalAuthLock(`user:${user.id}`, request.ip ?? '');
