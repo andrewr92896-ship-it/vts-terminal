@@ -28,3 +28,15 @@ export const publicAuth={
     return publicRequest<{message:string}>('/early-access',{method:'POST',body:JSON.stringify({email,note:note||undefined})});
   },
 };
+
+// WHO IS SIGNED IN IS A RUNTIME FACT, not a constant. The top bar carried the
+// literal "Andrew" — the owner's name — which every public visitor and every
+// demo visitor saw. The shell sets this once the session or the demo resolves;
+// the auth adapter reads it, so shared components see it through the same
+// useAuth() they always used.
+export type PublicIdentity={id:string;username:string;displayName:string;email?:string;isDemo?:boolean};
+let identity:PublicIdentity={id:'public-user',username:'public',displayName:'Public account'};
+const identityListeners=new Set<()=>void>();
+export function setPublicUser(next:PublicIdentity){identity=next;for(const listener of identityListeners)listener()}
+export function readPublicUser(){return identity}
+export function watchPublicUser(listener:()=>void){identityListeners.add(listener);return()=>{identityListeners.delete(listener)}}
