@@ -255,6 +255,30 @@ export async function authRoutes(app: FastifyInstance, options: AuthRouteOptions
 
     if (!credentialsValid || !admitted || !user) {
       await recordTerminalAuthFailure(loginSubject, ip);
+      // The ANSWER stays generic — one message for every failure, so a stranger
+      // cannot learn from it whether an address exists, is active, or is
+      // admitted. That is right and does not change.
+      //
+      // But the SERVER has to know, and it did not. A correct password from an
+      // account missing from PRIVATE_ACCESS_USER_IDS reads as "Invalid email or
+      // password" with nothing anywhere saying otherwise — so the one person who
+      // most needs to understand it, the owner of a private terminal locked out
+      // of their own deployment, has no way to tell it from a typo. Two failures
+      // that need completely different fixes, indistinguishable.
+      //
+      // So the reason goes to the log, where only the operator sees it. No
+      // password, and no identifier the request did not already supply.
+      const reason = !user
+        ? 'no such account'
+        : !user.active
+          ? 'account is inactive'
+          : !admitted
+            ? 'account is not in PRIVATE_ACCESS_USER_IDS'
+            : 'password did not match';
+      app.log.warn(
+        { userId: user?.id, reason },
+        `[auth] sign-in refused: ${reason}`,
+      );
       return reply.code(401).send({ error: 'Invalid email or password' });
     }
 

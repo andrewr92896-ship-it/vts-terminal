@@ -11,9 +11,16 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 7.40';
+export const APP_VERSION = 'Beta V 7.41';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 7.41',
+    date: 'August 27, 2026',
+    notes: [
+      'A refused sign-in now says why in the server log. What you see on the sign-in card is deliberately the same message every time — a stranger must not be able to learn which addresses exist — but that also meant an account left off the private access list looked exactly like a mistyped password, with nothing anywhere able to tell the two apart.',
+    ],
+  },
   {
     version: 'Beta V 7.40',
     date: 'August 27, 2026',
