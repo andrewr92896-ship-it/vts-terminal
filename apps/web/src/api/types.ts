@@ -3283,3 +3283,33 @@ export interface FounderTradePrefsPatch {
   notifyOnResponse?: boolean;
   responseLevel?: NotifLevel;
 }
+
+// ---- Developer Terminal: what this deployment is actually serving ----------
+//
+// Mirror of apps/api/src/dev/environment.ts. Deliberately carries no connection
+// string: the server reports the SHAPE of the database target (which variable
+// supplied it, the driver, the host or path) and never the value, because a
+// libsql URL carries its auth token in the query string.
+export interface DevAccount {
+  id: string;
+  username: string;
+  rank: 'founder' | 'admin' | 'member';
+  active: boolean;
+  admitted: boolean;
+}
+
+export interface DevCredential {
+  broker: string;
+  label: string;
+  active: boolean;
+  problem: string | null;
+}
+
+export interface DevEnvironment {
+  database: { source: 'PRIVATE_DATABASE_URL' | 'DATABASE_URL'; driver: string; target: string };
+  counts: Record<string, number | null>;
+  accounts: DevAccount[];
+  allowlist: { configured: boolean; unknownIds: string[] };
+  credentials: DevCredential[];
+  credentialsTested: boolean;
+}

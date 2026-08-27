@@ -53,6 +53,7 @@ import { AdminGuidelines } from '../workspaces/admin/AdminGuidelines';
 import { AdminRuleBreaking } from '../workspaces/admin/AdminRuleBreaking';
 import { AdminWallTemplates } from '../workspaces/admin/AdminWallTemplates';
 import { AdminReviewList } from '../workspaces/admin/AdminReviewList';
+import { AdminEnvironment } from '../workspaces/admin/AdminEnvironment';
 import { AdminStudyLibrary } from '../workspaces/admin/AdminStudyLibrary';
 import { DevBlog } from '../workspaces/admin/DevBlog';
 import {
@@ -210,6 +211,8 @@ function renderScreen(
       return <AdminWallTemplates theme={theme} />;
     case 'ad_review':
       return <AdminReviewList theme={theme} />;
+    case 'ad_environment':
+      return <AdminEnvironment theme={theme} />;
     case 'ad_blog':
       return <DevBlog theme={theme} />;
     case 'ad_teams':

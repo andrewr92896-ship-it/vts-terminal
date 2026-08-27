@@ -7,6 +7,7 @@ import type {
   StudyPackage,
   StudyPackageDetail,
   StudyPackageState,
+  DevEnvironment,
   StudyBugContext,
   StudyShare,
   StudySubmission,
@@ -2172,6 +2173,11 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ kind, name, subject, blueprint }),
     });
+  },
+  // Which database is this deployment serving, and what is in it? Read-only,
+  // and it never returns a connection string.
+  devEnvironment(): Promise<DevEnvironment> {
+    return request('/api/dev/environment');
   },
   studyPackageState(id: string): Promise<{ state: StudyPackageState }> {
     return request(`/api/dev/study/packages/${encodeURIComponent(id)}/state`);

@@ -11,9 +11,16 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 7.38';
+export const APP_VERSION = 'Beta V 7.39';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 7.39',
+    date: 'August 27, 2026',
+    notes: [
+      'Developer Terminal ▸ Deployment says which database this terminal is reading, what is in it, which accounts it will admit, and whether the stored broker credentials still open. It was possible for the terminal to come up healthy and show an empty desk with nothing on any screen able to say why.',
+    ],
+  },
   {
     version: 'Beta V 7.38',
     date: 'August 27, 2026',

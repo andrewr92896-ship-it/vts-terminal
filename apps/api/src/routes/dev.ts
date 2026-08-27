@@ -9,6 +9,7 @@ import { PACKAGE_SCHEMA_VERSION } from '../studies/packageFormat.js';
 import { db } from '../db/index.js';
 import { studyPackageAdds, studyPackageShares, studyPackageSubmissions, studyPackages } from '../db/schema.js';
 import { packageAudience } from '../studies/packageAccess.js';
+import { readDevEnvironment } from '../dev/environment.js';
 
 // Developer capabilities — the SAME production terminal, with the diagnostics
 // and preview controls a founder needs to test it.
@@ -107,6 +108,13 @@ export async function devRoutes(app: FastifyInstance) {
   });
 
   // The fixture catalog, for the picker.
+  // Which database is this deployment serving, and what is in it?
+  //
+  // Read-only, and it never returns a connection string — a libsql URL carries
+  // its auth token in the query string, so the service reports the shape of the
+  // target rather than the target. See dev/environment.ts.
+  app.get('/api/dev/environment', dev, async () => readDevEnvironment());
+
   app.get('/api/dev/study/fixtures', dev, async () => {
     return {
       schemaVersion: PACKAGE_SCHEMA_VERSION,
