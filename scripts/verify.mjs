@@ -52,6 +52,9 @@ const env = { ...process.env };
 const key = () => randomBytes(32).toString('base64');
 if (!env.CREDENTIALS_KEY) env.CREDENTIALS_KEY = key();
 if (!env.SESSION_SECRET) env.SESSION_SECRET = key();
+// The marketing build itself stays fail-closed. The official verifier supplies
+// the one explicit production-safe origin so its general build step is deterministic.
+env.PUBLIC_APP_ORIGIN = 'https://app.vitalistradingsystems.com';
 
 for (const [label, script] of STEPS) {
   process.stdout.write(`\n── ${label} ──\n`);

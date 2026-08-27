@@ -30,7 +30,7 @@ flowchart LR
 
 Three independent build targets now exist:
 
-- `apps/marketing`: public static marketing build. Its only application link targets the public terminal.
+- `apps/marketing`: public static marketing build. Its only application link targets the public terminal. The destination is baked into the artifact from the required build-time `PUBLIC_APP_ORIGIN`; the build fails closed when it is absent or is not the exact public production origin or a canonical single-label Railway staging origin.
 - `apps/public-terminal`: isolated customer shell. It imports no private source and deliberately exposes no login or data feature until separate public auth/API/database infrastructure exists.
 - `apps/web` + `apps/api`: the existing application, now classified as the private portal and private API.
 

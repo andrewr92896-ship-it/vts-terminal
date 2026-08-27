@@ -7,6 +7,8 @@ import vm from 'node:vm';
 
 const PUBLIC_ROOTS = ['apps/marketing', 'apps/public-terminal'];
 const TERMINAL_ROOTS = ['apps/public-terminal/src', 'apps/public-terminal/dist'];
+const SAFE_PUBLIC_APP_ORIGIN = 'https://app.vitalistradingsystems.com';
+const SAFE_RAILWAY_ORIGIN = 'https://vts-public-demo-pr-123.up.railway.app';
 const TEXT_EXTENSIONS = /\.(?:html|css|js|mjs|ts|tsx|json|txt|svg)$/i;
 const LEGACY_BOUNDARY_RULES = [
   ['private portal hostname', /portal\.vitalistradingsystems\.com/i],
@@ -50,6 +52,12 @@ const PROHIBITED_CONCEPTS = [
   ['broad general-purpose AI', /\b(?:general[ -]purpose\s+AI|AI\s+(?:assistant|chatbot|copilot)|ask\s+(?:the\s+)?AI\s+anything)\b/i],
   ['live credential claim', /\b(?:enter|save|store|connect|use)(?:s|d|ing)?\s+(?:your\s+)?(?:live|real)\s+(?:API\s+)?credentials?\b/i],
   ['real-performance claim', /\b(?:actual|live|verified|audited|real)\s+(?:returns?|performance|P&L|profits?|track\s+record)\b/i],
+  ['accuracy or win-rate claim', /\b(?:guaranteed|proven|high|superior|\d+(?:\.\d+)?%)[ -]?(?:accuracy|accurate|win[ -]?rate)\b/i],
+  ['return claim', /\b(?:guaranteed|consistent|market[ -]?beating|superior|positive)\s+returns?\b/i],
+  ['prediction claim', /\b(?:predict|forecast)(?:s|ed|ing)?\s+(?:the\s+)?(?:market|price|returns?|winners?|direction)\b/i],
+  ['automated-trading claim', /\b(?:automated|autonomous|hands[ -]?free|algorithmic)\s+(?:trade|trading|execution)\b/i],
+  ['investment-advice claim', /\b(?:provides?|offers?|delivers?|get|receive)\s+(?:personalized\s+)?investment\s+advice\b/i],
+  ['real AI or API claim', /\b(?:live|real|production)\s+(?:AI|API)(?:\s+(?:integration|connection|service|analysis))?\b/i],
 ];
 
 let failures = 0;
@@ -116,12 +124,18 @@ function verifyScannerRules() {
     ['broad general-purpose AI', 'Ask the AI anything'],
     ['live credential claim', 'Save your live API credentials'],
     ['real-performance claim', 'Verified performance since inception'],
+    ['accuracy or win-rate claim', 'Proven 92% accuracy'],
+    ['return claim', 'Consistent returns'],
+    ['prediction claim', 'Predict market direction'],
+    ['automated-trading claim', 'Automated trading'],
+    ['investment-advice claim', 'Provides personalized investment advice'],
+    ['real AI or API claim', 'Live AI integration'],
   ];
   for (const [expected, sample] of forbiddenSamples) {
     if (!violationsFor(sample, true).includes(expected)) fail(`scanner self-test missed ${expected}`);
   }
   const permitted = [
-    '<form id="feedback-form"><button type="submit">Save in memory</button></form>',
+
     "form.addEventListener('submit', function (event) { event.preventDefault(); })",
     'No broker connection, order placement, copy trading, or personalized recommendations are available.',
     'This demo does not show real performance and never accepts live credentials.',
@@ -130,6 +144,81 @@ function verifyScannerRules() {
   for (const sample of permitted) {
     const found = violationsFor(sample, true);
     if (found.length) fail(`scanner false-positive self-test for ${JSON.stringify(sample)}: ${found.join(', ')}`);
+  }
+}
+
+function runMarketingBuild(origin) {
+  const env = { ...process.env };
+  delete env.PUBLIC_APP_ORIGIN;
+  if (origin !== undefined) env.PUBLIC_APP_ORIGIN = origin;
+  return spawnSync(process.execPath, ['scripts/build-static-app.mjs', 'apps/marketing'], {
+    env,
+    encoding: 'utf8',
+  });
+}
+
+function verifyMarketingOriginContract() {
+  for (const origin of [SAFE_PUBLIC_APP_ORIGIN, SAFE_RAILWAY_ORIGIN]) {
+    const run = runMarketingBuild(origin);
+    if (run.status !== 0) {
+      fail(`marketing build rejected safe origin ${origin}: ${run.stderr || run.stdout}`);
+      continue;
+    }
+    const artifact = readFileSync('apps/marketing/dist/index.html', 'utf8');
+    const href = `href="${origin}"`;
+    if (artifact.split(href).length - 1 !== 1) fail(`marketing artifact does not contain exactly the validated origin ${origin}`);
+    if (artifact.includes('%%PUBLIC_APP_ORIGIN%%')) fail('marketing artifact retains the destination placeholder');
+  }
+
+  const rejected = [
+    undefined,
+    '',
+    'https://portal.vitalistradingsystems.com',
+    'https://child.portal.vitalistradingsystems.com',
+    'https://vitalistradingsystems.com',
+    'https://app.vitalistradingsystems.com/private',
+    'https://app.vitalistradingsystems.com?next=portal',
+    'https://app.vitalistradingsystems.com#demo',
+    'https://user:pass@app.vitalistradingsystems.com',
+    'http://app.vitalistradingsystems.com',
+    'https://app.vitalistradingsystems.com/',
+    'https://app.vitalistradingsystems.com:443',
+    'https://localhost',
+    'https://127.0.0.1',
+    'https://[::1]',
+    'https://10.0.0.5',
+    'https://192.168.1.10',
+    'https://172.16.0.4',
+    'javascript:alert(1)',
+    'data:text/html,test',
+    'not a URL',
+    'https://two.labels.up.railway.app',
+  ];
+  for (const origin of rejected) {
+    const run = runMarketingBuild(origin);
+    if (run.status === 0) fail(`marketing build accepted unsafe origin ${String(origin)}`);
+    if (existsSync('apps/marketing/dist')) fail(`failed marketing build left an artifact for ${String(origin)}`);
+  }
+}
+
+function verifyMarketingAssetGraph() {
+  const source = readFileSync('apps/marketing/src/index.html', 'utf8');
+  const artifact = readFileSync('apps/marketing/dist/index.html', 'utf8');
+  const sourceLinks = [...source.matchAll(/\b(?:src|href)\s*=\s*["']([^"']+)["']/gi)].map((match) => match[1]);
+  const artifactLinks = [...artifact.matchAll(/\b(?:src|href)\s*=\s*["']([^"']+)["']/gi)].map((match) => match[1]);
+  const expectedSourceLinks = ['#main', '#top', '#capabilities', '#boundaries', './styles.css', '%%PUBLIC_APP_ORIGIN%%'].sort();
+  const expectedArtifactLinks = ['#main', '#top', '#capabilities', '#boundaries', './styles.css', SAFE_PUBLIC_APP_ORIGIN].sort();
+  if (JSON.stringify(sourceLinks.sort()) !== JSON.stringify(expectedSourceLinks)) fail(`marketing source link graph changed: ${sourceLinks.join(', ')}`);
+  if (JSON.stringify(artifactLinks.sort()) !== JSON.stringify(expectedArtifactLinks)) fail(`marketing artifact link graph changed: ${artifactLinks.join(', ')}`);
+  if (/<(?:script|img|picture|video|audio|source|form|iframe|embed|object)\b/i.test(source)) fail('marketing source contains a prohibited active, external, or form element');
+}
+
+function scanMarketing(root, allowedOrigin = '') {
+  for (const file of walk(root)) {
+    if (!TEXT_EXTENSIONS.test(file)) continue;
+    let text = readFileSync(file, 'utf8');
+    if (allowedOrigin) text = text.split(allowedOrigin).join('');
+    for (const label of violationsFor(text, true)) fail(`${file} contains forbidden ${label}`);
   }
 }
 
@@ -318,23 +407,30 @@ async function verifyStaticServer() {
   }
 }
 
+verifyMarketingOriginContract();
+
 for (const script of ['build:marketing', 'build:public']) {
-  const run = spawnSync('npm', ['run', script], { stdio: 'inherit', shell: true });
+  const env = script === 'build:marketing'
+    ? { ...process.env, PUBLIC_APP_ORIGIN: SAFE_PUBLIC_APP_ORIGIN }
+    : process.env;
+  const run = spawnSync('npm', ['run', script], { stdio: 'inherit', shell: true, env });
   if (run.status !== 0) process.exit(run.status ?? 1);
 }
 
 verifyScannerRules();
-for (const root of PUBLIC_ROOTS) {
-  scan(path.join(root, 'src'), root === 'apps/public-terminal');
-  scan(path.join(root, 'dist'), root === 'apps/public-terminal');
-}
+scanMarketing('apps/marketing/src');
+scanMarketing('apps/marketing/dist', SAFE_PUBLIC_APP_ORIGIN);
+for (const root of TERMINAL_ROOTS) scan(root, true);
 verifyResetContract();
 verifyFormsAreMemoryOnly();
 verifyAssetGraph('apps/public-terminal/dist');
+verifyMarketingAssetGraph();
 await verifyStaticServer();
 
-const marketing = readFileSync('apps/marketing/src/index.html', 'utf8');
-if (!marketing.includes('https://app.vitalistradingsystems.com')) fail('marketing login link does not target the public application');
+const marketingSource = readFileSync('apps/marketing/src/index.html', 'utf8');
+const marketingArtifact = readFileSync('apps/marketing/dist/index.html', 'utf8');
+if (marketingSource.split('%%PUBLIC_APP_ORIGIN%%').length - 1 !== 1) fail('marketing source must contain exactly one build-time destination placeholder');
+if (marketingArtifact.split(SAFE_PUBLIC_APP_ORIGIN).length - 1 !== 1) fail('marketing artifact must contain exactly one validated public destination');
 if (!existsSync('apps/web/public/robots.txt') || !readFileSync('apps/web/public/robots.txt', 'utf8').includes('Disallow: /')) fail('private portal robots.txt is not deny-all');
 const authRoutes = readFileSync('apps/api/src/routes/auth.ts', 'utf8');
 if (authRoutes.includes("app.post('/api/auth/demo'")) fail('private portal still registers credential-free demo login');
