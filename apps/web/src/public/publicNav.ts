@@ -3,7 +3,7 @@ import { C } from '../theme/tokens';
 
 export type PublicWorkspaceKey = Extract<WorkspaceKey, 'myportal'|'trading'|'finances'|'news'|'investments'|'studies'|'help'>;
 export type PublicScreenKey =
-  | 'live'|'data'|'desk'|'funded'|'deleted'
+  | 'live'|'data'|'desk'|'funded'|'deleted'|'notes'
   | 'td_trading'|'my_access'|'my_rules'|'my_prefs'|'my_settings'
   | 'fin_networth'|'fin_budget'
   | 'news'|'news_world'|'news_politics'
@@ -19,11 +19,11 @@ export interface PublicNavWorkspace { key:PublicWorkspaceKey;label:string;icon:s
 export const PUBLIC_NAV:readonly PublicNavWorkspace[]=[
  {key:'myportal',label:'My Terminal',icon:'briefcase',accent:'#34D399',group:'My Terminal',sections:[
   {key:'data',label:'Market Data',icon:'line-chart'},{key:'td_trading',label:'To Do',icon:'list-todo'},
-  {key:'my_access',label:'Plans & Features',icon:'gem'},{key:'my_rules',label:'Site Rules',icon:'list-checks'},
+  {key:'my_access',label:'Premium Features',icon:'gem'},{key:'my_rules',label:'Site Rules',icon:'list-checks'},
   {key:'my_prefs',label:'Preferences',icon:'settings-2'},{key:'my_settings',label:'Settings',icon:'settings'}]},
  {key:'trading',label:'Trade Tracking',icon:'candlestick-chart',accent:C.gold,group:'Trade Tracking',sections:[
   {key:'live',label:'Live Wall',icon:'layout-dashboard'},{key:'desk',label:'Closed Trades & Metrics',icon:'candlestick-chart'},
-  {key:'funded',label:'Manual Trades',icon:'pencil'},{key:'deleted',label:'Deleted Trades',icon:'trash-2'}]},
+  {key:'funded',label:'Manual Trades',icon:'pencil'},{key:'deleted',label:'Deleted Trades',icon:'trash-2'},{key:'notes',label:'Trading Notes & Predictions',icon:'notebook-pen'}]},
  {key:'finances',label:'Finances',icon:'piggy-bank',accent:'#4ADE80',group:'Finances',sections:[
   {key:'fin_networth',label:'Net Worth',icon:'scale'},{key:'fin_budget',label:'Budget',icon:'receipt'}]},
  {key:'news',label:'News',icon:'newspaper',accent:'#93B4FF',group:'News',sections:[

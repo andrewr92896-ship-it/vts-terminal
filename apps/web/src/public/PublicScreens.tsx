@@ -20,13 +20,14 @@ import { THEMES } from '../theme/themes';
 import { useAuth } from '../auth/AuthContext';
 import { PublicLiveWall } from './PublicLiveWall';
 import { PublicPlans,PublicSettings } from './PublicAccountPages';
+import { PublicPredictions } from './PublicPredictions';
 import type { PublicScreenKey,PublicWorkspaceKey } from './publicNav';
 
 export function PublicScreen({screen,workspace,onNavigate}:{screen:PublicScreenKey;workspace:PublicWorkspaceKey;onNavigate:(screen:PublicScreenKey)=>void}){
  const theme=THEMES[workspace];const {user}=useAuth();const go=(next:string)=>onNavigate(next as PublicScreenKey);
  switch(screen){
   case'live':return <PublicLiveWall/>;case'data':return <MarketData/>;case'desk':return <TradeLog/>;
-  case'funded':return <FundedScreen/>;case'deleted':return <DeletedTrades/>;case'td_trading':return <TradingTodo/>;
+  case'funded':return <FundedScreen/>;case'deleted':return <DeletedTrades/>;case'notes':return <PublicPredictions theme={theme}/>;case'td_trading':return <TradingTodo/>;
   case'my_access':return <PublicPlans theme={theme}/>;case'my_rules':case'hp_rules':return <HelpRules theme={theme}/>;
   case'my_prefs':return <Preferences theme={theme}/>;case'my_settings':return <PublicSettings theme={theme}/>;
   case'fin_networth':return <NetWorthScreen onNavigate={go}/>;case'fin_budget':return <BudgetScreen onNavigate={go}/>;
