@@ -9,6 +9,7 @@
 // throwing: a demo visitor clicking into a corner nobody seeded should meet an
 // empty screen, never a stack trace.
 import { demoAccounts, demoHoldings, demoState, demoAgo, demoDay } from './demoSeed';
+import { DEMO_QUESTIONS } from './demoQuestions';
 
 const clone = <T>(value: T): T => structuredClone(value);
 const nextId = (prefix: string) => `${prefix}-${demoState.nextId++}`;
@@ -176,6 +177,14 @@ const DEMO_DIVIDENDS = [0, 3, 6, 9].flatMap((quarter, index) => ([
 
 const writes: Record<string, (args: any[]) => unknown> = {
   generalNews: ([topic]) => ({ headlines: clone(topic === 'politics' ? DEMO_POLITICS : DEMO_WORLD) }),
+  studyDeck: ([id]) => {
+    const found = DEMO_DECKS.find((d) => d.id === id) ?? DEMO_DECKS[0]!;
+    return { deck: { ...clone(found), questions: found.id === 'demo-deck-1' ? clone(DEMO_QUESTIONS) : [] } };
+  },
+  // Progress is per visit, like everything else here.
+  studyDeckGame: () => ({ state: demoState.gameState }),
+  saveStudyDeckGame: ([, state]) => { demoState.gameState = typeof state === 'string' ? state : null; return { ok: true }; },
+  studyDeckLeaderboard: () => ({ rows: [] }),
   addTrade: ([input]) => {
     const entry = num(input?.entryPrice); const exit = input?.exitPrice == null ? null : num(input.exitPrice);
     demoState.trades.unshift({
@@ -274,8 +283,8 @@ const deck = (id: string, name: string, description: string, categories: string[
 });
 
 const DEMO_DECKS = [
-  deck('demo-deck-1', 'Market terminology', 'The vocabulary a new trader meets first — orders, spreads, sessions and sizing.', ['Orders', 'Pricing', 'Sessions', 'Risk'], 48),
-  deck('demo-deck-2', 'Reading an economic calendar', 'What each release measures, who publishes it, and how often it is revised.', ['Inflation', 'Labor', 'Policy'], 32),
+  deck('demo-deck-1', 'Market terminology', 'The vocabulary a new trader meets first — orders, spreads, sessions and sizing.', ['Orders', 'Pricing', 'Sessions', 'Risk'], DEMO_QUESTIONS.length),
+  deck('demo-deck-2', 'Reading an economic calendar', 'What each release measures, who publishes it, and how often it is revised.', ['Inflation', 'Labor', 'Policy'], 0),
 ];
 
 const DEMO_SETS = [
@@ -299,9 +308,32 @@ const DEMO_POLITICS = [
   wire('p2', 'Trade delegation concludes three days of talks', 'Both sides described the discussions as procedural.', 'Fictional Wire', 11),
 ];
 
+const fundedTrade = (id: string, instrument: string, side: 'long'|'short', units: number, entry: number, exit: number|null, pl: number|null, days: number) => ({
+  id, accountId: 'demo-funded-1', instrument, side, units, entryPrice: entry, exitPrice: exit,
+  realizedPl: pl, stopLoss: null, takeProfit: null, status: exit == null ? 'open' : 'closed',
+  openedAt: demoAgo(days), closedAt: exit == null ? null : demoAgo(days) + 5 * 3_600_000,
+  notes: null, createdAt: demoAgo(days),
+});
+
+// A hand-kept book with trades in it, so the screen shows what it is for rather
+// than an empty state.
+const DEMO_FUNDED = {
+  id: 'demo-funded-1', ownerId: 'demo-user', owner: 'demo', isMine: true,
+  platform: 'Hand-kept', label: 'Practice book', currency: 'USD',
+  balance: 12_480, startingBalance: 12_000, commissionPerLot: null, notes: null,
+  realizedPl: 480, tradeCount: 3, pnl: { daily: 0, weekly: 186, monthly: 480 },
+  trades: [
+    fundedTrade('demo-ft-1', 'EUR/USD', 'long', 20_000, 1.1631, 1.1674, 86, 3),
+    fundedTrade('demo-ft-2', 'NAS100', 'short', 1, 19_402, 19_302, 100, 6),
+    fundedTrade('demo-ft-3', 'XAU/USD', 'long', 3, 4_598.2, null, null, 1),
+  ],
+  createdAt: demoAgo(60), updatedAt: demoAgo(1),
+};
+
 const capitalTotal = (value: number) => ({ value, mode: 'manual' as const, stated: 1, unstated: 0, mixedCurrency: false });
 
 const reads: Record<string, () => unknown> = {
+  funded: () => ({ accounts: [clone(DEMO_FUNDED)], fundedTileColor: null }),
   studyDecks: () => ({ decks: clone(DEMO_DECKS) }),
   studyGames: () => ({ decks: clone(DEMO_DECKS) }),
   studyFlashcardSets: () => ({ sets: clone(DEMO_SETS) }),

@@ -108,6 +108,7 @@ export const demoState = {
     { id: 'be6', categoryId: 'bc5', amountCents: 14_900, note: 'Charting subscription', occurredOn: day(17), source: 'manual' },
   ] as any[],
   notes: [] as any[],
+  gameState: null as string | null,
 };
 
 // ---- Trading notes ----------------------------------------------------------

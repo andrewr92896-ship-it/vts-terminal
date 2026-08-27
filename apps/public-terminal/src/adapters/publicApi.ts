@@ -63,7 +63,7 @@ const evidenceEmpty=(name:string):any=>{
   deskSettings:{breakEvenMode:'percent',breakEvenPct:0,breakEvenAmount:0,breakEvenOverrides:[],minTradeUnits:0,instruments:[],editableMembers:[]},
   traderCapital:{userId:null,traders:1,deposited:emptyCapitalTotal(),withdrawn:emptyCapitalTotal(),breakdown:[],total:null,accounts:0,unreadable:0,currency:null,canSync:false,syncedAt:null,otherTransfers:0,note:null,canEdit:false},
   deletedTrades:{trades:[],canDeleteAny:false},restoreDeletedTrade:{trades:[],canDeleteAny:false},
-  funded:{accounts:[],trades:[],summary:{}},
+  funded:{accounts:[],fundedTileColor:null},
   investmentPortfolio:{accounts:[],holdings:[],allocation:[],performance:[],dividends:[],contributions:[],goals:[],projections:[],totals:{},unpricedCount:0},
   investmentProjection:{points:[],startValue:0,monthlyContribution:0,annualRatePct:0,years:0},
   generalNews:{headlines:[],source:null},getTodo:{sections:[{id:'public-todo',title:'To Do',tag:'trading',items:[]}]},
