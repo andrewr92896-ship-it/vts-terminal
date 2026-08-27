@@ -38,6 +38,7 @@
     "verify:ai-provider": "npm --workspace @vts/api run verify:ai-provider",
     "verify:study-packages": "npm --workspace @vts/api run verify:study-packages",
     "verify:study-categories": "npm --workspace @vts/web run verify:study-categories",
+    "verify:movement": "npm --workspace @vts/web run verify:movement",
     "verify:sizing": "npm --workspace @vts/web run verify:sizing",
     "verify:desk-layout": "npm --workspace @vts/web run verify:desk-layout",
     "build:private": "npm --workspace @vts/api run build && npm --workspace @vts/web run build",

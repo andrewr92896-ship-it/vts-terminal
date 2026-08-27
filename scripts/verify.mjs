@@ -12,6 +12,7 @@ const STEPS = [
   ['market data macro', 'verify:market-macro'],
   ['investments math', 'verify:investments'],
   ['position sizing (web ↔ server)', 'verify:sizing'],
+  ['trade movement (pips and points)', 'verify:movement'],
   ['Desk right now responsive layout', 'verify:desk-layout'],
   ['rollover alerts and re-entry math', 'verify:rollover'],
   ['study packages', 'verify:study-packages'],

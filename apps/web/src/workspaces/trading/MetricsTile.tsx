@@ -4,7 +4,7 @@ import { api, ApiError } from '../../api/client';
 import { usePrivacy } from '../../privacy/privacy';
 import type { BoardTile, TradeLogData } from '../../api/types';
 import { configActive, configFrom } from './outcome';
-import { fmtPips, hasAnyPips, netPips } from './pips';
+import { fmtMovement, hasAnyMovement, negMovement, netMovement } from './pips';
 import { profitFactorStats, profitFactorText, projectedProfitFactorStats, scaledProfitFactorText, summarizeTrades } from './tradeStats';
 import { useTileData } from './tiles/TileFrame';
 import { capitalSub } from './CapitalCards';
@@ -116,7 +116,7 @@ export function MetricsTile({
   const net = realized + unreal;
   // Pips sit under every money figure, but only on a desk that trades forex —
   // there is no pip to show otherwise.
-  const showPips = hasAnyPips(shownTrades);
+  const showPips = hasAnyMovement(shownTrades);
   const beActive = config ? configActive(config) : false;
 
   const money = (n: number) => (!showMoney ? '•••' : signedUsd(n));
@@ -155,7 +155,7 @@ export function MetricsTile({
               label="Realized P/L"
               value={!canSeeBalances ? 'hidden' : money(realized)}
               color={plColor(realized)}
-              pips={showPips ? `(${fmtPips(netPips(shownTrades), true)})` : undefined}
+              pips={showPips ? fmtMovement(netMovement(shownTrades), true) || undefined : undefined}
               sub="closed trades"
             />
             <Stat
@@ -168,13 +168,13 @@ export function MetricsTile({
             <Stat
               label="Gross Profit"
               value={!canSeeBalances ? 'hidden' : showMoney ? usd(pf?.grossProfit ?? 0) : '•••'}
-              pips={showPips && pf ? `(${fmtPips(pf.grossProfitPips)})` : undefined}
+              pips={showPips && pf ? fmtMovement(pf.grossProfitMove) || undefined : undefined}
               sub="winning trades"
             />
             <Stat
               label="Gross Loss"
               value={!canSeeBalances ? 'hidden' : showMoney ? usd(-(pf?.grossLoss ?? 0)) : '•••'}
-              pips={showPips && pf ? `(${fmtPips(-pf.grossLossPips)})` : undefined}
+              pips={showPips && pf ? fmtMovement(negMovement(pf.grossLossMove)) || undefined : undefined}
               sub="losing trades"
             />
             <Stat

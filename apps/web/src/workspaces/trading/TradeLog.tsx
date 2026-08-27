@@ -19,12 +19,14 @@ import {
 } from './tradeBreakdown';
 import {
   tradePips,
-  fmtPips,
   fmtUnitCount,
   fmtUnitSize,
   lotsTitle,
-  netPips,
-  hasAnyPips,
+  fmtMovement,
+  hasAnyMovement,
+  negMovement,
+  netMovement,
+  tradePoints,
   perPipForSize,
   pipsParenthetical,
 } from './pips';
@@ -172,13 +174,16 @@ function buildExportCsv(opts: {
   row('Break-even', s.breakeven);
   row('Win rate', s.wins + s.losses > 0 ? `${Math.round(s.winRate * 100)}%` : '—');
   row('Gross profit', money(pf.grossProfit));
-  row('Gross profit (pips)', pf.grossProfitPips);
+  row('Gross profit (pips)', pf.grossProfitMove.pips ?? '');
+  row('Gross profit (points)', pf.grossProfitMove.points ?? '');
   row('Gross loss', money(-pf.grossLoss));
-  row('Gross loss (pips)', -pf.grossLossPips);
+  row('Gross loss (pips)', pf.grossLossMove.pips == null ? '' : -pf.grossLossMove.pips);
+  row('Gross loss (points)', pf.grossLossMove.points == null ? '' : -pf.grossLossMove.points);
   row('Profit factor', pf.grossProfit === 0 && pf.grossLoss === 0 ? '' : pf.grossLoss === 0 ? 'Infinite (no losses)' : (pf.grossProfit / pf.grossLoss).toFixed(2));
   row('Profit factor (scaled to one lot)', pf.scaledProfit === 0 && pf.scaledLoss === 0 ? '' : pf.scaledLoss === 0 ? 'Infinite (no losses)' : (pf.scaledProfit / pf.scaledLoss).toFixed(2));
   row('Realized P/L', s.totalRealizedPl == null ? '' : money(s.totalRealizedPl));
-  row('Net pips', netPips(trades));
+  row('Net pips', netMovement(trades).pips ?? '');
+  row('Net points', netMovement(trades).points ?? '');
   row('Avg slippage', s.avgSlippage == null ? '' : String(s.avgSlippage));
   row();
   row('Trades');
@@ -384,10 +389,12 @@ export function TradeLog() {
   // meaning what it says while a filter is on; unfiltered, `shownTrades`
   // already carries those rows and adding them again would double-count.
   const ppf = projectedProfitFactorStats(filterActive ? [...shownTrades, ...openBook] : shownTrades, config);
-  // Pips are the desk's preferred unit — show them next to every $ metric, but
-  // only when the desk actually trades forex (otherwise there's no pip to show).
-  const showPips = hasAnyPips(shownTrades);
-  const netClosedPips = netPips(shownTrades);
+  // Movement is the desk's preferred unit beside every $ metric: pips for a
+  // currency pair, points for everything else. Both are shown when the desk
+  // holds each, and neither is shown when nothing could be measured — a pip sum
+  // on its own silently described only the forex half of the money beside it.
+  const showPips = hasAnyMovement(shownTrades);
+  const netClosedMove = netMovement(shownTrades);
   const beActive = configActive(config);
   // By Strategy / By Instrument, folded in from History. Computed over the CLOSED
   // rows on screen — an open trade has no realized result to attribute.
@@ -421,7 +428,7 @@ export function TradeLog() {
       label: 'Realized P/L',
       val: s.totalRealizedPl == null ? 'hidden' : showMoney ? usd(s.totalRealizedPl) : '•••••',
       sub: 'closed trades',
-      pips: showPips ? `(${fmtPips(netClosedPips, true)})` : undefined,
+      pips: showPips ? fmtMovement(netClosedMove, true) || undefined : undefined,
     },
     {
       // The live open P/L across currently-open positions — the leg realized P/L
@@ -436,13 +443,13 @@ export function TradeLog() {
       label: 'Gross Profit',
       val: !canSeeBalances ? 'hidden' : showMoney ? usd(pf.grossProfit) : '•••••',
       sub: 'winning trades',
-      pips: showPips ? `(${fmtPips(pf.grossProfitPips)})` : undefined,
+      pips: showPips ? fmtMovement(pf.grossProfitMove) || undefined : undefined,
     },
     {
       label: 'Gross Loss',
       val: !canSeeBalances ? 'hidden' : showMoney ? usd(-pf.grossLoss) : '•••••',
       sub: 'losing trades',
-      pips: showPips ? `(${fmtPips(-pf.grossLossPips)})` : undefined,
+      pips: showPips ? fmtMovement(negMovement(pf.grossLossMove)) || undefined : undefined,
     },
     {
       // Raw profit factor with the size-scaled reading always shown beneath it.
@@ -914,7 +921,16 @@ function Tape({
         const plVal = t.status === 'open' ? t.unrealizedPl : t.realizedPl;
         const plUp = (plVal ?? 0) >= 0;
         const plColor = !canSeeBalances ? FAINT : plVal == null ? MUTED : isBreakeven ? GOLD : plUp ? GREEN : RED;
-        const rowPips = t.status === 'closed' ? tradePips(t.side, t.entryPrice, t.exitPrice, t.instrument) : null;
+        const rowMove =
+          t.status === 'closed'
+            ? fmtMovement(
+                {
+                  pips: tradePips(t.side, t.entryPrice, t.exitPrice, t.instrument),
+                  points: tradePoints(t.side, t.entryPrice, t.exitPrice, t.instrument),
+                },
+                true,
+              )
+            : '';
         return (
           <div key={t.id} style={{ ...tapeRow, borderBottom: `1px solid ${BORDER}`, flexWrap: isPhone ? 'wrap' : 'nowrap' }}>
             <span style={{ flex: '1 1 90px', fontWeight: 600, color: TEXT, display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
@@ -940,7 +956,7 @@ function Tape({
               <span style={{ fontWeight: 700, color: plColor }}>
                 {!canSeeBalances ? '·' : plVal == null ? '—' : showMoney ? `${isBreakeven ? '' : plUp ? '+' : ''}${usd(plVal)}` : '•••'}
               </span>
-              {rowPips != null && <span style={{ fontSize: 9.5, color: MUTED }}>{`(${fmtPips(rowPips, true)})`}</span>}
+              {rowMove !== '' && <span style={{ fontSize: 9.5, color: MUTED }}>{rowMove}</span>}
             </span>
             <span style={{ ...timeCol, display: 'flex', justifyContent: 'flex-end' }}>
               <TradeTimesCell

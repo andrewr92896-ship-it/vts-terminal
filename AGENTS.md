@@ -601,7 +601,33 @@ workspaces list** (see `theme/nav.ts` order).
         as 0.01 for gold — reading that as a "point" would quote the figure in
         cents.
       Never label a non-pair's movement in pips; never size a point from
-      `pipLocation`. Sizes render through `fmtUnits`
+      `pipLocation`.
+      - **AND A SET OF TRADES REPORTS BOTH UNITS, NEVER ONE STANDING FOR THE
+        WHOLE** (`netMovement` / `fmtMovement` / `hasAnyMovement` in `pips.ts`).
+        Every aggregate on the desk used to be a pip sum written as
+        `if (pips != null) sum += p`, and `tradePips` returns null for anything
+        that is not a pair — so gold, the indices and crypto were dropped in
+        **silence**. A By Instrument row of pure gold printed **"(0 pips)"**, a
+        measured zero standing in for a figure never measured, beside perfectly
+        real money; a mixed strategy row printed a pip figure covering only its
+        forex legs, with nothing saying so. Same family of rule as the Live
+        Wall's `unavailable` source and Investments' `unpricedCount`: **a figure
+        that could not be measured must never be reported as a measured one.**
+        - **A null leg means "no trade here speaks that unit", and is never a
+          zero.** That is what separates a desk holding no gold from one whose
+          gold came out flat — and a break-even pair still correctly reads
+          `0 pips`, because that zero WAS measured.
+        - **The two are never added.** A mixed set reads
+          `(+183 pips · -40.9 pts)`; a set with no pair reads points alone,
+          which the old `hasAnyPips` gate hid entirely.
+        - **`netPips` and `hasAnyPips` are DELETED, not left unused** — an
+          unused-but-plausible pips-only aggregate is how this comes back. Do
+          not reintroduce one.
+        - Call sites: the Trade Log KPI cards and its CSV, the By Strategy / By
+          Instrument breakdowns, the tape's per-trade figure, Funded Trades'
+          stats, and the Live Wall's Desk Metrics tile. `history.ts`'s server
+          `groupBy` still sums pips only and is commented as such — **no screen
+          reads it**; wire it to one and it needs this shape first. Sizes render through `fmtUnits`
       (`TradeCard.tsx`), which keeps more decimals the smaller the size — the
       default locale format prints 0.00042 of a bitcoin as "0". Keep all of this
       when adding stocks or another broker.
@@ -5943,6 +5969,9 @@ fails it fails at one of them and that one is the fastest thing to re-run:
   app cannot show you: the draw is a proportion that only appears over hundreds
   of questions, and the breakdown's arithmetic is right or wrong in ways a
   screenshot cannot tell you.
+- **Trade movement: `npm run verify:movement`** after touching `pips.ts`,
+  `tradeBreakdown.tsx` or `tradeStats.ts`. See the rule below — the fault it
+  pins is invisible on a forex-only desk, which is the owner's own.
 - **Position sizing: `npm run verify:sizing`** after touching either
   `sizing.ts`. It is the only check that imports the web copy AND the server
   copy and runs both through the same fixtures, so it is what stops the two

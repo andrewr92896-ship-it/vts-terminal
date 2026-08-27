@@ -1,6 +1,6 @@
 import type { TradeSide, TradeStatus, TradeSummary } from '../../api/types';
 import { classifyOutcome, type BreakEvenConfig } from './outcome';
-import { tradePips } from './pips';
+import { tradePips, tradePoints, type NetMovement } from './pips';
 
 // Everything these readings need from a trade, and nothing else. A structural
 // subset of TradeRecord, so the desk's own rows satisfy it as they are — and so
@@ -70,6 +70,13 @@ export type ProfitFactor = {
   profitFactor: number | null;
   grossProfitPips: number;
   grossLossPips: number;
+  // The same two figures for everything that does NOT speak pips — gold, the
+  // indices, crypto — in points, one whole unit of price. A null leg means no
+  // trade in the set speaks that unit, which is deliberately not a zero: the
+  // pip sums used to swallow those trades whole, so a desk trading gold beside
+  // EUR/USD reported a pip figure covering only part of the money beside it.
+  grossProfitMove: NetMovement;
+  grossLossMove: NetMovement;
   // "Scaled" gross P/L: every trade normalized to the same lot size by taking its
   // per-unit P/L (realized P/L ÷ size), so a 1-unit test and a 20k-unit position
   // weigh equally. Because profit factor is a ratio, the common lot size cancels
@@ -84,21 +91,42 @@ export function profitFactorStats(trades: ScoredTrade[], config: BreakEvenConfig
   let grossLoss = 0;
   let grossProfitPips = 0;
   let grossLossPips = 0;
+  let grossProfitPoints = 0;
+  let grossLossPoints = 0;
+  let anyProfitPips = false;
+  let anyLossPips = false;
+  let anyProfitPoints = false;
+  let anyLossPoints = false;
   let scaledProfit = 0;
   let scaledLoss = 0;
   for (const t of trades) {
     if (t.status !== 'closed' || t.realizedPl == null) continue;
     const outcome = classifyOutcome(t.side, t.entryPrice, t.exitPrice, t.realizedPl, t.instrument, config);
     const pips = tradePips(t.side, t.entryPrice, t.exitPrice, t.instrument);
+    const points = tradePoints(t.side, t.entryPrice, t.exitPrice, t.instrument);
     // Per-unit P/L normalizes trade size; null when there's no size to divide by.
     const perUnit = t.units ? t.realizedPl / Math.abs(t.units) : null;
     if (outcome === 'win') {
       grossProfit += Math.max(0, t.realizedPl);
-      if (pips != null) grossProfitPips += Math.max(0, pips);
+      if (pips != null) {
+        grossProfitPips += Math.max(0, pips);
+        anyProfitPips = true;
+      }
+      if (points != null) {
+        grossProfitPoints += Math.max(0, points);
+        anyProfitPoints = true;
+      }
       if (perUnit != null) scaledProfit += Math.max(0, perUnit);
     } else if (outcome === 'loss') {
       grossLoss += Math.abs(t.realizedPl);
-      if (pips != null) grossLossPips += Math.max(0, -pips);
+      if (pips != null) {
+        grossLossPips += Math.max(0, -pips);
+        anyLossPips = true;
+      }
+      if (points != null) {
+        grossLossPoints += Math.max(0, -points);
+        anyLossPoints = true;
+      }
       if (perUnit != null) scaledLoss += Math.max(0, -perUnit);
     }
   }
@@ -110,6 +138,14 @@ export function profitFactorStats(trades: ScoredTrade[], config: BreakEvenConfig
     profitFactor,
     grossProfitPips: Number(grossProfitPips.toFixed(1)),
     grossLossPips: Number(grossLossPips.toFixed(1)),
+    grossProfitMove: {
+      pips: anyProfitPips ? Number(grossProfitPips.toFixed(1)) : null,
+      points: anyProfitPoints ? Number(grossProfitPoints.toFixed(1)) : null,
+    },
+    grossLossMove: {
+      pips: anyLossPips ? Number(grossLossPips.toFixed(1)) : null,
+      points: anyLossPoints ? Number(grossLossPoints.toFixed(1)) : null,
+    },
     scaledProfit,
     scaledLoss,
   };
@@ -157,6 +193,10 @@ export function unrealizedProfitFactorStats(trades: ScoredTrade[]): ProfitFactor
     profitFactor: grossLoss > 0 ? grossProfit / grossLoss : null,
     grossProfitPips: 0,
     grossLossPips: 0,
+    // Both null rather than an empty pair of zeros: no movement was measured
+    // here at all, and a caller must not be able to print "(0 pips)" from it.
+    grossProfitMove: { pips: null, points: null },
+    grossLossMove: { pips: null, points: null },
     scaledProfit,
     scaledLoss,
   };
@@ -183,6 +223,8 @@ export function projectedProfitFactorStats(trades: ScoredTrade[], config: BreakE
     profitFactor: grossLoss > 0 ? grossProfit / grossLoss : null,
     grossProfitPips: closed.grossProfitPips,
     grossLossPips: closed.grossLossPips,
+    grossProfitMove: closed.grossProfitMove,
+    grossLossMove: closed.grossLossMove,
     scaledProfit: closed.scaledProfit + open.scaledProfit,
     scaledLoss: closed.scaledLoss + open.scaledLoss,
   };

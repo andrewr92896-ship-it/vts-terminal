@@ -35,8 +35,12 @@
 .vts-public-auth-card h2 { margin:8px 0; font-size:22px; }
 .vts-public-auth-card > p { color:var(--muted); line-height:1.5; font-size:13px; }
 .vts-public-auth-card label { display:flex; flex-direction:column; gap:7px; margin:18px 0; color:var(--muted); font-size:11px; font-weight:600; text-transform:uppercase; letter-spacing:.6px; }
-.vts-public-auth-card input[type='email'],.vts-public-auth-card input[inputmode='numeric'] { width:100%; padding:12px 13px; color:var(--text); background:#071021; border:1px solid var(--line-2); border-radius:8px; outline:none; font-size:14px; }
-.vts-public-auth-card input:focus { border-color:var(--gold); box-shadow:0 0 0 3px rgba(235,203,116,.08); }
+/* Every text field in the card, matched by what it is NOT rather than by
+   listing types. Listing them missed `password`, so the field on the first
+   screen anybody sees rendered as a white box on a dark card — and the next
+   field added would have been missed the same way. */
+.vts-public-auth-card input:not([type='checkbox']):not([type='radio']) { width:100%; padding:12px 13px; color:var(--text); background:#071021; border:1px solid var(--line-2); border-radius:8px; outline:none; font-size:14px; }
+.vts-public-auth-card input:not([type='checkbox']):not([type='radio']):focus { border-color:var(--gold); box-shadow:0 0 0 3px rgba(235,203,116,.08); }
 .vts-public-auth-card .remember { flex-direction:row; align-items:center; text-transform:none; letter-spacing:0; font-size:12px; }
 .vts-public-auth-card button { width:100%; padding:11px 14px; border-radius:8px; border:0; background:linear-gradient(180deg,var(--gold),var(--gold-2)); color:var(--gold-text); font-weight:700; cursor:pointer; }
 .vts-public-auth-card footer { display:flex; gap:14px; margin-top:22px; padding-top:16px; border-top:1px solid var(--line); color:var(--faint); font-size:10px; }

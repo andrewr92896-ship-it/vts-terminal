@@ -10,6 +10,7 @@
     "preview": "vite preview",
     "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p tsconfig.public.json",
     "verify:study-categories": "tsx src/workspaces/studies/verifyStudyCategories.ts",
+    "verify:movement": "tsx src/workspaces/trading/verifyMovement.ts",
     "verify:sizing": "tsx src/workspaces/trading/verifySizing.ts",
     "verify:desk-layout": "tsx src/workspaces/trading/verifyDeskPositionsLayout.ts"
   },
