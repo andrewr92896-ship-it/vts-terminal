@@ -82,6 +82,40 @@ for (const [label, table] of [
   row(label, await count(table));
 }
 
+// ---- who is in this database, and by what id? -------------------------------
+//
+// The reason this prints IDs rather than just a count: PRIVATE_ACCESS_USER_IDS
+// admits accounts by ID, and two databases hold DIFFERENT accounts. Point a
+// service at a different database without moving the allowlist to match, and it
+// starts perfectly well and then refuses the only person who should be let in —
+// a working site nobody can sign in to, with nothing on screen saying why.
+//
+// So: read the ID from the database that is about to be SERVED, and set the
+// allowlist from that, before switching anything.
+console.log('\n[accounts]');
+const accounts = await client
+  .execute('select id, username, display_name, email, roles, active from users order by created_at')
+  .catch(() => null);
+
+if (!accounts) {
+  console.log('  no users table on this schema version.');
+} else if (accounts.rows.length === 0) {
+  console.log('  none — this database has never been seeded.');
+} else {
+  for (const u of accounts.rows) {
+    const roles = String(u.roles ?? '');
+    const rank = roles.includes('founder') || roles.includes('software_developer')
+      ? 'founder'
+      : roles.includes('admin')
+        ? 'admin'
+        : 'member';
+    const state = Number(u.active) === 0 ? ' [inactive]' : '';
+    console.log(`  ${String(u.id)}  ${String(u.username)} · ${rank}${state}`);
+  }
+  console.log('  → PRIVATE_ACCESS_USER_IDS admits by the ID on the left, and these IDs are');
+  console.log('    specific to THIS database. Set it from whichever database will be served.');
+}
+
 // ---- will the broker credentials survive a move? ----------------------------
 console.log('\n[broker credentials]');
 const connections = await client
