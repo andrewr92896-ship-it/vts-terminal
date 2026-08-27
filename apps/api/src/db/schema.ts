@@ -114,94 +114,6 @@ export const sessions = sqliteTable('sessions', {
 export type UserRow = typeof users.$inferSelect;
 export type SessionRow = typeof sessions.$inferSelect;
 
-// One pending self-service password credential per account. The plaintext is
-// emailed once and never stored; only the Argon2 hash lives here. Keeping it
-// separate from users.password_hash means requesting recovery cannot change or
-// invalidate the current password. A later request replaces this row.
-export const passwordResetCredentials = sqliteTable(
-  'password_reset_credentials',
-  {
-    id: text('id').primaryKey(),
-    userId: text('user_id')
-      .notNull()
-      .unique()
-      .references(() => users.id, { onDelete: 'cascade' }),
-    passwordHash: text('password_hash').notNull(),
-    createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
-    expiresAt: integer('expires_at', { mode: 'timestamp_ms' }).notNull(),
-  },
-  (table) => [index('password_reset_expiry_idx').on(table.expiresAt)],
-);
-export type PasswordResetCredentialRow = typeof passwordResetCredentials.$inferSelect;
-
-
-// A password-valid sign-in that is waiting on its emailed second factor. The
-// browser holds the raw challenge token in a short-lived httpOnly cookie; only
-// its SHA-256 id and the code's SHA-256 hash are stored here.
-export const loginChallenges = sqliteTable(
-  'login_challenges',
-  {
-    id: text('id').primaryKey(),
-    userId: text('user_id')
-      .notNull()
-      .references(() => users.id, { onDelete: 'cascade' }),
-    codeHash: text('code_hash').notNull(),
-    attempts: integer('attempts').notNull().default(0),
-    ip: text('ip'),
-    userAgent: text('user_agent'),
-    createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
-    sentAt: integer('sent_at', { mode: 'timestamp_ms' }).notNull(),
-    expiresAt: integer('expires_at', { mode: 'timestamp_ms' }).notNull(),
-  },
-  (table) => [
-    unique('login_challenges_user_unique').on(table.userId),
-    index('login_challenges_expiry_idx').on(table.expiresAt),
-  ],
-);
-export type LoginChallengeRow = typeof loginChallenges.$inferSelect;
-
-// Opt-in "remember this device" tokens. They skip only the emailed code, never
-// the password, and can be revoked independently of ordinary login sessions.
-export const terminalTrustedDevices = sqliteTable(
-  'terminal_trusted_devices',
-  {
-    id: text('id').primaryKey(),
-    userId: text('user_id')
-      .notNull()
-      .references(() => users.id, { onDelete: 'cascade' }),
-    ip: text('ip'),
-    userAgent: text('user_agent'),
-    createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
-    lastUsedAt: integer('last_used_at', { mode: 'timestamp_ms' }).notNull(),
-    expiresAt: integer('expires_at', { mode: 'timestamp_ms' }).notNull(),
-  },
-  (table) => [
-    index('terminal_trusted_devices_user_idx').on(table.userId),
-    index('terminal_trusted_devices_expiry_idx').on(table.expiresAt),
-  ],
-);
-export type TerminalTrustedDeviceRow = typeof terminalTrustedDevices.$inferSelect;
-
-
-// Durable, privacy-preserving account/IP budgets for terminal password and
-// emailed-code attempts. IDs are keyed hashes, so raw identifiers and addresses
-// are not retained in this abuse-control table.
-export const terminalAuthLimits = sqliteTable(
-  'terminal_auth_limits',
-  {
-    id: text('id').primaryKey(),
-    sendCount: integer('send_count').notNull().default(0),
-    sendWindowStartedAt: integer('send_window_started_at', { mode: 'timestamp_ms' }).notNull(),
-    lastSentAt: integer('last_sent_at', { mode: 'timestamp_ms' }),
-    failureCount: integer('failure_count').notNull().default(0),
-    failureWindowStartedAt: integer('failure_window_started_at', { mode: 'timestamp_ms' }).notNull(),
-    lockedUntil: integer('locked_until', { mode: 'timestamp_ms' }),
-    updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
-  },
-  (table) => [index('terminal_auth_limits_updated_idx').on(table.updatedAt)],
-);
-export type TerminalAuthLimitRow = typeof terminalAuthLimits.$inferSelect;
-
 // Per-user, revocable bearer tokens for the read-only mobile/home-screen widget
 // (`GET /api/widget/positions`). The terminal's own API is otherwise httpOnly
 // cookie-only, which a native iOS widget extension / Scriptable can't present.
@@ -953,10 +865,9 @@ export const supportRequestMessages = sqliteTable('support_request_messages', {
 });
 export type SupportRequestMessageRow = typeof supportRequestMessages.$inferSelect;
 
-// ---- AI usage (per-user guardrails and metering) ----
-// One row per Claude call. Text rows enforce the monthly allowance; vision rows
-// remain metered without becoming a screenshot-to-trade product cap. `kind`
-// records which feature made the call (ask, analyze, news_brief, todo_command, ...).
+// ---- AI usage (per-user guardrails) ----
+// One row per Claude call, used to enforce a monthly cap. `kind` records which
+// feature made the call (ask, analyze, news_brief, todo_command, ...).
 export const aiUsage = sqliteTable('ai_usage', {
   id: text('id').primaryKey(),
   // NULL = the terminal spent this on its own schedule, with no user behind it

@@ -6,12 +6,10 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.node.json && vite build",
-    "build:public": "tsc --noEmit -p tsconfig.public.json && vite build --config vite.public.config.ts",
     "preview": "vite preview",
-    "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p tsconfig.public.json",
+    "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.node.json",
     "verify:study-categories": "tsx src/workspaces/studies/verifyStudyCategories.ts",
-    "verify:sizing": "tsx src/workspaces/trading/verifySizing.ts",
-    "verify:desk-layout": "tsx src/workspaces/trading/verifyDeskPositionsLayout.ts"
+    "verify:sizing": "tsx src/workspaces/trading/verifySizing.ts"
   },
   "dependencies": {
     "@fontsource/ibm-plex-mono": "^5.1.1",

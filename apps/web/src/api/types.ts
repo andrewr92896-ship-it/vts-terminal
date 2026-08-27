@@ -369,25 +369,22 @@ export interface TodoCommandResult {
   reply: string;
 }
 
-// Current user's AI usage against the monthly text cap.
+// Current user's AI usage against the monthly cap.
 export interface AiBudget {
   used: number;
   limit: number;
   remaining: number;
 }
 
-export interface AiUsageCount {
-  used: number;
-}
-
-// Text keeps a monthly allowance. Screenshot reads are counted for visibility
-// but have no monthly product quota. The flat used/limit/remaining mirror text.
+// Two separate monthly allowances: a text question and a screenshot read cost an
+// order of magnitude apart, so they are counted apart. The flat used/limit/
+// remaining mirror the TEXT budget, which is what an ordinary question spends.
 export interface AiUsage {
   used: number;
   limit: number;
   remaining: number;
   text: AiBudget;
-  vision: AiUsageCount;
+  vision: AiBudget;
   // Background AI the terminal ran on its own schedule this month. Admins only;
   // null for everyone else. Not a budget — nothing caps it.
   system: number | null;

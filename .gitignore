@@ -41,4 +41,3 @@ npm-debug.log*
 
 # Scratch databases written by npm run verify:db
 .tmp-verify/
-test-results/

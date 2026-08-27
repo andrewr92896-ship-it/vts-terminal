@@ -1,8 +1,7 @@
-import { useId, useState, type CSSProperties } from 'react';
+import { useState, type CSSProperties } from 'react';
 import { api, ApiError } from '../../api/client';
 import { fmtMoney, fmtPrice, fmtUnits } from './TradeCard';
 import { DeskPositionRow } from './DeskPositionRow';
-import { deskPositionsLayout } from './deskPositionsLayout';
 import { miniBtn } from './positionEdit';
 import { etSince } from './tradeTime';
 import type { DeskHolding, DeskOrderRecord, DeskWorkingOrder, LiveTrade } from '../../api/types';
@@ -55,22 +54,14 @@ interface TeamProps {
   // read as "nobody is trading") but marked, and never actionable — there is no
   // real position behind them to close.
   sample: boolean;
-  narrow: boolean;
   onPick: (instrument: string) => void; // load an instrument into the ticket
   onChanged: () => void; // a position was closed or amended
 }
 
-export function TeamPositions({ trades, myUserId, currency, hideMoney, readOnly, sample, narrow, onPick, onChanged }: TeamProps) {
-  const [expanded, setExpanded] = useState(false);
-  const listId = useId();
+export function TeamPositions({ trades, myUserId, currency, hideMoney, readOnly, sample, onPick, onChanged }: TeamProps) {
   const mine = sample ? [] : trades.filter((t) => t.ownerId === myUserId);
   const theirs = sample ? trades : trades.filter((t) => t.ownerId !== myUserId);
   const traders = new Set(trades.map((t) => t.ownerId)).size;
-  const layout = deskPositionsLayout(trades.length, narrow, expanded);
-  const ordered = [...mine, ...theirs].slice(0, layout.visibleCount);
-  const visibleIds = new Set(ordered.map((trade) => trade.id));
-  const visibleMine = mine.filter((trade) => visibleIds.has(trade.id));
-  const visibleTheirs = theirs.filter((trade) => visibleIds.has(trade.id));
 
   return (
     <div style={panel}>
@@ -80,70 +71,42 @@ export function TeamPositions({ trades, myUserId, currency, hideMoney, readOnly,
       />
       {trades.length === 0 && <Empty>{"Nobody on the desk has a position open."}</Empty>}
 
-      {layout.canToggle && (
-        <button
-          type="button"
-          onClick={() => setExpanded((value) => !value)}
-          aria-expanded={expanded}
-          aria-controls={listId}
-          style={bookToggle}
-        >
-          {expanded ? 'Show fewer positions' : `Show all ${trades.length} positions`}
-        </button>
+      {mine.length > 0 && (
+        <>
+          <GroupLabel>{"Yours"}</GroupLabel>
+          {mine.map((t) => (
+            <DeskPositionRow
+              key={t.id}
+              trade={t}
+              own
+              sample={sample}
+              currency={currency}
+              hideMoney={hideMoney}
+              readOnly={readOnly}
+              onPick={onPick}
+              onChanged={onChanged}
+            />
+          ))}
+        </>
       )}
 
-      {trades.length > 0 && (
-        <div
-          id={listId}
-          role={layout.usesInternalScroll ? 'region' : undefined}
-          aria-label={layout.usesInternalScroll ? `Open positions, ${trades.length} total` : undefined}
-          tabIndex={layout.usesInternalScroll ? 0 : undefined}
-          style={layout.usesInternalScroll ? boundedBook : undefined}
-        >
-          {visibleMine.length > 0 && (
-            <>
-              <GroupLabel>{"Yours"}</GroupLabel>
-              {visibleMine.map((t) => (
-                <DeskPositionRow
-                  key={t.id}
-                  trade={t}
-                  own
-                  sample={sample}
-                  currency={currency}
-                  hideMoney={hideMoney}
-                  readOnly={readOnly}
-                  onPick={onPick}
-                  onChanged={onChanged}
-                />
-              ))}
-            </>
-          )}
-
-          {visibleTheirs.length > 0 && (
-            <>
-              <GroupLabel>{sample ? 'Sample positions' : 'Your group'}</GroupLabel>
-              {visibleTheirs.map((t) => (
-                <DeskPositionRow
-                  key={t.id}
-                  trade={t}
-                  own={false}
-                  sample={sample}
-                  currency={currency}
-                  hideMoney={hideMoney}
-                  readOnly={readOnly}
-                  onPick={onPick}
-                  onChanged={onChanged}
-                />
-              ))}
-            </>
-          )}
-        </div>
-      )}
-
-      {layout.collapsed && (
-        <div style={previewNote} aria-live="polite">
-          {`${layout.hiddenCount} more position${layout.hiddenCount === 1 ? '' : 's'} available. Expand the book to review them.`}
-        </div>
+      {theirs.length > 0 && (
+        <>
+          <GroupLabel>{sample ? 'Sample positions' : 'Your group'}</GroupLabel>
+          {theirs.map((t) => (
+            <DeskPositionRow
+              key={t.id}
+              trade={t}
+              own={false}
+              sample={sample}
+              currency={currency}
+              hideMoney={hideMoney}
+              readOnly={readOnly}
+              onPick={onPick}
+              onChanged={onChanged}
+            />
+          ))}
+        </>
       )}
     </div>
   );
@@ -335,25 +298,5 @@ function Empty({ children }: { children: string }) {
 }
 
 const panel: CSSProperties = { background: PANEL, border: `1px solid ${BORDER}`, borderRadius: 12, padding: 16 };
-const boundedBook: CSSProperties = {
-  maxHeight: 'min(68vh, 680px)',
-  overflowY: 'auto',
-  overscrollBehavior: 'contain',
-  paddingRight: 6,
-  scrollbarGutter: 'stable',
-};
-const bookToggle: CSSProperties = {
-  width: '100%',
-  background: 'rgba(108,158,255,.08)',
-  border: `1px solid ${BORDER2}`,
-  color: MUTED,
-  borderRadius: 7,
-  padding: '8px 10px',
-  fontSize: 11.5,
-  fontWeight: 600,
-  cursor: 'pointer',
-  marginBottom: 4,
-};
-const previewNote: CSSProperties = { color: FAINT, fontSize: 10.5, lineHeight: 1.5, marginTop: 7 };
 const row: CSSProperties = { background: INPUT_BG, border: `1px solid ${BORDER}`, borderRadius: 9, padding: '10px 12px', marginBottom: 8 };
 const sidePill: CSSProperties = { fontSize: 10, fontWeight: 700, letterSpacing: '.4px', border: '1px solid', borderRadius: 999, padding: '2px 8px', fontFamily: MONO };

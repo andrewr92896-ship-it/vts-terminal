@@ -5,7 +5,6 @@ import { db } from './db/index.js';
 import { tradingTeams, userFeatures, users } from './db/schema.js';
 import { hashPassword } from './auth/passwords.js';
 import { parseRoles } from './auth/rbac.js';
-import { config } from './config.js';
 import { seedConnectionsFromEnv } from './trading/connections.js';
 import { seedBadges } from './badges/service.js';
 import {
@@ -122,9 +121,7 @@ export async function seedAdmin(): Promise<void> {
   const password = provided || crypto.randomBytes(12).toString('base64url');
 
   const now = new Date();
-  // A fresh private environment can predeclare the first account's stable ID
-  // so the production allowlist remains fail-closed even before the database exists.
-  const adminId = config.PRIVATE_BOOTSTRAP_ADMIN_ID || crypto.randomUUID();
+  const adminId = crypto.randomUUID();
   await db.insert(users).values({
     id: adminId,
     username,

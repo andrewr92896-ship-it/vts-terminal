@@ -6,15 +6,14 @@ import {
   useCallback,
   type ReactNode,
 } from 'react';
-import { api, ApiError, type TerminalLoginResponse } from '../api/client';
+import { api, ApiError } from '../api/client';
 import type { User } from '../api/types';
 import { DEFAULT_ZONE, setAccountZone, takeLegacyDeviceZone } from '../lib/timezone';
 
 interface AuthState {
   user: User | null;
   loading: boolean;
-  login: (email: string, password: string) => Promise<TerminalLoginResponse>;
-  verifyTwoFactor: (code: string, remember: boolean) => Promise<void>;
+  login: (email: string, password: string) => Promise<void>;
   demoLogin: () => Promise<void>;
   logout: () => Promise<void>;
   // Record acceptance of the current Terms of Service / Privacy Policy, clearing
@@ -87,12 +86,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const login = useCallback(async (email: string, password: string) => {
     const r = await api.login(email, password);
-    if (!r.requiresTwoFactor) setUser(r.user);
-    return r;
-  }, []);
-
-  const verifyTwoFactor = useCallback(async (code: string, remember: boolean) => {
-    const r = await api.verifyTwoFactor(code, remember);
     setUser(r.user);
   }, []);
 
@@ -144,7 +137,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   return (
     <AuthCtx.Provider
-      value={{ user, loading, login, verifyTwoFactor, demoLogin, logout, acceptTerms, changePassword, updateProfile, refreshUser }}
+      value={{ user, loading, login, demoLogin, logout, acceptTerms, changePassword, updateProfile, refreshUser }}
     >
       {children}
     </AuthCtx.Provider>

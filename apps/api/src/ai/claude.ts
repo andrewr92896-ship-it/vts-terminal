@@ -1,14 +1,30 @@
-import { completeText, completeVision, textModel } from './provider.js';
+import Anthropic from '@anthropic-ai/sdk';
+import { config } from '../config.js';
 
-// The terminal's AI flows: what to ask, and how to read the answer. WHICH
-// provider serves them, and the request shape it wants, lives in provider.ts —
-// so everything below is about prompts and parsing rather than about a vendor.
-//
-// The file is still called claude.ts: nineteen modules import from it, and the
-// name is an internal identifier rather than anything a user reads. Renaming it
-// is a rename of nineteen imports for no behavioural gain.
+// Single place every Claude call goes through. The site default is Sonnet 4.6;
+// trade screenshot analysis uses Opus 4.8 with vision. The API key lives only
+// here (backend) — it never reaches the browser. When the key is absent, AI
+// features report "not configured" instead of throwing.
 
-export { aiConfigured } from './provider.js';
+export function aiConfigured(): boolean {
+  return !!config.ANTHROPIC_API_KEY;
+}
+
+let client: Anthropic | null = null;
+function getClient(): Anthropic {
+  if (!config.ANTHROPIC_API_KEY) throw new Error('AI is not configured');
+  if (!client) client = new Anthropic({ apiKey: config.ANTHROPIC_API_KEY });
+  return client;
+}
+
+// Pull the concatenated text out of a Messages response (skips thinking blocks).
+function textOf(message: Anthropic.Message): string {
+  return message.content
+    .filter((b): b is Anthropic.TextBlock => b.type === 'text')
+    .map((b) => b.text)
+    .join('\n')
+    .trim();
+}
 
 // Best-effort JSON extraction: strip code fences and grab the first {...} block.
 export function extractJson(raw: string): unknown | null {
@@ -82,16 +98,30 @@ function alertText(alert: AlertContext): string {
     : 'Analyze the attached trade screenshot.';
 }
 
-// Vision: analyze a pasted chart screenshot against the alert.
+// Opus 4.8 vision: analyze a pasted chart screenshot against the alert.
 export async function analyzeTradeScreenshot(
   imageBase64: string,
   mediaType: 'image/png' | 'image/jpeg' | 'image/gif' | 'image/webp',
   alert: AlertContext,
 ): Promise<AnalyzeResult> {
-  const { text: raw, model } = await completeVision({
-    imageBase64, mediaType, system: ANALYSIS_SYSTEM, prompt: alertText(alert),
-    maxTokens: 2000, thinking: true, json: true,
+  const model = config.ANTHROPIC_MODEL_ANALYSIS;
+  const message = await getClient().messages.create({
+    model,
+    max_tokens: 2000,
+    thinking: { type: 'adaptive' },
+    system: ANALYSIS_SYSTEM,
+    messages: [
+      {
+        role: 'user',
+        content: [
+          { type: 'image', source: { type: 'base64', media_type: mediaType, data: imageBase64 } },
+          { type: 'text', text: alertText(alert) },
+        ],
+      },
+    ],
   });
+
+  const raw = textOf(message);
   const json = extractJson(raw) as Partial<TradeAnalysis> | null;
   const parsed: TradeAnalysis | null = json
     ? {
@@ -148,17 +178,30 @@ function num(v: unknown): number | null {
   return typeof v === 'number' && Number.isFinite(v) ? v : null;
 }
 
-// Vision: read an open position off a broker/platform screenshot so it can be
-// saved as a manual Live Wall position.
+// Opus 4.8 vision: read an open position off a broker/platform screenshot so it
+// can be saved as a manual Live Wall position.
 export async function parsePositionScreenshot(
   imageBase64: string,
   mediaType: 'image/png' | 'image/jpeg' | 'image/gif' | 'image/webp',
 ): Promise<{ parsed: ParsedPosition; raw: string; model: string }> {
-  const { text: raw, model } = await completeVision({
-    imageBase64, mediaType, system: POSITION_SYSTEM,
-    prompt: 'Extract the open position from this screenshot.',
-    maxTokens: 1500, thinking: true, json: true,
+  const model = config.ANTHROPIC_MODEL_ANALYSIS;
+  const message = await getClient().messages.create({
+    model,
+    max_tokens: 1500,
+    thinking: { type: 'adaptive' },
+    system: POSITION_SYSTEM,
+    messages: [
+      {
+        role: 'user',
+        content: [
+          { type: 'image', source: { type: 'base64', media_type: mediaType, data: imageBase64 } },
+          { type: 'text', text: 'Extract the open position from this screenshot.' },
+        ],
+      },
+    ],
   });
+
+  const raw = textOf(message);
   const json = (extractJson(raw) ?? {}) as Partial<ParsedPosition>;
   const parsed: ParsedPosition = {
     instrument: typeof json.instrument === 'string' && json.instrument.trim() ? json.instrument.trim() : null,
@@ -192,16 +235,28 @@ Respond with ONLY a JSON object (no prose, no code fences) of exactly this shape
 }
 Strip currency symbols and commas: "$201,450.50" becomes 201450.5. Use null for anything you cannot read with confidence. Keep the summary under 160 characters.`;
 
-// Vision: read the balance/equity off a funded-account screenshot.
+// Opus 4.8 vision: read the balance/equity off a funded-account screenshot.
 export async function parseAccountScreenshot(
   imageBase64: string,
   mediaType: 'image/png' | 'image/jpeg' | 'image/gif' | 'image/webp',
 ): Promise<{ parsed: ParsedAccount; raw: string; model: string }> {
-  const { text: raw, model } = await completeVision({
-    imageBase64, mediaType, system: ACCOUNT_SYSTEM,
-    prompt: 'Read the account balance and equity from this screenshot.',
-    maxTokens: 1000, thinking: true, json: true,
+  const model = config.ANTHROPIC_MODEL_ANALYSIS;
+  const message = await getClient().messages.create({
+    model,
+    max_tokens: 1000,
+    thinking: { type: 'adaptive' },
+    system: ACCOUNT_SYSTEM,
+    messages: [
+      {
+        role: 'user',
+        content: [
+          { type: 'image', source: { type: 'base64', media_type: mediaType, data: imageBase64 } },
+          { type: 'text', text: 'Read the account balance and equity from this screenshot.' },
+        ],
+      },
+    ],
   });
+  const raw = textOf(message);
   const json = (extractJson(raw) ?? {}) as Partial<ParsedAccount>;
   const parsed: ParsedAccount = {
     balance: num(json.balance),
@@ -255,16 +310,28 @@ function parseSide(v: unknown): 'long' | 'short' | 'unknown' {
   return v === 'long' || v === 'short' ? v : 'unknown';
 }
 
-// Vision: read every trade off a trade-history screenshot.
+// Opus 4.8 vision: read every trade off a trade-history screenshot.
 export async function parseTradeHistoryScreenshot(
   imageBase64: string,
   mediaType: 'image/png' | 'image/jpeg' | 'image/gif' | 'image/webp',
 ): Promise<{ parsed: ParsedHistory; raw: string; model: string }> {
-  const { text: raw, model } = await completeVision({
-    imageBase64, mediaType, system: HISTORY_SYSTEM,
-    prompt: 'Extract every trade from this trade-history screenshot.',
-    maxTokens: 3000, thinking: true, json: true,
+  const model = config.ANTHROPIC_MODEL_ANALYSIS;
+  const message = await getClient().messages.create({
+    model,
+    max_tokens: 3000,
+    thinking: { type: 'adaptive' },
+    system: HISTORY_SYSTEM,
+    messages: [
+      {
+        role: 'user',
+        content: [
+          { type: 'image', source: { type: 'base64', media_type: mediaType, data: imageBase64 } },
+          { type: 'text', text: 'Extract every trade from this trade-history screenshot.' },
+        ],
+      },
+    ],
   });
+  const raw = textOf(message);
   const json = (extractJson(raw) ?? {}) as { trades?: unknown; balance?: unknown; equity?: unknown; summary?: unknown };
   const rawTrades = Array.isArray(json.trades) ? json.trades : [];
   const trades: ParsedHistoryTrade[] = rawTrades.map((t) => {
@@ -289,11 +356,17 @@ export async function parseTradeHistoryScreenshot(
   return { parsed, raw, model };
 }
 
-// The site-wide assistant (Ask VTS AI, product knowledge, parsing).
+// Sonnet 4.6: the site-wide assistant (Ask Claude, product knowledge, parsing).
 // maxTokens defaults to 4000; question-generation passes a larger budget since a
 // batch of four-option questions with explanations is a big response.
 export async function askClaude(prompt: string, system?: string, maxTokens = 4000): Promise<string> {
-  return completeText({ turns: [{ role: 'user', content: prompt }], system, maxTokens });
+  const message = await getClient().messages.create({
+    model: config.ANTHROPIC_MODEL_DEFAULT,
+    max_tokens: maxTokens,
+    ...(system ? { system } : {}),
+    messages: [{ role: 'user', content: prompt }],
+  });
+  return textOf(message);
 }
 
 // ---- Market-hours lookup (fills a Strategy Session's weekly schedule) ----
@@ -333,11 +406,11 @@ Include one entry per open day using the lowercase 3-letter day key (sun,mon,tue
 const HHMM_RE = /^\d{1,2}:\d{2}$/;
 const DAY_KEYS = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'] as const;
 
-// Resolve an instrument's weekly market hours in ET. Structural
+// Sonnet: resolve an instrument's weekly market hours in ET. Structural
 // validation only — the model's hours are trusted, but shapes are coerced and
 // any malformed day is dropped so the caller always gets clean windows.
 export async function analyzeMarketHours(symbol: string): Promise<MarketHoursResult> {
-  const model = textModel();
+  const model = config.ANTHROPIC_MODEL_DEFAULT;
   const raw = await askClaude(
     `Instrument: ${symbol.trim().slice(0, 60)}\n\nReturn its weekly market hours in Eastern Time.`,
     MARKET_HOURS_SYSTEM,
@@ -459,11 +532,17 @@ export interface ChatMessage {
   content: string;
 }
 
-// Multi-turn chat — powers the global Ask VTS AI panel. maxTokens
+// Sonnet 4.6 multi-turn chat — powers the global Ask Claude panel. maxTokens
 // defaults to 4000; the study-guide builder passes a larger budget since a draft
 // of many slides is a big JSON response.
 export async function chatClaude(messages: ChatMessage[], system?: string, maxTokens = 4000): Promise<string> {
-  return completeText({ turns: messages, system, maxTokens });
+  const message = await getClient().messages.create({
+    model: config.ANTHROPIC_MODEL_DEFAULT,
+    max_tokens: maxTokens,
+    ...(system ? { system } : {}),
+    messages: messages.map((m) => ({ role: m.role, content: m.content })),
+  });
+  return textOf(message);
 }
 
 export interface TermDefinition {

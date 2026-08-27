@@ -11,22 +11,9 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 7.38';
+export const APP_VERSION = 'Beta V 7.37';
 
 export const PATCH_NOTES: PatchNote[] = [
-  {
-    version: 'Beta V 7.38',
-    date: 'August 27, 2026',
-    notes: [
-      'The public terminal is live, with a demo anyone can open without an account. It uses sample data, saves nothing, and resets when you leave — so it can be handed to somebody to click around in.',
-      'vitalistradingsystems.com is a proper landing page now rather than a holding page: what the terminal does, what it deliberately does not do, and a way into the demo and into early access.',
-      'Early access is a real request form with a route behind it, and it says what a pre-release place includes before it asks for an email.',
-      'Signing in to the public terminal now warns you that it is not the group terminal and that features are reduced, so landing on the wrong one is obvious.',
-      'Admin ▸ Users shows each account’s ID with a copy button — the value the private-access allowlist admits.',
-      'Closed Trades & Metrics no longer says “Whole desk — combined stats” on a book with one trader in it, and the To Do screen is called To Do in both places it is named.',
-      'Groundwork only, nothing switched on: every AI call now goes through one place, and moving to a different AI provider is a setting rather than a rewrite.',
-    ],
-  },
   {
     version: 'Beta V 7.37',
     date: 'August 24, 2026',

@@ -302,7 +302,6 @@ export function TradeDesk() {
             hideMoney={money}
             readOnly={readOnly}
             sample={sampleBook}
-            narrow={isTablet}
             onPick={setInstrument}
             onChanged={afterAction}
           />

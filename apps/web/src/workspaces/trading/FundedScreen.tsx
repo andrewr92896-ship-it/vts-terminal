@@ -37,7 +37,7 @@ export function FundedScreen() {
         <div>
           <h2 style={{ margin: 0, fontSize: 19, fontWeight: 700, color: '#fff' }}>{"Manual Trades"}</h2>
           <div style={{ fontSize: 12, color: MUTED, marginTop: 6, maxWidth: 640 }}>
-            {"Your own book, kept by hand. Add an account, then add trades by typing them in or reading them off a screenshot. Nothing connects to an outside platform — you keep it current yourself."}
+            {"Your own book, kept by hand. Add an account, place trades by typing them in or reading them off a screenshot, and track open positions live on the Live Wall — with each account’s balance and Today / This week / 30-day P/L. Nothing connects to an outside platform; you keep it current yourself."}
           </div>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>

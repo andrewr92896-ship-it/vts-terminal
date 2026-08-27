@@ -4,9 +4,6 @@ import { db } from '../db/index.js';
 import {
   users,
   sessions,
-  loginChallenges,
-  passwordResetCredentials,
-  terminalTrustedDevices,
   todoSections,
   todoItems,
   tradingTrades,
@@ -93,9 +90,6 @@ import {
 } from '../db/schema.js';
 import { hashPassword } from '../auth/passwords.js';
 import { destroyUserSessions } from '../auth/sessions.js';
-import { forgetTerminalAuthForUser } from '../auth/twoFactor.js';
-import { forgetAllDevices as forgetEmployeeDevices } from '../employee/trustedDevices.js';
-import { destroyEmployeeSessionsForUser } from '../employee/sessions.js';
 import { isAdmin, isFounder, isRoleKey, parseRoles, parseBadges, type RoleKey } from '../auth/rbac.js';
 import { teamExists } from '../teams/service.js';
 import { assignableBadgeKeys } from '../badges/service.js';
@@ -452,18 +446,6 @@ export async function updateUser(
   if (input.active === false) revoke = true;
 
   await db.update(users).set(patch).where(eq(users.id, targetId));
-  if (input.password != null || input.active === false || input.email != null || input.roles != null) {
-    // An admin-set password, deactivation, or mailbox change supersedes both
-    // recovery credentials and every browser remembered under the old state.
-    await Promise.all([
-      db
-        .delete(passwordResetCredentials)
-        .where(eq(passwordResetCredentials.userId, targetId)),
-      forgetTerminalAuthForUser(targetId),
-      forgetEmployeeDevices(targetId),
-      destroyEmployeeSessionsForUser(targetId),
-    ]);
-  }
   if (revoke) await destroyUserSessions(targetId);
 
   const updated = (
@@ -782,11 +764,6 @@ export async function deleteUser(actingUserId: string, targetId: string): Promis
     await tx.delete(employeeTrustedDevices).where(eq(employeeTrustedDevices.userId, targetId));
     await tx.delete(employeeProfiles).where(eq(employeeProfiles.userId, targetId));
     await tx.delete(employeeLoginAttempts).where(eq(employeeLoginAttempts.id, `user:${targetId}`));
-    await tx.delete(loginChallenges).where(eq(loginChallenges.userId, targetId));
-    await tx.delete(terminalTrustedDevices).where(eq(terminalTrustedDevices.userId, targetId));
-    await tx
-      .delete(passwordResetCredentials)
-      .where(eq(passwordResetCredentials.userId, targetId));
     await tx.delete(sessions).where(eq(sessions.userId, targetId));
     await tx.delete(users).where(eq(users.id, targetId));
   });

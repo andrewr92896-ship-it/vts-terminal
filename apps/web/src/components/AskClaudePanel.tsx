@@ -60,9 +60,9 @@ export function AskClaudePanel({
   // panel inside a pause explains itself rather than looking broken.
   const [pausedUntil, setPausedUntil] = useState<number | null>(null);
   const [remaining, setRemaining] = useState<number | null>(null);
-  // The whole usage payload: the text allowance this panel spends, metered
-  // screenshot reads, and — for an admin — what the terminal spent on its own
-  // schedule.
+  // The whole usage payload: the text allowance this panel spends, the separate
+  // screenshot allowance, and — for an admin — what the terminal spent on its
+  // own schedule.
   const [usage, setUsage] = useState<AiUsage | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -194,12 +194,14 @@ export function AskClaudePanel({
                 {remaining} left
               </span>
             )}
+            {/* The screenshot allowance is separate and much smaller, so it is
+                worth showing before somebody runs into it mid-import. */}
             {usage && (
               <span
-                title="Screenshot reads this month — metered, not monthly-capped"
-                style={{ fontSize: 9.5, color: '#6f84b0', fontFamily: "'IBM Plex Mono', monospace" }}
+                title="Screenshot reads left this month — a separate allowance from questions"
+                style={{ fontSize: 9.5, color: usage.vision.remaining <= 3 ? '#e0a23a' : '#6f84b0', fontFamily: "'IBM Plex Mono', monospace" }}
               >
-                {usage.vision.used} screenshot reads
+                {usage.vision.remaining} screenshots
               </span>
             )}
             {/* Admins only: what the terminal spent tagging news and explaining

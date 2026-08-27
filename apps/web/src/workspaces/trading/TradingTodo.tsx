@@ -92,9 +92,9 @@ export function TradingTodo() {
 
   return (
     <div style={{ maxWidth: 720, color: '#dfe6f5', animation: 'fadeIn .25s ease' }}>
-      <h2 style={{ margin: '0 0 4px', fontSize: 19, fontWeight: 700, color: '#eef3ff' }}>{"To Do"}</h2>
+      <h2 style={{ margin: '0 0 4px', fontSize: 19, fontWeight: 700, color: '#eef3ff' }}>{"Trading To-Do"}</h2>
       <p style={{ margin: '0 0 16px', fontSize: 12.5, color: '#8b97b3' }}>
-        {"Your list. Nobody else sees it."}
+        {"Trading tasks and reminders."}
       </p>
 
       {actionError && (

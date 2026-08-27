@@ -580,7 +580,7 @@ export function MarketNews({ onOpenMembership }: { onOpenMembership?: () => void
 
         {/* ---- content footer (informational only) ---- */}
         <div style={{ marginTop: 20, fontSize: 10.5, color: C.faint, letterSpacing: '0.3px', display: 'flex', alignItems: 'center', gap: 6 }}>
-          <span>Headlines are reproduced from the terminal's news feeds for information only — not investment advice.</span>
+          <span>Headlines are reproduced from the desk's news feeds for information only — not investment advice.</span>
           {/* The tape-read glyph is what is flagged here, not the headlines.
               Marked once at the foot of the feed rather than on every row —
               a glyph repeated beside a hundred headlines stops being a mark. */}
