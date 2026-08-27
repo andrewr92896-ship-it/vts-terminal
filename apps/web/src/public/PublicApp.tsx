@@ -13,8 +13,8 @@ const initial=(location.hash.slice(1)||'live') as PublicScreenKey;
 export function PublicApp(){
   const [verified,setVerified]=useState(evidence);
   const [screen,setScreen]=useState<PublicScreenKey>(initial==='data'?'data':'live');
-  const [collapsed,setCollapsed]=useState(query.get('sidebar')==='collapsed'||innerWidth<=1024);
-  const [mobileOpen,setMobileOpen]=useState(false);
+  const [collapsed,setCollapsed]=useState(query.get('sidebar')==='collapsed'||(!query.has('sidebar')&&innerWidth<=1024));
+  const [mobileOpen,setMobileOpen]=useState(query.get('sidebar')==='expanded'&&innerWidth<=768);
   const workspace=useMemo<PublicWorkspaceKey>(()=>screen==='data'?'myportal':'trading',[screen]);
   const workspaceNav=PUBLIC_NAV.find((item)=>item.key===workspace)!;
   useEffect(()=>{ const onHash=()=>{const next=location.hash.slice(1);if(next==='live'||next==='data')setScreen(next)};addEventListener('hashchange',onHash);return()=>removeEventListener('hashchange',onHash)},[]);
