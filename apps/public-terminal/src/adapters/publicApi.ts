@@ -1,6 +1,7 @@
 type MarketDataLayout={pinned:string[];hidden:string[];custom:Array<Record<string,unknown>>};
 type MarketDataPayload={groups:Array<{key:string;label:string}>;series:Array<Record<string,unknown>>;periods:string[];defaultPins:string[];meetings:string[];meetingYear:number;sampleValues:boolean};
 type MarketNewsData={aiTagging:boolean;headlines:Array<Record<string,unknown>>;calendar:Array<Record<string,unknown>>};
+import { publicEvidence, publicRequest } from '../../../web/src/public/PublicRuntime';
 
 export class ApiError extends Error { constructor(public status:number,message:string){super(message)} }
 
@@ -35,9 +36,9 @@ const marketNewsData:MarketNewsData={aiTagging:false,headlines:[
 let layout:MarketDataLayout={pinned:[...marketDataPayload.defaultPins],hidden:[],custom:[]};
 
 export const api={
-  async marketData(){return structuredClone(marketDataPayload)},
-  async marketNews(){return structuredClone(marketNewsData)},
-  async marketDataLayout(){return {layout:structuredClone(layout)}},
-  async saveMarketDataLayout(next:MarketDataLayout){layout=structuredClone(next);return {layout:structuredClone(layout)}},
+  async marketData(){return publicEvidence?structuredClone(marketDataPayload):publicRequest<MarketDataPayload>('/market-data')},
+  async marketNews(){return publicEvidence?structuredClone(marketNewsData):publicRequest<MarketNewsData>('/market-news')},
+  async marketDataLayout(){return publicEvidence?{layout:structuredClone(layout)}:publicRequest<{layout:MarketDataLayout}>('/market-data/layout')},
+  async saveMarketDataLayout(next:MarketDataLayout){if(publicEvidence){layout=structuredClone(next);return {layout:structuredClone(layout)}}return publicRequest<{layout:MarketDataLayout}>('/market-data/layout',{method:'PUT',body:JSON.stringify(next)})},
   async marketNewsStreams(){return {streams:{channels:[]},liveConfigured:false}},
 };

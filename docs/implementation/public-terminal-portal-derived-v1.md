@@ -43,10 +43,11 @@ import verifier checks those seams, rejects prohibited source references, and
 scans the built bundle for privileged routes, credentials, session names, and
 execution vocabulary.
 
-The evidence adapter is fictional, non-sensitive, in-memory state used only for
-CI rendering. It issues no network requests and creates no cookies. The normal
-entry remains the public email/two-step UI; persistence and delivery require a
-separate public service/database/secrets deployment in a later isolated batch.
+The `?evidence=1` adapter is fictional, non-sensitive, in-memory state used only
+for CI rendering. It issues no network requests and creates no cookies. The
+normal entry uses only `/public/v1/...` auth and market endpoints; persistence
+and delivery require that separate public service/database/secrets deployment
+in a later isolated batch.
 
 ## Extension points
 

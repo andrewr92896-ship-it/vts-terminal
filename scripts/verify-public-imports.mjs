@@ -9,7 +9,7 @@ const ALLOWED_PORTAL_IMPORTS=[
   /^\.\.\/\.\.\/web\/src\/public\/PublicApp$/,
   /^\.\.\/(components\/(Icon|Clock)|theme\/(tokens|themes)|workspaces\/trading\/(MarketData|CalendarTile|NewsTile|WatchlistTile|TvWidget)|api\/types)$/,
   /^\.\.\/(hooks\/useNowTick|lib\/timezone|workspaces\/trading\/(etClock|tvChart)|workspaces\/trading\/tiles\/TileFrame)$/,
-  /^\.\/((Public(App|ClockTile|LiveWall|Login|Sidebar|TopBar)|publicNav))$/,
+  /^\.\/((Public(App|ClockTile|LiveWall|Login|Runtime|Sidebar|TopBar)|publicNav))$/,
 ];
 const PROHIBITED_SOURCE=[/Admin/i,/Developer/i,/Founder/i,/OrderTicket/i,/TradeDesk/i,/BrokerConnections/i,/Pushover/i,/TeamChat/i,/FounderTrade/i];
 const PROHIBITED_BUNDLE=[/vts_portal_session/i,/portal\.vitalistradingsystems\.com/i,/\/api\/(admin|dev|brokers|trade-desk|founder|teams|chat|pushover)/i,/place.{0,8}order/i,/broker.{0,8}(key|token|secret)/i,/founder.{0,8}trade/i,/strategy.{0,8}bias/i];
