@@ -116,6 +116,96 @@ if (!accounts) {
   console.log('    specific to THIS database. Set it from whichever database will be served.');
 }
 
+// ---- WHO OWNS THE TRADES, AND WHAT IS FILTERING THEM OUT? -------------------
+//
+// The counts above say the database holds trades. They do NOT say the signed-in
+// account will see any of them, and those are different questions — a terminal
+// can read exactly the right database and still show an empty desk.
+//
+// Three things independently produce "0 trades" over a full table, and this
+// section separates them because the fix differs completely:
+//
+//   1. OWNERSHIP. Trade visibility is self-only unless the account holds the
+//      Trading Teams grant, so a book owned by another user row is invisible —
+//      correctly — to whoever is signed in.
+//   2. THE CONNECTION CUTOFF. `history_start_at` excludes everything logged
+//      before it. Set to a recent date, it hides an entire history while every
+//      row is still present and correct.
+//   3. SOFT DELETION. A row with `deleted_at` is on the Deleted Trades screen
+//      and nowhere else.
+console.log('\n[trades by owner]');
+const owners = await client
+  .execute(
+    `select u.id, u.username, u.team_id as team,
+            sum(case when p.deleted_at is null and p.status = 'open' then 1 else 0 end) as open_now,
+            sum(case when p.deleted_at is null and p.status = 'closed' then 1 else 0 end) as closed,
+            sum(case when p.deleted_at is not null then 1 else 0 end) as deleted
+       from users u left join trading_positions p on p.user_id = u.id
+      group by u.id order by closed desc`,
+  )
+  .catch(() => null);
+
+if (!owners) {
+  console.log('  could not read trades by owner on this schema version.');
+} else {
+  for (const r of owners.rows) {
+    const open = Number(r.open_now ?? 0);
+    const closed = Number(r.closed ?? 0);
+    const deleted = Number(r.deleted ?? 0);
+    if (open + closed + deleted === 0) continue;
+    console.log(
+      `  ${String(r.username)} (${String(r.id)})  open ${open} · closed ${closed} · deleted ${deleted}` +
+        (r.team ? `  team ${String(r.team)}` : '  no team'),
+    );
+  }
+  console.log('  → a trader sees only their OWN trades unless their account holds the');
+  console.log('    Trading Teams grant. Trades owned by another row are hidden by design.');
+}
+
+// The cutoff is the quiet one: every row present, every row excluded.
+console.log('\n[connection cutoffs]');
+const cutoffs = await client
+  .execute(
+    `select c.id, c.user_id, c.broker, c.label, c.active, c.history_start_at as cutoff,
+            (select count(*) from trading_positions p
+              where p.connection_id = c.id and p.deleted_at is null) as rows_total,
+            (select count(*) from trading_positions p
+              where p.connection_id = c.id and p.deleted_at is null
+                and c.history_start_at is not null
+                and coalesce(p.closed_at, p.opened_at, p.first_seen_at) < c.history_start_at) as rows_before
+       from broker_connections c`,
+  )
+  .catch(() => null);
+
+if (!cutoffs) {
+  console.log('  no broker_connections table on this schema version.');
+} else if (cutoffs.rows.length === 0) {
+  console.log('  none stored.');
+} else {
+  for (const c of cutoffs.rows) {
+    const cutoff = c.cutoff ? new Date(Number(c.cutoff)).toISOString().slice(0, 10) : null;
+    const total = Number(c.rows_total ?? 0);
+    const before = Number(c.rows_before ?? 0);
+    console.log(
+      `  ${String(c.broker)} · ${String(c.label)}${Number(c.active) === 1 ? '' : ' (paused)'}` +
+        `  owner ${String(c.user_id)}  ${total} trades` +
+        (cutoff ? `  counted since ${cutoff} — ${before} excluded by it` : '  no cutoff set'),
+    );
+  }
+  const hidden = cutoffs.rows.some((c) => Number(c.rows_before ?? 0) > 0 && Number(c.rows_before) === Number(c.rows_total));
+  if (hidden) {
+    console.log('  → A CUTOFF IS EXCLUDING AN ENTIRE CONNECTION\'S HISTORY. The rows are all');
+    console.log('    still there; clear or move the "count trades since" date to count them.');
+  }
+}
+
+// Trades that arrived with no connection attached still belong to their owner
+// and still count — worth stating so a zero here is not read as a problem.
+const orphaned = await client
+  .execute("select count(*) as n from trading_positions where connection_id is null and deleted_at is null")
+  .catch(() => null);
+if (orphaned) console.log(`  ${Number(orphaned.rows[0]?.n ?? 0)} trades carry no connection (still counted)`);
+
 // ---- will the broker credentials survive a move? ----------------------------
 console.log('\n[broker credentials]');
 const connections = await client
