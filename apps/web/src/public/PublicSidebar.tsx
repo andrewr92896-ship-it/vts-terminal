@@ -2,6 +2,7 @@ import type { CSSProperties } from 'react';
 import { Icon } from '../components/Icon';
 import { C, tint } from '../theme/tokens';
 import { PUBLIC_NAV, publicNavFor, type PublicScreenKey, type PublicWorkspaceKey } from './publicNav';
+import { isDemo } from './PublicRuntime';
 
 interface PublicSidebarProps {
   workspace: PublicWorkspaceKey;
@@ -32,7 +33,7 @@ export function PublicSidebar(props: PublicSidebarProps) {
         {current.sections.map((section) => <NavRow key={section.key} collapsed={props.collapsed} active={section.key === props.screen} icon={section.icon} label={section.label} accent={current.accent} onClick={() => props.onSelectScreen(section.key)} />)}
       </nav>
       <div style={{ marginTop: 'auto', display: 'flex', alignItems: 'center', justifyContent: props.collapsed ? 'center' : 'space-between', gap: 8, padding: '12px 8px 0', borderTop: `1px solid ${C.line}`, color: C.faint, fontFamily: C.mono, fontSize: 9.5 }}>
-        {!props.collapsed && <span>VTS Public</span>}<span style={{ border: `1px solid ${tint(C.gold,.35)}`, borderRadius: 4, padding: '2px 5px', color: C.gold }}>Candidate</span>
+        {!props.collapsed && <span>VTS Public</span>}<span style={{ border: `1px solid ${tint(C.gold,.35)}`, borderRadius: 4, padding: '2px 5px', color: C.gold }}>{isDemo() ? 'Demo' : 'Candidate'}</span>
       </div>
     </aside>
   );
