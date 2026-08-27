@@ -286,6 +286,7 @@ export const NAV: NavWorkspace[] = [
       // other half of marks that are otherwise scattered beside the features
       // they describe. A read of auth/reviewMarks.ts; it stores nothing.
       { key: 'ad_review', label: 'Under Review', icon: 'alert-triangle' },
+      { key: 'ad_environment', label: 'Deployment', icon: 'layout-dashboard' },
       // (There is deliberately no "View as role" row. It lives in the account
       // menu instead — owner decision, 2026-08: previewing as Member hides this
       // very workspace, so a control for leaving the preview cannot live inside
