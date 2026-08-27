@@ -40,20 +40,38 @@ const baseApi={
   async marketNews(){return publicEvidence?structuredClone(marketNewsData):publicRequest<MarketNewsData>('/market-news')},
   async marketDataLayout(){return publicEvidence?{layout:structuredClone(layout)}:publicRequest<{layout:MarketDataLayout}>('/market-data/layout')},
   async saveMarketDataLayout(next:MarketDataLayout){if(publicEvidence){layout=structuredClone(next);return {layout:structuredClone(layout)}}return publicRequest<{layout:MarketDataLayout}>('/market-data/layout',{method:'PUT',body:JSON.stringify(next)})},
-  async marketNewsStreams(){return {streams:{channels:[]},liveConfigured:false}},
+  // The whole MarketNewsStreams shape, not just the catalog: the screen reads
+  // `watching`, `notify` and `cols` straight off it and a missing array is a
+  // render crash rather than an empty wall.
+  async marketNewsStreams(){return {streams:{channels:[],watching:[],docked:null,cols:2,notify:{},maxWatching:1},liveConfigured:false}},
 };
+
+const emptyTradeSummary=()=>({total:0,open:0,closed:0,wins:0,losses:0,breakeven:0,winRate:0,totalRealizedPl:0,totalUnrealizedPl:0,avgSlippage:null});
+const emptyExcluded=()=>({beforeCutoff:0,belowFloor:0,cutoffFrom:null});
+const emptyCapitalTotal=()=>({value:null,mode:'none',stated:0,unstated:0,mixedCurrency:false});
 
 const evidenceEmpty=(name:string):any=>{
  const table:Record<string,any>={
-  tradeLog:{trades:[],excluded:[],removed:null,canDeleteAny:false,minTradeUnits:{},summary:{totalRealizedPl:0}},
+  // Each entry is the REAL payload shape for that call, not an approximation.
+  // The evidence build renders these through the portal's own components, so a
+  // missing array or a renamed field is a thrown TypeError and a blank page —
+  // and a blank page still passes a screenshot test that only asserts the root
+  // is visible. Every fixture below is written against the shared payload types.
+  tradeLog:{trades:[],summary:emptyTradeSummary(),breakEvenPct:0,breakEvenMode:'percent',breakEvenAmount:0,breakEvenOverrides:[],minTradeUnits:0,excluded:emptyExcluded(),canDeleteAny:false},
+  tradeHistory:{trades:[],summary:{...emptyTradeSummary(),byStrategy:[],byInstrument:[]},breakEvenPct:0,breakEvenMode:'percent',breakEvenAmount:0,breakEvenOverrides:[],minTradeUnits:0,excluded:emptyExcluded(),canDeleteAny:false},
+  deskSettings:{breakEvenMode:'percent',breakEvenPct:0,breakEvenAmount:0,breakEvenOverrides:[],minTradeUnits:0,instruments:[],editableMembers:[]},
+  traderCapital:{userId:null,traders:1,deposited:emptyCapitalTotal(),withdrawn:emptyCapitalTotal(),breakdown:[],total:null,accounts:0,unreadable:0,currency:null,canSync:false,syncedAt:null,otherTransfers:0,note:null,canEdit:false},
   deletedTrades:{trades:[],canDeleteAny:false},restoreDeletedTrade:{trades:[],canDeleteAny:false},
-  funded:{accounts:[],trades:[],summary:{}},investmentPortfolio:{accounts:[],holdings:[],allocation:[],performance:[],dividends:[],contributions:[],goals:[],projections:[],totals:{}},
+  funded:{accounts:[],trades:[],summary:{}},
+  investmentPortfolio:{accounts:[],holdings:[],allocation:[],performance:[],dividends:[],contributions:[],goals:[],projections:[],totals:{},unpricedCount:0},
+  investmentProjection:{points:[],startValue:0,monthlyContribution:0,annualRatePct:0,years:0},
   generalNews:{headlines:[],source:null},getTodo:{sections:[{id:'public-todo',title:'To Do',tag:'trading',items:[]}]},
-  netWorth:{assets:[],liabilities:[],assetsTotal:0,liabilitiesTotal:0,netWorth:0,investmentValue:null,tradingValue:null},
+  netWorth:{tracked:{investments:0,trading:0,tradingEnabled:false,available:true,note:null},assets:[],liabilities:[],totals:{assets:0,liabilities:0,netWorth:0,manualAssets:0},history:[],totalDays:0,asOf:Date.now()},
   budgetMonth:{month:new Date().toISOString().slice(0,7),categories:[],income:0,expenses:0,remaining:0},
   listStudyPackages:{packages:[]},sharedStudyPackages:{pending:[],accepted:[]},browseStudyLibrary:{entries:[]},
-  teamFlashcardSets:{sets:[]},studyDecks:{decks:[]},studyGames:{decks:[]},siteContent:{howto:{}},patchNotes:{notes:[]},
-  announcements:{announcements:[],canManage:false},bugReports:{reports:[]}
+  studyFlashcardSets:{sets:[]},teamFlashcardSets:{sets:[]},studyGuides:{guides:[]},
+  studyDecks:{decks:[]},studyGames:{decks:[]},siteContent:{howto:{}},patchNotes:{notes:[]},
+  announcements:{announcements:[],canManage:false},myBugReports:{reports:[]},bugReports:{reports:[]}
  };return structuredClone(table[name]??{ok:true,items:[],records:[]});
 };
 export const api:any=new Proxy(baseApi as any,{get(target,key:string){if(key in target)return target[key];return async(...args:any[])=>{

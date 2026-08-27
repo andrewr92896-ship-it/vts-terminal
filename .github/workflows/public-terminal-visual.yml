@@ -3,7 +3,8 @@ name: public-terminal-visual
 on:
   push:
     branches:
-      - codex/public-terminal-update-existing-pages-v1
+      - 'codex/public-terminal-**'
+      - 'claude/**'
   workflow_dispatch:
 
 concurrency:

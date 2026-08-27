@@ -12,11 +12,29 @@ const ALLOWED_PORTAL_IMPORTS=[
   /^\.\.\/(hooks\/useNowTick|lib\/timezone|workspaces\/trading\/(etClock|tvChart)|workspaces\/trading\/tiles\/TileFrame)$/,
   /^\.\/((Public(App|ClockTile|LiveWall|Login|Runtime|Sidebar|TopBar|Screens|AccountPages)|publicNav))$/,
   /^\.\.\/(api\/client|auth\/AuthContext|theme\/(tokens|themes))$/,
-  /^\.\.\/workspaces\/(trading\/(MarketData|TradeLog|FundedScreen|DeletedTrades|TradingTodo|MarketNews)|news\/GeneralNews|studies\/(StudyCreation|StudyLibrary|StudyGameHub|FlashcardsHub|StudyGuides)|help\/(HelpScreens|LegalScreens)|myportal\/(Preferences|NetWorth)|finances\/Budget|investments)$/,
+  /^\.\.\/workspaces\/(trading\/(MarketData|TradeLog|FundedScreen|DeletedTrades|TradingTodo|MarketNews|notesFormat)|news\/GeneralNews|studies\/(StudyCreation|StudyLibrary|StudyGameHub|FlashcardsHub|StudyGuides)|help\/(HelpScreens|LegalScreens)|myportal\/(Preferences|NetWorth)|finances\/Budget|investments)$/,
 
 ];
 const PROHIBITED_SOURCE=[/AdminTerminal/i,/DeveloperTerminal/i,/FounderTrade/i,/OrderTicket/i,/TradeDesk/i,/BrokerConnections/i,/Pushover/i,/TeamChat/i];
-const PROHIBITED_BUNDLE=[/vts_portal_session/i,/portal\.vitalistradingsystems\.com/i,/\/api\/(admin|dev|brokers|trade-desk|founder|teams|chat|pushover)/i,/place.{0,8}order/i,/broker.{0,8}(key|token|secret)/i,/founder.{0,8}trade/i,/strategy.{0,8}bias/i];
+// The bundle is MINIFIED, so a proximity match like /broker.{0,8}key/ fires on
+// two unrelated tokens that minification happened to push together — the manual
+// trade form's `{key:'',label:'No broker'},{key:'oanda'}` reads as "broker...key"
+// and is not a credential at all. So each pattern below matches the PHRASE, with
+// only word separators allowed between its halves: it still catches `brokerKey`,
+// `BROKER_TOKEN` and "it places live orders", and no longer cries wolf on an
+// object literal. A guard that fails on unrelated code is one people learn to
+// widen until it catches nothing.
+const SEP='[\\s_-]{0,3}';
+const PROHIBITED_BUNDLE=[
+  /vts_portal_session/i,
+  /portal\.vitalistradingsystems\.com/i,
+  /\/api\/(admin|dev|brokers|trade-desk|founder|teams|chat|pushover)/i,
+  /plac(e|es|ed|ing)\s+(a\s+|an\s+|the\s+|live\s+|real\s+|market\s+)*orders?\b/i,
+  new RegExp(`broker${SEP}(api${SEP})?(key|token|secret|credential)`,'i'),
+  new RegExp(`(oanda|kraken|tradestation)${SEP}(api${SEP})?(key|token|secret)`,'i'),
+  new RegExp(`founder${SEP}trade`,'i'),
+  new RegExp(`strategy${SEP}bias`,'i'),
+];
 let failures=0;
 const fail=(message)=>{failures+=1;console.error(`FAIL ${message}`)};
 const walk=(directory)=>readdirSync(directory,{withFileTypes:true}).flatMap((entry)=>{const next=path.join(directory,entry.name);return entry.isDirectory()?walk(next):[next]});
@@ -34,7 +52,7 @@ for(const directory of PUBLIC_DIRS){
   }
 }
 const config=readFileSync('apps/web/vite.public.config.ts','utf8');
-for(const seam of ['src/api/client','src/auth/AuthContext','src/auth/access','src/privacy/privacy','src/workspaces/trading/TvWidget'])if(!config.includes(seam))fail(`public build is missing adapter seam ${seam}`);
+for(const seam of ['src/api/client','src/auth/AuthContext','src/auth/access','src/privacy/privacy','src/legal/content','src/meta/version','src/help/tutorials','src/auth/reviewMarks','src/workspaces/trading/TvWidget'])if(!config.includes(seam))fail(`public build is missing adapter seam ${seam}`);
 if(!config.includes('sourcemap:false'))fail('public build must keep source maps disabled');
 const dist='apps/public-terminal/dist';
 if(existsSync(dist))for(const file of walk(dist).filter((item)=>/\.(js|css|html|json)$/.test(item))){const text=readFileSync(file,'utf8');for(const pattern of PROHIBITED_BUNDLE)if(pattern.test(text))fail(`${file} contains prohibited bundle reference ${pattern}`)}

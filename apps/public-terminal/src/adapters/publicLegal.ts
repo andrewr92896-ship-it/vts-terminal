@@ -8,7 +8,7 @@ export const TERMS:LegalDoc={title:'Terms of Service',intro:'These terms govern 
  {heading:'Availability',blocks:[{p:'Features may change or be unavailable. AI-dependent actions remain unavailable until a separate public-provider migration is completed.'}]}]};
 export const PRIVACY:LegalDoc={title:'Privacy Policy',intro:'This policy describes the public terminal’s isolated data handling.',sections:[
  {heading:'Public records',blocks:[{p:'The public service stores public-account identity, session, security, preference, support, study, finance, investment, and manual trade-tracking records in the separate public data boundary.'}]},
- {heading:'What is not collected here',blocks:[{p:'The public terminal does not request private-portal credentials, broker keys, order credentials, private organization records, or administrator data.'}]},
+ {heading:'What is not collected here',blocks:[{p:'The public terminal does not request private-portal credentials, broker connection credentials, order authority, private organization records, or administrator data.'}]},
  {heading:'Security and retention',blocks:[{p:'Sessions and remembered-device tokens are separated from private cookies. Records are scoped to the authenticated public account and retained only as needed to provide the public service and meet legal obligations.'}]},
  {heading:'Contact',blocks:[{p:`Privacy questions may be sent to ${COMPANY.contactEmail}.`}]}]};
 export const RULES={title:'Rules & Conduct',intro:'Keep the public terminal safe, personal, and informational.',groups:[

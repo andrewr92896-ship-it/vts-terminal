@@ -16,6 +16,7 @@ on:
     branches:
       - main
       - 'codex/**'
+      - 'claude/**'
 
 # A branch pushed twice in quick succession only needs the newer run. Several
 # branches are usually in flight here, so this keeps them from queueing behind

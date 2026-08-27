@@ -17,6 +17,12 @@ const STEPS = [
   ['database integration (auth, sharing, alerts and package edits)', 'verify:db'],
   ['public/private application boundary', 'verify:boundaries'],
   ['build', 'build'],
+  // AFTER the build, deliberately. The boundary step above is the source
+  // allowlist, which is worth failing fast on; the built-bundle denylist it
+  // also carries has nothing to read until `dist` exists, so on a clean CI
+  // checkout it was silently scanning no files at all. This pass is the one
+  // that actually reads the shipped public bundle.
+  ['public bundle denylist', 'verify:public-imports'],
 ];
 const env={...process.env};const key=()=>randomBytes(32).toString('base64');
 if(!env.CREDENTIALS_KEY)env.CREDENTIALS_KEY=key();if(!env.SESSION_SECRET)env.SESSION_SECRET=key();
