@@ -4,10 +4,7 @@
   "private": true,
   "description": "Vitalis Trading Systems Terminal — monorepo (frontend + backend).",
   "type": "module",
-  "workspaces": [
-    "apps/api",
-    "apps/web"
-  ],
+  "workspaces": ["apps/api", "apps/web"],
   "scripts": {
     "setup": "npm install && npm --workspace @vts/api run setup",
     "dev": "npm-run-all --parallel dev:api dev:web",
@@ -41,15 +38,12 @@
     "verify:desk-layout": "npm --workspace @vts/web run verify:desk-layout",
     "build:private": "npm --workspace @vts/api run build && npm --workspace @vts/web run build",
     "build:marketing": "node scripts/build-static-app.mjs apps/marketing",
-    "build:public": "node scripts/build-static-app.mjs apps/public-terminal",
+    "build:public": "npm --workspace @vts/web run build:public",
     "start:private": "npm --workspace @vts/api run start",
-    "verify:boundaries": "node scripts/verify-public-boundary.mjs && node scripts/verify-private-access.mjs",
+    "verify:boundaries": "node scripts/verify-public-imports.mjs && node scripts/verify-public-boundary.mjs && node scripts/verify-private-access.mjs",
+    "verify:public-imports": "node scripts/verify-public-imports.mjs",
     "db:check-two-factor": "npm --workspace @vts/api run db:check-two-factor"
   },
-  "devDependencies": {
-    "npm-run-all": "^4.1.5"
-  },
-  "engines": {
-    "node": ">=20"
-  }
+  "devDependencies": { "npm-run-all": "^4.1.5" },
+  "engines": { "node": ">=20" }
 }
