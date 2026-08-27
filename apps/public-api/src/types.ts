@@ -22,6 +22,7 @@ export interface PublicStore {
   consumeRateLimit(bucket:string,keyHash:string,limit:number,windowMs:number):Promise<RateLimitResult>;
   getLayout(accountId:string):Promise<unknown|undefined>;
   saveLayout(accountId:string,layout:unknown):Promise<void>;
+  recordEarlyAccessRequest(email:string,note:string|null):Promise<void>;
   audit(event:string,accountId:string|undefined,metadata:Record<string,unknown>):Promise<void>;
 }
 

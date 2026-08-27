@@ -1,4 +1,5 @@
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
+import { pathToFileURL } from 'node:url';
 import { loadPublicConfig } from './config.js';
 import { PublicAuthService, AuthError } from './auth.js';
 import { PostgresPublicStore } from './postgresStore.js';
@@ -44,6 +45,19 @@ export async function handleRequest(req:IncomingMessage,res:ServerResponse,depen
     if(method==='POST'&&path==='/public/v1/auth/recovery'){
       const body=await readBody(req);return json(res,202,await auth.recover(String(body.email||''),ip(req)));
     }
+    if(method==='POST'&&path==='/public/v1/early-access'){
+      const body=await readBody(req);
+      const email=String(body.email||'').trim().toLowerCase();
+      const note=typeof body.note==='string'&&body.note.trim()?body.note.trim().slice(0,1000):null;
+      if(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)||email.length>320)throw new AuthError(400,'Enter a valid email address.');
+      const limit=await dependencies.store.consumeRateLimit('early_access',ip(req),5,60*60*1000);
+      if(!limit.allowed)throw new AuthError(429,'Too many requests. Try again later.');
+      await dependencies.store.recordEarlyAccessRequest(email,note);
+      await dependencies.store.audit('early_access.requested',undefined,{});
+      // The same answer either way, so this cannot be used to learn whether an
+      // address is already on the list.
+      return json(res,202,{message:'Request received. If a place opens up you will hear from us at that address.'});
+    }
     if(method==='GET'&&path==='/public/v1/auth/session')return json(res,200,await auth.session(sessionCookie(req)));
     if(method==='POST'&&path==='/public/v1/auth/change-password'){
       const body=await readBody(req);const result=await auth.changePassword(sessionCookie(req),String(body.currentPassword||''),String(body.newPassword||''));
@@ -59,5 +73,8 @@ export async function handleRequest(req:IncomingMessage,res:ServerResponse,depen
   } catch(error){const status=error instanceof AuthError?error.status:Number((error as {status?:number}).status)||500;const message=status>=500?'Public service unavailable.':error instanceof Error?error.message:'Request failed.';return json(res,status,{message});}
 }
 
-const server=createServer(handleRequest);
-server.listen(config.port,'0.0.0.0',()=>console.log(JSON.stringify({event:'public_api.started',port:config.port})));
+const startedDirectly=process.argv[1]?import.meta.url===pathToFileURL(process.argv[1]).href:false;
+if(startedDirectly){
+  const server=createServer(handleRequest);
+  server.listen(config.port,'0.0.0.0',()=>console.log(JSON.stringify({event:'public_api.started',port:config.port})));
+}

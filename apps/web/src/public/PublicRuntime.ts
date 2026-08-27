@@ -23,4 +23,8 @@ export const publicAuth={
   session(){return publicRequest<{user:{id:string;email:string;displayName:string};passwordChangeRequired:boolean;privateGroupWarning:boolean}>('/auth/session')},
   changePassword(currentPassword:string,newPassword:string){return publicRequest<{ok:true;passwordChangeRequired:false}>('/auth/change-password',{method:'POST',body:JSON.stringify({currentPassword,newPassword})})},
   logout(){return publicRequest<{ok:true}>('/auth/logout',{method:'POST'})},
+  earlyAccess(email:string,note:string){
+    if(demo)return Promise.resolve({message:'Request received. In the demo nothing is stored — on the live terminal this reaches the early-access list.'});
+    return publicRequest<{message:string}>('/early-access',{method:'POST',body:JSON.stringify({email,note:note||undefined})});
+  },
 };
