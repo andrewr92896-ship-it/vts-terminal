@@ -473,7 +473,7 @@ export function MarketData() {
           <ScreenTitle>Market Data</ScreenTitle>
           <div style={subtitle}>
             {
-              'Every rate, print and price the desk watches — pinned where you want them, searchable, and on the Forex Factory release schedule. All times Eastern.'
+              'Every rate, print and price the terminal watches — pinned where you want them, searchable, and on the Forex Factory release schedule. All times Eastern.'
             }
           </div>
         </div>

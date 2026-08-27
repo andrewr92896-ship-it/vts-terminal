@@ -23,8 +23,6 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run build:public
-        env:
-          VITE_PUBLIC_EVIDENCE: "1"
       - run: npm run verify:public-imports
       - run: npm install --no-save --package-lock=false @playwright/test@1.55.0
       - run: npx playwright install --with-deps chromium

@@ -358,11 +358,8 @@ function ConnectionNote() {
         <span style={{ fontSize: 13.5, fontWeight: 700, color: C.text }}>Connecting accounts automatically</span>
       </div>
       <div style={{ fontSize: 12.5, color: C.muted, lineHeight: 1.65 }}>
-        Accounts are entered by hand for now. Pulling balances and holdings in automatically needs a read-only
-        aggregator — Plaid or SnapTrade — which most retirement providers require because they do not hand out
-        per-user API keys the way a broker does. That is a paid provider account and, for Plaid, an access
-        request, so it is a decision rather than a build. The tracker is designed for it: connected accounts
-        will sit beside hand-entered ones without anything here changing.
+        Accounts are entered by hand for now. Connecting them automatically is planned, and a connected
+        account will sit beside a hand-entered one without anything here changing.
       </div>
       <div style={{ fontSize: 12, color: C.faint, lineHeight: 1.6, marginTop: 10 }}>
         Whichever way an account arrives, the connection stays <strong style={{ color: C.muted }}>read-only</strong> —

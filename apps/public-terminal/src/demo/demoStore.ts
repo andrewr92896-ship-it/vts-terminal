@@ -310,7 +310,7 @@ const reads: Record<string, () => unknown> = {
     userId: 'demo-user', traders: 1,
     deposited: capitalTotal(25_000), withdrawn: capitalTotal(4_000),
     breakdown: [{ accountKey: 'other', label: 'Hand-kept book', broker: null, connected: false, currency: 'USD', deposited: 25_000, withdrawn: 4_000, depositedSync: false, withdrawnSync: false, syncable: false, canEdit: false, nav: null, syncedAt: null, note: null }],
-    total: null, accounts: 1, unreadable: 0, currency: 'USD', canSync: false, syncedAt: null,
+    total: 27_412.6, accounts: 1, unreadable: 0, currency: 'USD', canSync: false, syncedAt: null,
     otherTransfers: 0, note: null, canEdit: false,
   }),
   tradeLog, tradeHistory, getTodo: todo, netWorth, budgetMonth: budget,

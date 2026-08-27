@@ -78,7 +78,7 @@ const evidenceEmpty=(name:string):any=>{
 export const api:any=new Proxy(baseApi as any,{get(target,key:string){if(key in target)return target[key];return async(...args:any[])=>{
  // AI fails closed EVERYWHERE until the separate provider migration, demo
  // included: a showcase must never imply a capability that is not wired.
- if(/(import|extract|chat|generate|analyze|audit|categorize|preview|fixture|tutor)/i.test(key)||/^ai/i.test(key))throw new ApiError(501,'AI actions are not available in this build.');
+ if(/(import|extract|chat|generate|analyze|audit|categorize|preview|fixture|tutor)/i.test(key)||/^ai/i.test(key))throw new ApiError(501,'AI features are moving to a new provider and are switched off in the public terminal.');
  if(isDemo()){const answered=demoCall(key,args);return answered.handled?answered.value:evidenceEmpty(key)}
  const write=/^(add|create|update|save|remove|delete|restore|toggle|send|reply|archive|unarchive|withdraw|submit|respond|share|revoke)/.test(key);
  return publicRequest('/records/'+encodeURIComponent(key),{method:write?'POST':'GET',body:write?JSON.stringify({args}):undefined});

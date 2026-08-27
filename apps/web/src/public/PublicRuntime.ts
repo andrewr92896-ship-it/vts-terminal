@@ -1,18 +1,10 @@
-const publicBuildEnv=(import.meta as unknown as {env:Record<string,string|undefined>}).env;
 const params=new URLSearchParams(typeof location==='undefined'?'':location.search);
-
-/**
- * The deterministic build CI screenshots. It is demo mode with a fixed seed —
- * NOT a second data path, so the evidence artifact is a picture of the demo a
- * visitor actually gets rather than of something only CI ever sees.
- */
-export const publicEvidence=publicBuildEnv.VITE_PUBLIC_EVIDENCE==='1';
 
 // Demo mode is a RUNTIME state, not a build flag: a visitor turns it on by
 // pressing "Explore the demo", so one deployed bundle serves both the demo and
 // real accounts. Nothing about it is written to storage — the demo's data lives
 // in module memory, so leaving or reloading the page IS the reset.
-let demo=publicEvidence||params.get('demo')==='1'||params.get('evidence')==='1';
+let demo=params.get('demo')==='1'||params.get('evidence')==='1';
 export const isDemo=()=>demo;
 export function startDemo(){demo=true}
 
