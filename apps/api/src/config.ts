@@ -24,12 +24,31 @@ const envSchema = z.object({
   PORT: z.coerce.number().int().positive().default(4000),
   WEB_ORIGIN: z.string().default('http://localhost:5173'),
   DATABASE_URL: z.string().default('file:./data/vts.db'),
+  PRIVATE_DATABASE_URL: blankAsUnset,
+  PRIVATE_PORTAL_ORIGIN: blankAsUnset,
+  PRIVATE_SESSION_SECRET: blankAsUnset,
+  PRIVATE_SESSION_COOKIE: blankAsUnset,
+  PRIVATE_ACCESS_USER_IDS: blankAsUnset,
+  PRIVATE_BOOTSTRAP_ADMIN_ID: blankAsUnset.pipe(z.string().uuid().optional()),
   SESSION_SECRET: z.string().min(16, 'SESSION_SECRET must be at least 16 characters'),
   SESSION_TTL_DAYS: z.coerce.number().int().positive().default(14),
+  // Main terminal email second factor. Off until a deployment has a verified
+  // mail provider; private and public deployments enable it independently.
+  AUTH_REQUIRE_2FA: z
+    .enum(['true', 'false'])
+    .default('false')
+    .transform((v) => v === 'true'),
+  AUTH_2FA_CODE_TTL_MINUTES: z.coerce.number().int().min(5).max(30).default(10),
+  AUTH_2FA_REMEMBER_DAYS: z.coerce.number().int().min(1).max(30).default(30),
   COOKIE_SECURE: z
     .enum(['true', 'false'])
     .default('false')
     .transform((v) => v === 'true'),
+  // Self-service recovery credentials. Fifteen minutes is deliberately short:
+  // the plaintext travels through email and is only a bridge into the forced
+  // Change Password screen. Values outside 5–30 minutes are configuration
+  // errors rather than a silent weakening of the recovery window.
+  PASSWORD_RESET_TTL_MINUTES: z.coerce.number().int().min(5).max(30).default(15),
   // Claude / Anthropic. The key is optional — when absent, AI features report
   // "not configured" instead of failing. The site default is Sonnet; trade
   // screenshot analysis uses a separate vision model (see below).
@@ -42,15 +61,33 @@ const envSchema = z.object({
   // million tokens against Opus's $5/$25. Env-overridable, so going back to Opus
   // is a variable change on the host rather than a redeploy.
   ANTHROPIC_MODEL_ANALYSIS: z.string().default('claude-sonnet-5'),
-  // AI usage guardrails (per user). The monthly cap resets at the start of each
-  // Eastern-Time month; the per-minute limit smooths bursts. Keeps Claude use
-  // from running up an unexpected bill.
+  // WHICH PROVIDER SERVES THE SIX MODEL CALLS. Defaults to `anthropic`, which
+  // is exactly what the terminal did before OpenAI existed here — so deploying
+  // this changes nothing until somebody sets the variable. Switching is a host
+  // variable and a restart rather than a redeploy, and so is switching back,
+  // which is the property that makes the migration testable one flow at a time.
+  AI_PROVIDER: z.enum(['anthropic', 'openai']).default('anthropic'),
+  OPENAI_API_KEY: z.string().optional(),
+  // gpt-4.1-mini for BOTH text and screenshots, deliberately.
   //
-  // Two budgets, because the two kinds of call cost an order of magnitude apart:
-  // a text question is roughly 1.5–2¢, a screenshot read 5–10¢. AI_MONTHLY_LIMIT
-  // keeps its name (and covers text) so existing deployments are unaffected.
+  // It reads a broker screenshot at roughly a seventh of the input cost and a
+  // ninth of the output cost of the Sonnet tier above, and the extraction work
+  // here is structured reading rather than hard reasoning. More importantly it
+  // supports the API's own JSON mode, so a screenshot parse can no longer come
+  // back as prose the parser has to dig JSON out of — which is the failure the
+  // owner actually hit: a trade pasted the same way as always, suddenly unread.
+  //
+  // gpt-4.1-nano is cheaper again and is a reasonable thing to try once this is
+  // proven, which is why the model is its own variable rather than a literal.
+  OPENAI_MODEL_DEFAULT: z.string().default('gpt-4.1-mini'),
+  OPENAI_MODEL_ANALYSIS: z.string().default('gpt-4.1-mini'),
+  // Points at a compatible gateway or a proxy when one is in front of OpenAI.
+  OPENAI_BASE_URL: z.string().default('https://api.openai.com/v1'),
+  // AI usage guardrails (per user). Text keeps a durable monthly cap that resets
+  // at the start of each Eastern-Time month. Screenshot-to-trade calls are
+  // metered but not monthly-capped; the shared per-minute limiter bounds bursts
+  // across both text and vision.
   AI_MONTHLY_LIMIT: z.coerce.number().int().positive().default(1000),
-  AI_VISION_MONTHLY_LIMIT: z.coerce.number().int().positive().default(40),
   AI_RATE_PER_MIN: z.coerce.number().int().positive().default(15),
   // Shared secret that inbound TradingView alerts must include (TradingView
   // sends no auth of its own). When unset, the webhook rejects everything.
@@ -108,10 +145,12 @@ const envSchema = z.object({
   // banner. Falls back to WEB_ORIGIN when that is a real public address —
   // localhost is skipped rather than sent, since Pushover cannot reach it.
   PUSHOVER_CALLBACK_ORIGIN: z.string().optional(),
-  // Outbound email (SMTP) — currently only used to deliver the Employee
-  // Portal's sign-in codes. Optional: when unset, a code is printed to the
+  // Outbound email (SMTP) — used by Employee Portal sign-in codes and main
+  // terminal password recovery. Optional: when unset, an employee code is printed to the
   // server log instead of emailed (same "printed once to logs" fallback as an
   // unset ADMIN_PASSWORD), so a misconfigured deploy cannot lock everyone out.
+  // Password recovery NEVER uses that fallback: its route requires a configured
+  // transport before it creates or sends a temporary credential.
   //
   // Every one of these treats a BLANK value as "not set". That is not
   // decoration: a hosting dashboard makes it very easy to create a variable and
@@ -164,7 +203,7 @@ const envSchema = z.object({
   // "Remember this device" — how long a device that confirmed a code may skip
   // the next one. Opt-in at sign-in time; the browser holds a separate,
   // longer-lived trust cookie for it.
-  EMPLOYEE_REMEMBER_DEVICE_DAYS: z.coerce.number().int().positive().max(90).default(30),
+  EMPLOYEE_REMEMBER_DEVICE_DAYS: z.coerce.number().int().positive().max(30).default(30),
   // The company email domain. Reaching the employee portal requires a sign-in
   // email on this domain — an outside collaborator with a personal address can
   // never enter it, whatever roles they hold. Checked at sign-in AND on every
@@ -185,6 +224,7 @@ const parsed = envSchema.safeParse({
   // In development, fall back to a fixed dev secret so the server still
   // boots before the user creates a .env. Production requires a real one.
   SESSION_SECRET:
+    process.env.PRIVATE_SESSION_SECRET ||
     process.env.SESSION_SECRET ||
     (process.env.NODE_ENV === 'production' ? undefined : DEV_SESSION_SECRET),
 });
@@ -193,6 +233,21 @@ if (!parsed.success) {
   console.error('Invalid environment configuration:');
   console.error(parsed.error.flatten().fieldErrors);
   process.exit(1);
+}
+
+if (parsed.data.NODE_ENV === 'production' && !parsed.data.PRIVATE_ACCESS_USER_IDS) {
+  console.error('[config] PRIVATE_ACCESS_USER_IDS is required for the private portal in production.');
+  process.exit(1);
+}
+
+if (parsed.data.NODE_ENV === 'production' && parsed.data.PRIVATE_BOOTSTRAP_ADMIN_ID) {
+  const admittedIds = new Set(
+    parsed.data.PRIVATE_ACCESS_USER_IDS!.split(',').map((value) => value.trim()).filter(Boolean),
+  );
+  if (!admittedIds.has(parsed.data.PRIVATE_BOOTSTRAP_ADMIN_ID)) {
+    console.error('[config] PRIVATE_BOOTSTRAP_ADMIN_ID must also appear in PRIVATE_ACCESS_USER_IDS.');
+    process.exit(1);
+  }
 }
 
 // ---- broker credential key: checked at boot, not at first use ----
@@ -236,8 +291,13 @@ function resolveDbUrl(url: string): string {
 
 export const config = {
   ...parsed.data,
+  WEB_ORIGIN: parsed.data.PRIVATE_PORTAL_ORIGIN ?? parsed.data.WEB_ORIGIN,
+  SESSION_SECRET: parsed.data.PRIVATE_SESSION_SECRET ?? parsed.data.SESSION_SECRET,
+  PRIVATE_SESSION_COOKIE:
+    parsed.data.PRIVATE_SESSION_COOKIE ??
+    (parsed.data.NODE_ENV === 'production' ? '__Host-vts_portal_session' : 'vts_portal_session'),
   apiRoot,
-  databaseUrl: resolveDbUrl(parsed.data.DATABASE_URL),
+  databaseUrl: resolveDbUrl(parsed.data.PRIVATE_DATABASE_URL ?? parsed.data.DATABASE_URL),
   isProd: parsed.data.NODE_ENV === 'production',
 };
 

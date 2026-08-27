@@ -1,0 +1,7 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { readFile } from 'node:fs/promises';
+
+test('public migration contains only public-owned tables',async()=>{const sql=await readFile(new URL('../../migrations/0001_public_auth_foundation.sql',import.meta.url),'utf8');const tables=[...sql.matchAll(/create table\s+([a-z_]+)/gi)].map((match)=>match[1]);assert.ok(tables.length>=8);assert.ok(tables.every((name)=>name!.startsWith('public_')));for(const forbidden of ['broker','order','position','balance','founder','group','admin'])assert.equal(tables.some((name)=>name!.includes(forbidden)),false)});
+test('server exposes no broker, order, private, admin, or trading contracts',async()=>{const source=await readFile(new URL('../../src/server.ts',import.meta.url),'utf8');const adapters=await readFile(new URL('../../src/adapters.ts',import.meta.url),'utf8');for(const route of ['/broker','/order','/position','/balance','/founder','/group','/admin','/private'])assert.equal(source.includes(`'/public/v1${route}`),false);assert.match(source,/\/public\/v1\/ai\//);assert.match(adapters,/status:503/)});
+test('public cookie names and path cannot collide with private defaults',async()=>{const source=await readFile(new URL('../../src/server.ts',import.meta.url),'utf8');assert.match(source,/vts_public_session_v1/);assert.match(source,/vts_public_trusted_device_v1/);assert.match(source,/PUBLIC_COOKIE_PATH='\/public'/);assert.doesNotMatch(source,/['"]vts_session['"]/)});

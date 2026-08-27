@@ -20,13 +20,17 @@
     "db:check-notes": "tsx src/trading/checkNotes.ts",
     "db:check-rollover": "tsx src/trading/checkRollover.ts",
     "db:check-founder-trades": "tsx src/trading/checkFounderTrades.ts",
+    "db:check-ai-usage": "tsx src/ai/checkUsage.ts",
+    "db:check-password-reset": "tsx src/auth/checkPasswordReset.ts",
     "verify:market-macro": "tsx src/trading/verifyMarketMacro.ts",
     "verify:rollover": "tsx src/trading/verifyRollover.ts",
     "verify:investments": "tsx src/investments/verifyInvestments.ts",
     "verify:migrations": "tsx src/db/verifyMigrations.ts",
     "verify:secretbox": "tsx src/security/verifySecretbox.ts",
+    "verify:ai-provider": "tsx src/ai/verifyProvider.ts",
     "verify:study-packages": "tsx src/studies/verifyStudyPackages.ts",
-    "setup": "npm run db:migrate && npm run db:seed"
+    "setup": "npm run db:migrate && npm run db:seed",
+    "db:check-two-factor": "tsx src/auth/checkTwoFactor.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.105.0",

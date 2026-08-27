@@ -103,6 +103,16 @@ export async function buildServer() {
     credentials: true,
   });
 
+  app.addHook('onSend', async (_request, reply, payload) => {
+    reply.header('X-Robots-Tag', 'noindex, nofollow');
+    reply.header('X-Content-Type-Options', 'nosniff');
+    reply.header('X-Frame-Options', 'DENY');
+    reply.header('Content-Security-Policy', "frame-ancestors 'none'");
+    reply.header('Referrer-Policy', 'no-referrer');
+    reply.header('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
+    return payload;
+  });
+
   app.decorateRequest('currentUser', null);
   app.addHook('onRequest', loadUser);
   // The demo account is read-only and its AI is scripted; this refuses its

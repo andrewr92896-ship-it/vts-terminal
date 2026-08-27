@@ -160,6 +160,10 @@ import type {
   DevBlogPost,
 } from './types';
 
+export type TerminalLoginResponse =
+  | { requiresTwoFactor: true; sentTo: string; rememberDays: number }
+  | { requiresTwoFactor: false; user: User };
+
 // A flashcard the user added to their own personal deck (a term, a definition,
 // and an optional topic label).
 export interface CustomVocabCard {
@@ -293,10 +297,28 @@ export const api = {
   me(): Promise<{ user: User }> {
     return request('/api/auth/me');
   },
-  login(email: string, password: string): Promise<{ user: User }> {
+  login(email: string, password: string): Promise<TerminalLoginResponse> {
     return request('/api/auth/login', {
       method: 'POST',
       body: JSON.stringify({ email, password }),
+    });
+  },
+  verifyTwoFactor(code: string, remember: boolean): Promise<{ user: User }> {
+    return request('/api/auth/two-factor/verify', {
+      method: 'POST',
+      body: JSON.stringify({ code, remember }),
+    });
+  },
+  resendTwoFactor(): Promise<{ ok: true; sentTo: string }> {
+    return request('/api/auth/two-factor/resend', {
+      method: 'POST',
+      body: JSON.stringify({}),
+    });
+  },
+  forgotPassword(email: string): Promise<{ ok: true; message: string }> {
+    return request('/api/auth/forgot-password', {
+      method: 'POST',
+      body: JSON.stringify({ email }),
     });
   },
   logout(): Promise<{ ok: boolean }> {
