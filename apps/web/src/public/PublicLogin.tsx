@@ -2,10 +2,42 @@ import { useState, type FormEvent } from 'react';
 import { C } from '../theme/tokens';
 import { publicAuth, publicEvidence } from './PublicRuntime';
 
-export function PublicLogin({ initialStep = 'email', onVerified }: { initialStep?:'email'|'two-factor'; onVerified:()=>void }) {
-  const [step,setStep]=useState(initialStep);
-  const [sent,setSent]=useState(false);
-  const [busy,setBusy]=useState(false);const [error,setError]=useState('');
-  async function submit(event:FormEvent<HTMLFormElement>){event.preventDefault();setBusy(true);setError('');try{const form=new FormData(event.currentTarget);if(step==='email'){if(!publicEvidence)await publicAuth.login(String(form.get('email')??''));setStep('two-factor')}else{if(!publicEvidence)await publicAuth.verify(String(form.get('code')??''),form.get('remember')==='on');onVerified()}}catch(reason){setError(reason instanceof Error?reason.message:'Unable to continue.')}finally{setBusy(false)}}
-  return <main className="vts-public-auth"><section className="vts-public-auth-brand"><img className="vts-public-wordmark" src="/brand/vitalis-wordmark.png" alt="Vitalis Trading Systems"/><div><p style={{fontFamily:C.mono,color:C.gold,fontSize:10,letterSpacing:'1.7px'}}>VTS PUBLIC TERMINAL</p><h1>Your market workbench.<br/><em>Focused and personal.</em></h1><p>Market information, personal tracking, and study tools in a reduced public terminal with its own account boundary.</p></div><p style={{fontFamily:C.mono,fontSize:10}}>Email two-step verification · optional 30-day remembered device</p></section><section className="vts-public-auth-card-wrap"><form className="vts-public-auth-card" onSubmit={submit}><p style={{fontFamily:C.mono,color:C.gold,fontSize:10,letterSpacing:'1.4px'}}>{step==='email'?'WELCOME':'STEP 2 OF 2'}</p><h2>{step==='email'?'Sign in to your terminal':'Check your email'}</h2><p>{step==='email'?'Use the email address for your public VTS account.':'Enter the six-digit code sent to an•••@example.com.'}</p>{step==='email'?<label>Email address<input name="email" type="email" autoComplete="email" placeholder="you@example.com" required/></label>:<><label>Verification code<input name="code" inputMode="numeric" autoComplete="one-time-code" maxLength={6} defaultValue={publicEvidence?'246810':''} required/></label><label className="remember"><input name="remember" type="checkbox" defaultChecked/>Remember this device for 30 days</label></>}<button disabled={busy} type="submit">{busy?'Please wait…':step==='email'?'Continue with email':'Verify & continue'}</button>{error&&<div style={{marginTop:10,color:C.red,fontSize:12}}>{error}</div>}{step==='two-factor'&&<button type="button" onClick={()=>setSent(true)} style={{marginTop:8,background:'transparent',border:`1px solid ${C.line2}`,color:C.muted}}>{sent?'New code sent':'Send a new code'}</button>}<div className="vts-public-boundary-note" style={{marginTop:16,marginBottom:0}}>This is the reduced public terminal. Accounts associated with a VTS group do not receive shared features here.</div><footer><a href="#terms">Terms</a><a href="#privacy">Privacy</a><span>Public candidate</span></footer></form></section></main>;
+type Step='login'|'two-factor'|'recovery'|'change-password';
+export function PublicLogin({ initialStep = 'login', onVerified }: { initialStep?:Step; onVerified:()=>void }) {
+  const [step,setStep]=useState<Step>(initialStep);const [challengeId,setChallengeId]=useState(publicEvidence?'evidence-challenge':'');const [sentTo,setSentTo]=useState('your public account email');
+  const [notice,setNotice]=useState('');const [busy,setBusy]=useState(false);const [error,setError]=useState('');
+  async function submit(event:FormEvent<HTMLFormElement>){
+    event.preventDefault();setBusy(true);setError('');const form=new FormData(event.currentTarget);
+    try{
+      if(step==='login'){
+        if(publicEvidence){setStep('two-factor');return}
+        const result=await publicAuth.login(String(form.get('email')??''),String(form.get('password')??''));
+        if(result.requiresTwoFactor){setChallengeId(result.challengeId||'');setSentTo(result.sentTo||'your public account email');setStep('two-factor')}
+        else if(result.passwordChangeRequired)setStep('change-password');else onVerified();
+      } else if(step==='two-factor'){
+        if(publicEvidence){onVerified();return}
+        const result=await publicAuth.verify(challengeId,String(form.get('code')??''),form.get('remember')==='on');
+        if(result.passwordChangeRequired)setStep('change-password');else onVerified();
+      } else if(step==='recovery'){
+        const message=publicEvidence?'If a public account matches that email, recovery instructions will be sent shortly.':(await publicAuth.recover(String(form.get('email')??''))).message;
+        setNotice(message);
+      } else {
+        const current=String(form.get('currentPassword')??''),next=String(form.get('newPassword')??''),confirm=String(form.get('confirmPassword')??'');
+        if(next!==confirm)throw new Error('New passwords do not match.');
+        if(!publicEvidence)await publicAuth.changePassword(current,next);onVerified();
+      }
+    }catch(reason){setError(reason instanceof Error?reason.message:'Unable to continue.')}finally{setBusy(false)}
+  }
+  const title=step==='login'?'Sign in to your terminal':step==='two-factor'?'Check your email':step==='recovery'?'Recover your account':'Change your temporary password';
+  const description=step==='login'?'Use your public VTS account email and password.':step==='two-factor'?`Enter the six-digit code sent to ${sentTo}.`:step==='recovery'?'Enter your public account email. The response is the same whether or not an account exists.':'Choose a new password before continuing.';
+  return <main className="vts-public-auth"><section className="vts-public-auth-brand"><img className="vts-public-wordmark" src="/brand/vitalis-wordmark.png" alt="Vitalis Trading Systems"/><div><p style={{fontFamily:C.mono,color:C.gold,fontSize:10,letterSpacing:'1.7px'}}>VTS PUBLIC TERMINAL</p><h1>Your market workbench.<br/><em>Focused and personal.</em></h1><p>Market information, personal tracking, and study tools in a reduced public terminal with its own account boundary.</p></div><p style={{fontFamily:C.mono,fontSize:10}}>Password · email two-step verification · optional 30-day remembered device</p></section><section className="vts-public-auth-card-wrap"><form className="vts-public-auth-card" onSubmit={submit}><p style={{fontFamily:C.mono,color:C.gold,fontSize:10,letterSpacing:'1.4px'}}>{step==='two-factor'?'STEP 2 OF 2':step==='change-password'?'PASSWORD CHANGE REQUIRED':'WELCOME'}</p><h2>{title}</h2><p>{description}</p>
+  {step==='login'&&<><label>Email address<input name="email" type="email" autoComplete="email" placeholder="you@example.com" required/></label><label>Password<input name="password" type="password" autoComplete="current-password" required/></label></>}
+  {step==='two-factor'&&<><label>Verification code<input name="code" inputMode="numeric" pattern="[0-9]{6}" autoComplete="one-time-code" maxLength={6} defaultValue={publicEvidence?'246810':''} required/></label><label className="remember"><input name="remember" type="checkbox"/>Remember this device for 30 days</label></>}
+  {step==='recovery'&&<label>Email address<input name="email" type="email" autoComplete="email" required/></label>}
+  {step==='change-password'&&<><label>Temporary password<input name="currentPassword" type="password" autoComplete="current-password" required/></label><label>New password<input name="newPassword" type="password" autoComplete="new-password" minLength={12} required/></label><label>Confirm new password<input name="confirmPassword" type="password" autoComplete="new-password" minLength={12} required/></label></>}
+  <button disabled={busy} type="submit">{busy?'Please wait…':step==='login'?'Continue':step==='two-factor'?'Verify & continue':step==='recovery'?'Send recovery email':'Change password & continue'}</button>
+  {notice&&<div style={{marginTop:10,color:C.green,fontSize:12}}>{notice}</div>}{error&&<div style={{marginTop:10,color:C.red,fontSize:12}}>{error}</div>}
+  {step==='login'&&<button type="button" onClick={()=>{setStep('recovery');setError('')}} style={{marginTop:8,background:'transparent',border:`1px solid ${C.line2}`,color:C.muted}}>Forgot password?</button>}
+  {(step==='recovery'||step==='two-factor')&&<button type="button" onClick={()=>{setStep('login');setError('');setNotice('')}} style={{marginTop:8,background:'transparent',border:`1px solid ${C.line2}`,color:C.muted}}>Back to sign in</button>}
+  <div className="vts-public-boundary-note" style={{marginTop:16,marginBottom:0}}>This is the reduced public terminal. Accounts associated with a VTS group do not receive shared features here.</div><footer><a href="#terms">Terms</a><a href="#privacy">Privacy</a><span>Public candidate</span></footer></form></section></main>;
 }

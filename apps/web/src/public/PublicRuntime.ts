@@ -2,12 +2,17 @@ const publicBuildEnv=(import.meta as unknown as {env:Record<string,string|undefi
 export const publicEvidence=publicBuildEnv.VITE_PUBLIC_EVIDENCE==='1';
 
 export async function publicRequest<T>(path:string,init:RequestInit={}):Promise<T>{
-  const response=await fetch(`/public/v1${path}`,{...init,credentials:'include',headers:{'Content-Type':'application/json',...(init.headers??{})}});
+  const response=await fetch(`/public/v1${path}`,{...init,credentials:'include',headers:{'Content-Type':'application/json','X-VTS-Public-CSRF':'1',...(init.headers??{})}});
   if(!response.ok){const body=await response.json().catch(()=>({}));throw new Error(typeof body.message==='string'?body.message:`Public service request failed (${response.status})`)}
   return response.json() as Promise<T>;
 }
 
+export type PublicAuthResult={requiresTwoFactor:boolean;challengeId?:string;sentTo?:string;passwordChangeRequired?:boolean;privateGroupWarning?:boolean};
 export const publicAuth={
-  login(email:string){return publicRequest<{requiresTwoFactor:boolean;sentTo?:string}>('/auth/login',{method:'POST',body:JSON.stringify({email})})},
-  verify(code:string,remember:boolean){return publicRequest<{ok:true}>('/auth/two-factor/verify',{method:'POST',body:JSON.stringify({code,remember})})},
+  login(email:string,password:string){return publicRequest<PublicAuthResult>('/auth/login',{method:'POST',body:JSON.stringify({email,password})})},
+  verify(challengeId:string,code:string,remember:boolean){return publicRequest<PublicAuthResult&{ok:true}>('/auth/two-factor/verify',{method:'POST',body:JSON.stringify({challengeId,code,remember})})},
+  recover(email:string){return publicRequest<{message:string}>('/auth/recovery',{method:'POST',body:JSON.stringify({email})})},
+  session(){return publicRequest<{user:{id:string;email:string;displayName:string};passwordChangeRequired:boolean;privateGroupWarning:boolean}>('/auth/session')},
+  changePassword(currentPassword:string,newPassword:string){return publicRequest<{ok:true;passwordChangeRequired:false}>('/auth/change-password',{method:'POST',body:JSON.stringify({currentPassword,newPassword})})},
+  logout(){return publicRequest<{ok:true}>('/auth/logout',{method:'POST'})},
 };
