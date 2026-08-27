@@ -18,6 +18,7 @@ export const PATCH_NOTES: PatchNote[] = [
     version: 'Beta V 7.38',
     date: 'August 27, 2026',
     notes: [
+      'A misconfigured bootstrap admin ID no longer stops the terminal from starting — it says so loudly instead. The account allowlist itself still refuses to start without it, which is the setting that actually protects the private terminal.',
       'Gold, the indices and crypto now report what they moved. Every pips figure on Closed Trades & Metrics, the Funded stats and the Desk Metrics tile quietly left those trades out, so a row of gold trades read “0 pips” beside real money and a mixed row counted only its forex half. They read in points now, beside the pips, and nothing that could not be measured is shown as a zero.',
       'The password box on the public sign-in card is styled like the one above it instead of a white box.',
       'The public terminal is live, with a demo anyone can open without an account. It uses sample data, saves nothing, and resets when you leave — so it can be handed to somebody to click around in.',

@@ -38,11 +38,14 @@ console.log('config checks');
     prod({ CREDENTIALS_KEY: undefined, PRIVATE_ACCESS_USER_IDS: undefined, PRIVATE_BOOTSTRAP_ADMIN_ID: ID_B }),
   );
   const named = report.problems.map((p) => p.variable);
-  check('reports every problem at once, not just the first', report.problems.length === 3, `got ${report.problems.length}: ${named.join(', ')}`);
-  for (const variable of ['PRIVATE_ACCESS_USER_IDS', 'PRIVATE_BOOTSTRAP_ADMIN_ID', 'CREDENTIALS_KEY']) {
+  check('reports every problem at once, not just the first', report.problems.length === 2, `got ${report.problems.length}: ${named.join(', ')}`);
+  for (const variable of ['PRIVATE_ACCESS_USER_IDS', 'CREDENTIALS_KEY']) {
     check(`  names ${variable}`, named.includes(variable));
   }
   check('is not ok', report.ok === false);
+  // Demoted on purpose — see configChecks.ts. It is reported, but it does not
+  // stop a running service from starting.
+  check('  warns about the bootstrap admin rather than refusing', report.warnings.some((w) => w.includes('PRIVATE_BOOTSTRAP_ADMIN_ID')));
 }
 
 // A complete production environment starts, with nothing to say about it.
@@ -58,7 +61,9 @@ console.log('config checks');
   const listed = checkEnvironment(prod({ PRIVATE_BOOTSTRAP_ADMIN_ID: ID_A }));
   check('a bootstrap admin on the allowlist passes', listed.ok === true);
   const absent = checkEnvironment(prod({ PRIVATE_BOOTSTRAP_ADMIN_ID: ID_B }));
-  check('a bootstrap admin off the allowlist fails', absent.problems.some((p) => p.variable === 'PRIVATE_BOOTSTRAP_ADMIN_ID'));
+  check('a bootstrap admin off the allowlist is NOT fatal', absent.ok === true, absent.problems.map((p) => p.message).join('; '));
+  check('  but it is said out loud', absent.warnings.some((w) => w.includes(ID_B)));
+  check('  while a missing allowlist still IS fatal', checkEnvironment(prod({ PRIVATE_ACCESS_USER_IDS: undefined })).ok === false);
 }
 
 // PRIVATE_SESSION_SECRET stands in for SESSION_SECRET, as it does at boot.

@@ -6161,6 +6161,17 @@ and each discovery was another outage. A single-fault environment behaves
 identically either way, which is why this needs `verify:config` rather than a
 passing boot to protect it.
 
+**What is fatal is a judgment, not a list.** `PRIVATE_ACCESS_USER_IDS` missing in
+production exits, because without it the private portal admits every account in
+the database — missing security beats broken uptime. `PRIVATE_BOOTSTRAP_ADMIN_ID`
+not appearing in that allowlist is only a **warning**, because `seedAdmin` reads
+it solely when no admin exists yet: on a running installation it has no effect at
+all, so exiting there would take a healthy service down over a setting that does
+nothing to it, and on the fresh install where it does apply the symptom (a seeded
+admin who cannot sign in) is visible and recoverable. Weigh any new check the same
+way — what does this actually break, and is that worse than the service being
+down?
+
 **Check before you deploy**, against the real service's own variables, without
 starting anything:
 

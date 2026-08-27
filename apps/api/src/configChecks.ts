@@ -288,18 +288,35 @@ export function checkEnvironment(raw: NodeJS.ProcessEnv = process.env): EnvRepor
     });
   }
 
-  // A bootstrap admin who is not on the allowlist is an account that would be
-  // created and then refused at the door — which reads as a broken deploy.
+  // A bootstrap admin who is not on the allowlist would be created and then
+  // refused at the door. Worth shouting about — but a WARNING, not a refusal to
+  // start, and the difference matters more than it looks.
+  //
+  // `seedAdmin` reads this variable only when the admin account does not already
+  // exist; on an installation that has one it returns before ever looking. So on
+  // every deployment that is actually running, exiting here would take a healthy
+  // service down to complain about a setting that has no effect on it. That is
+  // the exact shape of the outage this whole module was written after.
+  //
+  // The condition it describes is also self-announcing on the install where it
+  // DOES apply: a fresh environment whose seeded admin cannot sign in. Visible,
+  // recoverable, and cheap. An outage is none of those.
+  //
+  // PRIVATE_ACCESS_USER_IDS above stays fatal, deliberately: that one IS the
+  // boundary, and a portal running without it admits every account in the
+  // database. Missing security beats broken uptime; a misconfigured seed does
+  // not.
   if (data.NODE_ENV === 'production' && data.PRIVATE_BOOTSTRAP_ADMIN_ID) {
     const admittedIds = new Set(
       (data.PRIVATE_ACCESS_USER_IDS ?? '').split(',').map((value) => value.trim()).filter(Boolean),
     );
     if (!admittedIds.has(data.PRIVATE_BOOTSTRAP_ADMIN_ID)) {
-      problems.push({
-        variable: 'PRIVATE_BOOTSTRAP_ADMIN_ID',
-        message: 'PRIVATE_BOOTSTRAP_ADMIN_ID must also appear in PRIVATE_ACCESS_USER_IDS.',
-        fix: `Add ${data.PRIVATE_BOOTSTRAP_ADMIN_ID} to PRIVATE_ACCESS_USER_IDS.`,
-      });
+      warnings.push(
+        `PRIVATE_BOOTSTRAP_ADMIN_ID (${data.PRIVATE_BOOTSTRAP_ADMIN_ID}) does not appear in ` +
+          'PRIVATE_ACCESS_USER_IDS. It is only used when seeding the first admin on an empty ' +
+          'database — harmless here if an admin already exists, but that seeded account would ' +
+          'be unable to sign in. Add it to the allowlist, or remove the variable.',
+      );
     }
   }
 
