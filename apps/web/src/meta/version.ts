@@ -11,9 +11,18 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 7.52';
+export const APP_VERSION = 'Beta V 7.53';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 7.53',
+    date: 'August 28, 2026',
+    notes: [
+      'Reporting a bug and sending a suggestion now work on a real public account, not just in the demo.',
+      'A bug report titles itself from its first line, so you do not have to.',
+      'The build now also catches anything that works in the demo but would fail for a real account.',
+    ],
+  },
   {
     version: 'Beta V 7.52',
     date: 'August 28, 2026',

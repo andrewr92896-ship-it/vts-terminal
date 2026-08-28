@@ -116,6 +116,8 @@ const BODY_LIMIT=16_384;
 // Comfortably above MAX_STATE_BYTES so the state cap is the thing that refuses a
 // state, with a message that says so, rather than a body limit refusing it as
 // "too large" — and roomy enough for a thousand-question import.
+// A bug report is prose. Long enough for somebody to paste what they saw.
+const MAX_REPORT=8_000;
 const STUDY_BODY_LIMIT=2_000_000;
 // A presentation carries its screenshots inline as base64 data URLs, so it is in
 // a different size class again — the private side allows 25 MB for exactly this.
@@ -1097,6 +1099,44 @@ export async function handleRequest(req:IncomingMessage,res:ServerResponse,depen
         return json(res,200,{guide:guideDetailView(updated),guides:(await dependencies.store.listStudyGuides(id)).map(guideView)});
       }
       throw new AuthError(404,'Public route not found.');
+    }
+    // ---- support -----------------------------------------------------------------
+    //
+    // REPORTING A BUG IS FREE ON EVERY ACCOUNT, and these routes sit on nothing
+    // but a session for that reason. A user who cannot reach help is a user who
+    // cannot tell you their payment failed, so the complaints channel must never
+    // sit behind the paid path or behind the AI path that is currently switched
+    // off. The private side runs an AI intake conversation to draw a usable
+    // description out of a person; here the report is simply what was written.
+    if(path==='/public/v1/support/bugs'&&method==='GET'){
+      const id=await authenticatedAccount(req,authService);
+      return json(res,200,{reports:await dependencies.store.listBugReports(id)});
+    }
+    if(path==='/public/v1/support/bugs'&&method==='POST'){
+      const id=await authenticatedAccount(req,authService);
+      const body=text((await readBody(req)).body,MAX_REPORT);
+      if(!body)throw new AuthError(400,'Say what went wrong.');
+      // The summary is the first line, capped. Derived rather than typed: a
+      // reporter should not have to title their own bug report.
+      const summary=(body.split('\n')[0]||'Bug report').slice(0,140);
+      return json(res,201,{report:await dependencies.store.createBugReport(id,summary,body)});
+    }
+    if(/^\/public\/v1\/support\/bugs\/[^/]+\/reply$/.test(path)&&method==='POST'){
+      const id=await authenticatedAccount(req,authService);
+      const reportId=decodeURIComponent(path.split('/')[5]!);
+      const body=text((await readBody(req)).body,MAX_REPORT);
+      if(!body)throw new AuthError(400,'Write something to add.');
+      // Always 'user': there is no admin surface on the public side, so a client
+      // must not be able to post a message that renders as staff having replied.
+      const report=await dependencies.store.appendBugMessage(id,reportId,'user',body);
+      if(!report)throw new AuthError(404,'No such report.');
+      return json(res,200,{report});
+    }
+    if(path==='/public/v1/support/suggestions'&&method==='POST'){
+      const id=await authenticatedAccount(req,authService);
+      const body=text((await readBody(req)).body,MAX_REPORT);
+      if(!body)throw new AuthError(400,'Write the suggestion.');
+      return json(res,201,{suggestion:await dependencies.store.createSuggestion(id,body)});
     }
     if(path.startsWith('/public/v1/ai/'))return json(res,501,{message:'Public AI is not available.'});
     return json(res,404,{message:'Public route not found.'});

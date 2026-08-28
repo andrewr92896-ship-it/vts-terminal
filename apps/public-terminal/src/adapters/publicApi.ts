@@ -136,6 +136,14 @@ const liveRecords:Record<string,(...args:any[])=>Promise<unknown>>={
   saveStudyGuide:(input:unknown)=>publicRequest('/studies/guides',{method:'POST',body:JSON.stringify(input)}),
   updateStudyGuide:(id:string,patch:unknown)=>publicRequest(`/studies/guides/${encodeURIComponent(id)}`,{method:'PUT',body:JSON.stringify(patch)}),
   deleteStudyGuide:(id:string)=>publicRequest(`/studies/guides/${encodeURIComponent(id)}`,{method:'DELETE'}),
+
+  // Reporting a bug is free on every account and is the channel through which
+  // everything else gets reported, so it is wired for real accounts rather than
+  // left as a demo-only screen.
+  myBugReports:()=>publicRequest('/support/bugs'),
+  createBugReport:(body:string)=>publicRequest('/support/bugs',{method:'POST',body:JSON.stringify({body})}),
+  replyBugReport:(id:string,body:string)=>publicRequest(`/support/bugs/${encodeURIComponent(id)}/reply`,{method:'POST',body:JSON.stringify({body})}),
+  sendSuggestion:(body:string)=>publicRequest('/support/suggestions',{method:'POST',body:JSON.stringify({body})}),
 };
 
 

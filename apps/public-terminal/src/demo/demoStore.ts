@@ -444,15 +444,15 @@ const writes: Record<string, (args: any[]) => unknown> = {
   createBugReport: ([body]) => {
     const now = Date.now();
     const report = { id: nextId('demo-bug'), author: 'Demo Trader', status: 'open',
-      summary: String(body ?? '').slice(0, 120), createdAt: now, updatedAt: now,
-      messages: [{ id: nextId('demo-msg'), author: 'Demo Trader', body: String(body ?? ''), createdAt: now, fromStaff: false }] };
+      summary: (String(body ?? '').split('\n')[0] || 'Bug report').slice(0, 140), createdAt: now, updatedAt: now,
+      messages: [{ id: nextId('demo-msg'), role: 'user', body: String(body ?? ''), createdAt: now }] };
     DEMO_BUG_REPORTS.unshift(report);
     return { report: clone(report) };
   },
   replyBugReport: ([id, body]) => {
     const report = DEMO_BUG_REPORTS.find((r) => r.id === id);
     if (report) {
-      report.messages.push({ id: nextId('demo-msg'), author: 'Demo Trader', body: String(body ?? ''), createdAt: Date.now(), fromStaff: false });
+      report.messages.push({ id: nextId('demo-msg'), role: 'user', body: String(body ?? ''), createdAt: Date.now() });
       report.updatedAt = Date.now();
     }
     return { report: clone(report ?? { id, author: 'Demo Trader', status: 'open', summary: '', createdAt: Date.now(), updatedAt: Date.now(), messages: [] }) };

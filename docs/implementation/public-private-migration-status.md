@@ -127,6 +127,30 @@ Updated: 2026-08-27.
 - It also found a SECOND AI route slipping the guard by name, after
   `flashcardsFromGame`: `closeFundedTrade` reads the result off a screenshot.
   Both are now refused by name rather than falling through to "route not found".
+- **The check now covers a second class: works in the demo, 404s for a real
+  account.** That one is easy to miss and expensive — the screen that was the
+  proof the product works is the screen that breaks for the first customer.
+  Twelve calls were in that state. Each is now either wired live or NAMED in
+  `DEMO_ONLY` with its reason. Proved to fail by unnaming one.
+
+- Gave the public terminal a ninth record family with real storage: SUPPORT —
+  reporting a bug, replying on the thread, and sending a suggestion. Wired for
+  real accounts rather than left demo-only because it is the channel through
+  which everything else gets reported: a user who cannot reach help is a user
+  who cannot tell you their payment failed. It sits on nothing but a session —
+  no tier, no opt-in, no entitlement.
+- A reply can only ever be posted as `user`. There is no admin surface on the
+  public side, so a client must not be able to post a message that renders as
+  staff having answered. The summary is derived from the first line rather than
+  typed: a reporter should not have to title their own bug report.
+- No AI triage, and that is stated rather than stubbed. The private side runs an
+  intake conversation to draw a usable description out of a person; here the
+  report is simply what was written.
+
+- Still demo-only BY DECISION and written down: the hand-kept trade log and the
+  funded book (`addTrade`, the funded account and trade writes). Both are
+  public-safe features — a record of trades somebody typed in, no broker behind
+  them — and both are storage that has not been built yet.
 
 - Gave the public terminal a sixth record family with real storage: STUDY GAMES
   — the decks, their questions, each learner's progress, and combining games.
@@ -195,7 +219,7 @@ Updated: 2026-08-27.
 ## Blocked/manual
 
 - Provision separate Railway services.
-- Provision a public database and public API (the API exists and has auth, market data, layout, early access, budget, to-do, investments, net worth, trading notes, study games, flashcards and presentations; the remaining record families are still demo-only).
+- Provision a public database and public API (the API exists and has auth, market data, layout, early access, budget, to-do, investments, net worth, trading notes, study games, flashcards, presentations and support; the remaining record families are still demo-only).
 - Configure separate public authentication.
 - Configure private MFA.
 - Populate `PRIVATE_ACCESS_USER_IDS`. Since 7.42 an entry may be an ID, a username or an email — a username survives the database changing, which an ID does not.

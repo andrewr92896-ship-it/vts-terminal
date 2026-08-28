@@ -1,4 +1,4 @@
-import type { FlashcardSetDetail, FlashcardSetPatch, FlashcardSetRow, NewFlashcardSet, NewStudyGuide, StudyGuideDetail, StudyGuidePatch, StudyGuideRow, NewStudyDeck, StudyDeckDetail, StudyDeckPatch, StudyDeckRow, NewTradingNote, TradingNotePatch, NetWorthItem, NetWorthSnapshot, InvestmentAccount, InvestmentGoal, InvestmentHolding, InvestmentSnapshot, InvestmentTransaction, BudgetCategory, BudgetEntry, Challenge, NewBudgetCategory, NewBudgetEntry, PublicAccount, PublicStore, RateLimitResult, Session, TodoItemRow, TodoSectionRow, TrustedDevice } from './types.js';
+import type { BugReport, BugRole, Suggestion, FlashcardSetDetail, FlashcardSetPatch, FlashcardSetRow, NewFlashcardSet, NewStudyGuide, StudyGuideDetail, StudyGuidePatch, StudyGuideRow, NewStudyDeck, StudyDeckDetail, StudyDeckPatch, StudyDeckRow, NewTradingNote, TradingNotePatch, NetWorthItem, NetWorthSnapshot, InvestmentAccount, InvestmentGoal, InvestmentHolding, InvestmentSnapshot, InvestmentTransaction, BudgetCategory, BudgetEntry, Challenge, NewBudgetCategory, NewBudgetEntry, PublicAccount, PublicStore, RateLimitResult, Session, TodoItemRow, TodoSectionRow, TrustedDevice } from './types.js';
 import { STARTER_SECTIONS } from './todo.js';
 import type { NoteRow } from './notes.js';
 
@@ -391,6 +391,35 @@ export class MemoryPublicStore implements PublicStore {
   async deleteStudyGuide(accountId:string,id:string){
     const row=this.studyGuides.get(id); if(!row||row.accountId!==accountId)return false;
     this.studyGuides.delete(id); return true;
+  }
+  // ---- support --------------------------------------------------------------
+  bugReports=new Map<string,BugReport&{accountId:string}>();
+  suggestions=new Map<string,Suggestion&{accountId:string}>();
+  async listBugReports(accountId:string){
+    return this.mine(this.bugReports,accountId).sort((a,b)=>b.updatedAt-a.updatedAt).map((r)=>structuredClone(this.strip(r))) as BugReport[];
+  }
+  async getBugReport(accountId:string,id:string){
+    const row=this.bugReports.get(id);
+    if(!row||row.accountId!==accountId)return undefined;
+    return structuredClone(this.strip(row)) as BugReport;
+  }
+  async createBugReport(accountId:string,summary:string,body:string){
+    const now=this.now();
+    const row={accountId,id:crypto.randomUUID(),author:'You',summary,status:'open',createdAt:now,updatedAt:now,
+      messages:[{id:crypto.randomUUID(),role:'user' as BugRole,body,createdAt:now}]};
+    this.bugReports.set(row.id,row);
+    return structuredClone(this.strip(row)) as BugReport;
+  }
+  async appendBugMessage(accountId:string,id:string,role:BugRole,body:string){
+    const row=this.bugReports.get(id); if(!row||row.accountId!==accountId)return undefined;
+    row.messages.push({id:crypto.randomUUID(),role,body,createdAt:this.now()});
+    row.updatedAt=this.now();
+    return structuredClone(this.strip(row)) as BugReport;
+  }
+  async createSuggestion(accountId:string,body:string){
+    const row={accountId,id:crypto.randomUUID(),author:'You',body,status:'new',createdAt:this.now()};
+    this.suggestions.set(row.id,row);
+    return structuredClone(this.strip(row)) as Suggestion;
   }
   async audit(event:string,accountId:string|undefined,metadata:Record<string,unknown>){this.audits.push({event,accountId,metadata})}
 }

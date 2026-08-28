@@ -1,5 +1,6 @@
 #!/usr/bin/env node
-// Every api.* call a PUBLIC screen can reach must be answered by something.
+// Every api.* call a PUBLIC screen can reach must be answered by something —
+// and it must be answered ON A REAL ACCOUNT, not only in the demo.
 //
 // This exists because the failure it catches is silent. An unrecognised method
 // name falls through to an empty-but-generic payload, so a screen doing
@@ -12,10 +13,16 @@
 // nor the screenshot test could see it: a capture asserts a page rendered, not
 // that pressing "add" on it did anything.
 //
+// There are TWO ways to fail, and the second is easy to miss. A call the demo
+// answers but the live adapter does not works perfectly in the showcase and
+// 404s the moment a real account presses it — so the screen that was the proof
+// the product works is the screen that breaks for the first customer. Both are
+// checked here, each against its own named list.
+//
 // So: walk the public screen tree, collect every api call it can reach, and
-// require each one to be accounted for — served live, served by the demo,
-// refused as AI, or NAMED BELOW with a reason. The named list is the point. A
-// gap that somebody decided to leave is fine; a gap nobody knows about is not.
+// require each one to be accounted for — served live, refused as AI, or NAMED
+// BELOW with a reason. The named lists are the point. A gap that somebody
+// decided to leave is fine; a gap nobody knows about is not.
 import { readFileSync, existsSync, readdirSync } from 'node:fs';
 import path from 'node:path';
 
@@ -64,8 +71,24 @@ const ACCEPTED = {
   // there is no broker behind it and no order that could have produced a row.
   trades: ['restoreTrade', 'updateHistoryTrade', 'updateTrade', 'removeTrade', 'restoreDeletedTrade'],
 };
+// Answered by the demo but NOT wired for a real account. Each of these works in
+// the showcase and 404s for a customer, so each needs a reason to still be here.
+const DEMO_ONLY = {
+  // The hand-kept trade log and the funded book. Both are real public-safe
+  // features — a record of trades somebody typed in, with no broker behind them
+  // — and both are storage that has not been built yet. Until it is, these three
+  // nav rows are demo-only, which is why they are written down rather than
+  // discovered by a customer.
+  handKeptTrades: [
+    'addTrade', 'updateTrade', 'removeTrade', 'restoreDeletedTrade',
+    'addFundedAccount', 'updateFundedAccount', 'removeFundedAccount',
+    'addFundedTrade', 'removeFundedTrade',
+  ],
+};
 const accepted = new Map();
 for (const [reason, names] of Object.entries(ACCEPTED)) for (const name of names) accepted.set(name, reason);
+const demoOnly = new Map();
+for (const [reason, names] of Object.entries(DEMO_ONLY)) for (const name of names) demoOnly.set(name, reason);
 
 const seen = new Set();
 const calls = new Map();
@@ -111,18 +134,28 @@ const demoNames = new Set([
   ...[...demoBlock.matchAll(/^  ([a-zA-Z]+),/gm)].map((m) => m[1]),
 ]);
 
-const gaps = [];
+const unanswered = [];
+const realAccountGaps = [];
 for (const [name, file] of [...calls.entries()].sort()) {
   if (aiWords.test(name) || /^ai/i.test(name) || aiNamed.has(name)) continue;
-  if (live.has(name) || base.has(name) || demoNames.has(name) || accepted.has(name)) continue;
-  gaps.push([name, file]);
+  if (live.has(name) || base.has(name) || accepted.has(name)) continue;
+  if (!demoNames.has(name)) { unanswered.push([name, file]); continue; }
+  // Answered by the demo alone: fine only if somebody decided it.
+  if (!demoOnly.has(name)) realAccountGaps.push([name, file]);
 }
 
-if (gaps.length > 0) {
-  console.error('FAIL a public screen calls something nothing answers:\n');
-  for (const [name, file] of gaps) console.error(`  api.${name}  —  ${file}`);
+if (unanswered.length > 0) {
+  console.error('FAIL a public screen calls something NOTHING answers:\n');
+  for (const [name, file] of unanswered) console.error(`  api.${name}  —  ${file}`);
   console.error('\nAnswer it in publicApi.ts (live) or demoStore.ts (demo), or add it to');
   console.error('ACCEPTED in this file with the reason it is deliberately unbuilt.');
-  process.exit(1);
 }
-console.log(`Demo coverage: ${calls.size} reachable api calls, all accounted for (${accepted.size} deliberately unbuilt).`);
+if (realAccountGaps.length > 0) {
+  console.error('\nFAIL a public screen calls something only the DEMO answers:\n');
+  for (const [name, file] of realAccountGaps) console.error(`  api.${name}  —  ${file}`);
+  console.error('\nThis works in the showcase and 404s for a real account. Wire it into');
+  console.error('liveRecords in publicApi.ts, or add it to DEMO_ONLY here with the reason.');
+}
+if (unanswered.length + realAccountGaps.length > 0) process.exit(1);
+console.log(`Demo coverage: ${calls.size} reachable api calls, all accounted for`);
+console.log(`  ${accepted.size} deliberately unbuilt, ${demoOnly.size} demo-only by decision.`);

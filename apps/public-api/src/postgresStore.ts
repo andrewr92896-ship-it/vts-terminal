@@ -1,5 +1,5 @@
 import pg from 'pg';
-import type { FlashcardSetDetail, FlashcardSetPatch, FlashcardSetRow, NewFlashcardSet, NewStudyGuide, StudyGuideDetail, StudyGuidePatch, StudyGuideRow, NewStudyDeck, StudyDeckDetail, StudyDeckPatch, StudyDeckRow, NewTradingNote, TradingNotePatch, NetWorthItem, NetWorthSnapshot, InvestmentAccount, InvestmentGoal, InvestmentHolding, InvestmentSnapshot, InvestmentTransaction, BudgetCategory, BudgetEntry, Challenge, NewBudgetCategory, NewBudgetEntry, PublicAccount, PublicStore, RateLimitResult, Session, TodoItemRow, TodoSectionRow, TrustedDevice } from './types.js';
+import type { BugReport, BugRole, Suggestion, FlashcardSetDetail, FlashcardSetPatch, FlashcardSetRow, NewFlashcardSet, NewStudyGuide, StudyGuideDetail, StudyGuidePatch, StudyGuideRow, NewStudyDeck, StudyDeckDetail, StudyDeckPatch, StudyDeckRow, NewTradingNote, TradingNotePatch, NetWorthItem, NetWorthSnapshot, InvestmentAccount, InvestmentGoal, InvestmentHolding, InvestmentSnapshot, InvestmentTransaction, BudgetCategory, BudgetEntry, Challenge, NewBudgetCategory, NewBudgetEntry, PublicAccount, PublicStore, RateLimitResult, Session, TodoItemRow, TodoSectionRow, TrustedDevice } from './types.js';
 import { STARTER_SECTIONS } from './todo.js';
 import type { NoteRow } from './notes.js';
 import type { DeckQuestion, Flashcard, GuideSlide } from './studies.js';
@@ -607,6 +607,77 @@ export class PostgresPublicStore implements PublicStore {
   async deleteStudyGuide(accountId:string,id:string):Promise<boolean>{
     const r=await this.pool.query('delete from public_study_guides where account_id=$1 and id=$2',[accountId,id]);
     return (r.rowCount??0)>0;
+  }
+  // ---- support --------------------------------------------------------------
+  //
+  // `author` is 'You' rather than a name: these are the caller's own reports and
+  // there is no admin surface on the public side, so there is nobody else it
+  // could have been — and putting the account's display name on a row nobody
+  // else reads would be storing an identity for nothing.
+  private async messagesFor(ids:string[]):Promise<Map<string,BugReport['messages']>>{
+    const out=new Map<string,BugReport['messages']>();
+    if(ids.length===0)return out;
+    const r=await this.pool.query(
+      `select report_id as "reportId",id,role,body,created_at as "createdAt"
+         from public_bug_messages where report_id = any($1::uuid[]) order by created_at`,[ids]);
+    for(const row of r.rows){
+      const list=out.get(String(row.reportId))??[];
+      list.push({id:String(row.id),role:row.role as BugRole,body:String(row.body),createdAt:new Date(String(row.createdAt)).getTime()});
+      out.set(String(row.reportId),list);
+    }
+    return out;
+  }
+  private reportRow(v:Record<string,unknown>,messages:BugReport['messages']):BugReport{
+    return {id:String(v.id),author:'You',summary:String(v.summary),status:String(v.status),
+      createdAt:new Date(String(v.createdAt)).getTime(),updatedAt:new Date(String(v.updatedAt)).getTime(),messages};
+  }
+  async listBugReports(accountId:string):Promise<BugReport[]>{
+    const r=await this.pool.query(
+      `select id,summary,status,created_at as "createdAt",updated_at as "updatedAt"
+         from public_bug_reports where account_id=$1 order by updated_at desc`,[accountId]);
+    const messages=await this.messagesFor(r.rows.map((v)=>String(v.id)));
+    return r.rows.map((v)=>this.reportRow(v,messages.get(String(v.id))??[]));
+  }
+  async getBugReport(accountId:string,id:string):Promise<BugReport|undefined>{
+    const r=await this.pool.query(
+      `select id,summary,status,created_at as "createdAt",updated_at as "updatedAt"
+         from public_bug_reports where account_id=$1 and id=$2`,[accountId,id]);
+    const row=r.rows[0];
+    if(!row)return undefined;
+    return this.reportRow(row,(await this.messagesFor([id])).get(id)??[]);
+  }
+  async createBugReport(accountId:string,summary:string,body:string):Promise<BugReport>{
+    const client=await this.pool.connect();
+    try{
+      await client.query('begin');
+      const r=await client.query(
+        `insert into public_bug_reports(account_id,summary) values($1,$2)
+         returning id,summary,status,created_at as "createdAt",updated_at as "updatedAt"`,[accountId,summary]);
+      const id=String(r.rows[0].id);
+      // A report with no message is a title with nothing behind it, so the two
+      // are written together or not at all.
+      await client.query('insert into public_bug_messages(report_id,role,body) values($1,$2,$3)',[id,'user',body]);
+      await client.query('commit');
+      return (await this.getBugReport(accountId,id))!;
+    }catch(error){
+      await client.query('rollback').catch(()=>{});
+      throw error;
+    }finally{client.release()}
+  }
+  async appendBugMessage(accountId:string,id:string,role:BugRole,body:string):Promise<BugReport|undefined>{
+    const owned=await this.pool.query('select 1 from public_bug_reports where account_id=$1 and id=$2',[accountId,id]);
+    if((owned.rowCount??0)===0)return undefined;
+    await this.pool.query('insert into public_bug_messages(report_id,role,body) values($1,$2,$3)',[id,role,body]);
+    await this.pool.query('update public_bug_reports set updated_at=now() where id=$1',[id]);
+    return this.getBugReport(accountId,id);
+  }
+  async createSuggestion(accountId:string,body:string):Promise<Suggestion>{
+    const r=await this.pool.query(
+      `insert into public_suggestions(account_id,body) values($1,$2)
+       returning id,body,status,created_at as "createdAt"`,[accountId,body]);
+    const row=r.rows[0];
+    return {id:String(row.id),author:'You',body:String(row.body),status:String(row.status),
+      createdAt:new Date(String(row.createdAt)).getTime()};
   }
   async audit(event:string,accountId:string|undefined,metadata:Record<string,unknown>){await this.pool.query('insert into public_audit_events(event,account_id,metadata) values($1,$2,$3)',[event,accountId??null,metadata])}
 }
