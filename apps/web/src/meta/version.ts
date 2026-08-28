@@ -20,6 +20,8 @@ export const PATCH_NOTES: PatchNote[] = [
     notes: [
       'Public terminal: there is now a supported way to let somebody in. Admitting an account by hand could produce one that could never sign in, in three different ways that all looked like a wrong password.',
       'Fixed: every rate-limited route on the public API — sign in, the emailed code, password recovery and the early-access form — failed outright against a real database. Nobody could have signed in.',
+      'Fixed: on a real public account, Contributions, Dividends and Performance were permanently empty. The rows were being saved the whole time and nothing could read them back.',
+      'Every statement in the public API now runs in testing before it ships. Twenty-nine of them never had, including every edit and every delete.',
     ],
   },
   {

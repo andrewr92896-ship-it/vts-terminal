@@ -292,6 +292,19 @@ to meet. The password is printed once and is not recoverable.
   the employee portal's. With `PUBLIC_SMTP_URL` pointing at nothing, a correct
   password reaches the second factor and stops there, for everybody, permanently.
 
+**THE INVESTMENTS WORKSPACE READS THREE THINGS THAT ARE NOT ON THE PORTFOLIO
+PAYLOAD** — `/investments/performance`, `/investments/dividends` and
+`/investments/contributions`, each its own route. They were built and served on
+the private side and never ported, so Performance, Dividends and Contributions
+rendered **permanently empty on a real account while the demo showed them
+full**, which is the worst way round: the showcase proves a screen the first
+customer finds blank. The rules travel with them — a **trailing** yield rather
+than a forward one, a tax year with no catalog entry reporting **no limit**
+rather than the nearest year's, an employer match reported **beside** the
+contribution and never added into it, and the performance window's contribution
+figure taken as the difference between the running totals at each end so it
+reconciles with the line above it.
+
 **Two adapter files carry the seam and they are not the same job.**
 `apps/public-terminal/src/adapters/publicApi.ts` maps a portal `api.*` call to a
 public route; `apps/public-terminal/src/demo/demoStore.ts` answers the same names
@@ -312,6 +325,10 @@ rather than observed to pass:**
   first real customer, so the screen that was the proof the product works is the
   screen that breaks. The named lists are the point: a gap somebody decided to
   leave is fine, a gap nobody knows about is not.
+  **It matches `api` and the method name across a LINE BREAK**, which is not a
+  detail: `api\n  .investmentPerformance(days)` is ordinary formatting, and
+  requiring the dot to be adjacent made four whole screens invisible to this
+  check — every one of them demo-only, which is the class it exists to catch.
 - **`verify:demo-writes`** drives every demo write to the act it exists for,
   asserting on the field the SCREEN destructures. This is the half a screenshot
   test cannot see: a capture asserts a page rendered, not that pressing "add" on
@@ -336,6 +353,23 @@ rather than observed to pass:**
   against a real database**: sign in, the second factor, recovery and early
   access, i.e. every way in, on a store the suite had otherwise exercised
   happily because it seeded its session directly instead of logging in.
+  It ends by asserting **every statement in the store has actually executed**,
+  through a Proxy that records each call, with a named exemption list. That is
+  what turns the above from a lucky find into a rule: **29 statements had never
+  run** when it was first switched on — every UPDATE and every DELETE in the
+  whole API, the market-data layout, the password change, and the early-access
+  upsert the marketing site's own form posts to. `this` is bound to the proxy so
+  a helper the store calls on itself is recorded too, and the list is checked
+  for STALE entries as well as missing ones — an excuse that is no longer true
+  hides the next real gap.
+
+- **`verify:limits-mirror`** compares the IRS contribution limits in
+  `apps/api/src/investments/limits.ts` against the copy in
+  `apps/public-api/src/investmentLimits.ts`, line for line. The public API is
+  its own service and may not import from the private one, so the catalog is
+  copied; nothing in either build would notice them diverging, and it is the one
+  figure here where being wrong means somebody over-contributes on the strength
+  of a number that looked right on their screen.
 
 - **`verify:public-wiring`** reads the ~66 paths OUT OF the adapter and calls
   each against a real server on a real database, because both halves are written

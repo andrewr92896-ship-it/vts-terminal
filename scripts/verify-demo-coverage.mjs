@@ -58,7 +58,18 @@ const ACCEPTED = {
     'listStudyPackageShares', 'respondToStudyShare', 'browseStudyLibrary',
     'addStudyLibraryPackage', 'removeStudyLibraryPackage', 'submitStudyPackage',
     'studyPackageSubmissions', 'studyLibraryAttestations', 'withdrawStudyPackageFromLibrary',
+    'studyPackageState',
   ],
+  // Wording and patch notes the private terminal serves out of `app_settings`.
+  // Both screens `.catch()` and fall back — the how-to text to its defaults, the
+  // patch notes to the archive already compiled into the bundle — so the public
+  // terminal shows the same thing either way and there is nothing to serve.
+  helpContent: ['siteContent', 'patchNotes'],
+  // A leaderboard is one account's standing on another's screen, so no public
+  // deck carries one: `hasLeaderboard` is false on every one of them and the
+  // client keys the tab on it, which makes this call unreachable rather than
+  // merely unanswered.
+  leaderboard: ['studyDeckLeaderboard'],
   // Broker-backed, and the public terminal has no broker connections at all.
   // These are reachable only from controls that a public account cannot use.
   brokers: ['syncTraderCapital', 'updateTraderCapital', 'liveWall'],
@@ -102,7 +113,12 @@ const walk = (file) => {
   seen.add(file);
   if (REPLACED.some((pattern) => pattern.test(file))) return;
   const text = readFileSync(file, 'utf8');
-  for (const match of text.matchAll(/api\.([a-zA-Z][a-zA-Z0-9]*)\s*\(/g)) {
+  // `api\n  .method(...)` is ordinary prettier output, so the dot is NOT always
+  // adjacent to `api` — requiring it to be made four whole screens invisible to
+  // this check (the Investments performance, dividends, contributions and
+  // projections reads, every one of them demo-only). The lookbehind keeps it
+  // from matching `something.api.x`.
+  for (const match of text.matchAll(/(?<![\w.])api\s*\.\s*([a-zA-Z][a-zA-Z0-9]*)\s*\(/g)) {
     if (!calls.has(match[1])) calls.set(match[1], path.relative('apps/web/src', file));
   }
   for (const match of text.matchAll(/from\s+['"]([^'"]+)['"]/g)) {
