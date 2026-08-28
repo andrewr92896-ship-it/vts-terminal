@@ -11,9 +11,16 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 7.44';
+export const APP_VERSION = 'Beta V 7.45';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 7.45',
+    date: 'August 28, 2026',
+    notes: [
+      'The public terminal keeps your investment accounts and holdings now. There are no live prices on that side yet, so a holding is worth what you typed or it is marked as not priced — never counted as zero, which would quietly understate what you own.',
+    ],
+  },
   {
     version: 'Beta V 7.44',
     date: 'August 28, 2026',

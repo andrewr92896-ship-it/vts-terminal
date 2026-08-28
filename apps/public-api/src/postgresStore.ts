@@ -1,5 +1,5 @@
 import pg from 'pg';
-import type { BudgetCategory, BudgetEntry, Challenge, NewBudgetCategory, NewBudgetEntry, PublicAccount, PublicStore, RateLimitResult, Session, TodoItemRow, TodoSectionRow, TrustedDevice } from './types.js';
+import type { InvestmentAccount, InvestmentGoal, InvestmentHolding, InvestmentSnapshot, InvestmentTransaction, BudgetCategory, BudgetEntry, Challenge, NewBudgetCategory, NewBudgetEntry, PublicAccount, PublicStore, RateLimitResult, Session, TodoItemRow, TodoSectionRow, TrustedDevice } from './types.js';
 import { STARTER_SECTIONS } from './todo.js';
 const {Pool}=pg;
 
@@ -134,6 +134,126 @@ export class PostgresPublicStore implements PublicStore {
        on conflict (id) do nothing`,
       [accountId,item.id,item.sectionId,item.text,item.position,item.hyphen,item.done,item.dueAt,item.intervalDays]);
     return (r.rowCount??0)>0;
+  }
+  // ---- investments ----------------------------------------------------------
+  //
+  // Every statement carries `account_id = $1`, including those already matching
+  // a row id, and every child row is inserted only `where exists` a parent the
+  // same account owns — so a guessed id reaches nothing rather than filing into
+  // somebody else's portfolio.
+  async listInvestmentAccounts(accountId:string):Promise<InvestmentAccount[]>{
+    const r=await this.pool.query('select id,label,kind,institution,source,cash_balance as "cashBalance",note,active,sort_order as "sortOrder" from public_investment_accounts where account_id=$1 order by sort_order,label',[accountId]);
+    return r.rows.map((v)=>({...v,cashBalance:Number(v.cashBalance),sortOrder:Number(v.sortOrder)})) as InvestmentAccount[];
+  }
+  async listInvestmentHoldings(accountId:string):Promise<InvestmentHolding[]>{
+    const r=await this.pool.query('select id,investment_account_id as "investmentAccountId",symbol,name,asset_class as "assetClass",quantity,cost_basis as "costBasis",manual_price as "manualPrice",manual_price_at as "manualPriceAt",sector,region,note from public_investment_holdings where account_id=$1 order by name',[accountId]);
+    return r.rows.map((v)=>({...v,quantity:Number(v.quantity),costBasis:v.costBasis===null?null:Number(v.costBasis),
+      manualPrice:v.manualPrice===null?null:Number(v.manualPrice),manualPriceAt:v.manualPriceAt?new Date(v.manualPriceAt).getTime():null})) as InvestmentHolding[];
+  }
+  async listInvestmentTransactions(accountId:string):Promise<InvestmentTransaction[]>{
+    const r=await this.pool.query('select id,investment_account_id as "investmentAccountId",holding_id as "holdingId",kind,amount,quantity,occurred_at as "occurredAt",tax_year as "taxYear",note,source from public_investment_transactions where account_id=$1 order by occurred_at desc',[accountId]);
+    return r.rows.map((v)=>({...v,amount:Number(v.amount),quantity:v.quantity===null?null:Number(v.quantity),
+      occurredAt:new Date(v.occurredAt).getTime(),taxYear:v.taxYear===null?null:Number(v.taxYear)})) as InvestmentTransaction[];
+  }
+  async listInvestmentGoals(accountId:string):Promise<InvestmentGoal[]>{
+    const r=await this.pool.query('select id,label,target_amount as "targetAmount",target_year as "targetYear",note from public_investment_goals where account_id=$1 order by target_year nulls last,label',[accountId]);
+    return r.rows.map((v)=>({...v,targetAmount:v.targetAmount===null?null:Number(v.targetAmount),targetYear:v.targetYear===null?null:Number(v.targetYear)})) as InvestmentGoal[];
+  }
+  async listInvestmentSnapshots(accountId:string):Promise<InvestmentSnapshot[]>{
+    const r=await this.pool.query(`select to_char(on_date,'YYYY-MM-DD') as "onDate",value,contributions from public_investment_snapshots where account_id=$1 order by on_date`,[accountId]);
+    return r.rows.map((v)=>({...v,value:Number(v.value),contributions:Number(v.contributions)})) as InvestmentSnapshot[];
+  }
+  async createInvestmentAccount(accountId:string,v:Omit<InvestmentAccount,'id'|'source'>):Promise<InvestmentAccount>{
+    // `source` is never read from the caller: a manual account must not be able
+    // to claim it is a verified provider connection.
+    const r=await this.pool.query(
+      `insert into public_investment_accounts(account_id,label,kind,institution,cash_balance,note,active,sort_order)
+       values($1,$2,$3,$4,$5,$6,$7,$8)
+       returning id,label,kind,institution,source,cash_balance as "cashBalance",note,active,sort_order as "sortOrder"`,
+      [accountId,v.label,v.kind,v.institution,v.cashBalance,v.note,v.active,v.sortOrder]);
+    const row=r.rows[0];
+    return {...row,cashBalance:Number(row.cashBalance),sortOrder:Number(row.sortOrder)} as InvestmentAccount;
+  }
+  async updateInvestmentAccount(accountId:string,id:string,patch:Partial<Omit<InvestmentAccount,'id'|'source'>>){
+    const columns:Record<string,string>={label:'label',kind:'kind',institution:'institution',cashBalance:'cash_balance',note:'note',active:'active',sortOrder:'sort_order'};
+    const sets:string[]=[]; const params:unknown[]=[accountId,id];
+    for(const [key,column] of Object.entries(columns)){
+      if(!(key in patch))continue;
+      params.push((patch as Record<string,unknown>)[key]);
+      sets.push(`${column}=$${params.length}`);
+    }
+    if(!sets.length)return (await this.pool.query('select 1 from public_investment_accounts where account_id=$1 and id=$2',[accountId,id])).rowCount!>0;
+    const r=await this.pool.query(`update public_investment_accounts set ${sets.join(',')},updated_at=now() where account_id=$1 and id=$2`,params);
+    return (r.rowCount??0)>0;
+  }
+  async deleteInvestmentAccount(accountId:string,id:string){
+    const r=await this.pool.query('delete from public_investment_accounts where account_id=$1 and id=$2',[accountId,id]);
+    return (r.rowCount??0)>0;
+  }
+  async createInvestmentHolding(accountId:string,v:Omit<InvestmentHolding,'id'>):Promise<InvestmentHolding|undefined>{
+    const r=await this.pool.query(
+      `insert into public_investment_holdings(account_id,investment_account_id,symbol,name,asset_class,quantity,cost_basis,manual_price,manual_price_at,sector,region,note)
+       select $1,$2,$3,$4,$5,$6,$7,$8,case when $9::double precision is null then null else to_timestamp($9/1000.0) end,$10,$11,$12
+        where exists (select 1 from public_investment_accounts where id=$2 and account_id=$1)
+       returning id,investment_account_id as "investmentAccountId",symbol,name,asset_class as "assetClass",quantity,cost_basis as "costBasis",manual_price as "manualPrice",manual_price_at as "manualPriceAt",sector,region,note`,
+      [accountId,v.investmentAccountId,v.symbol,v.name,v.assetClass,v.quantity,v.costBasis,v.manualPrice,v.manualPriceAt,v.sector,v.region,v.note]);
+    const row=r.rows[0];
+    return row?{...row,quantity:Number(row.quantity),costBasis:row.costBasis===null?null:Number(row.costBasis),
+      manualPrice:row.manualPrice===null?null:Number(row.manualPrice),manualPriceAt:row.manualPriceAt?new Date(row.manualPriceAt).getTime():null} as InvestmentHolding:undefined;
+  }
+  async updateInvestmentHolding(accountId:string,id:string,patch:Partial<Omit<InvestmentHolding,'id'|'investmentAccountId'>>){
+    const columns:Record<string,string>={symbol:'symbol',name:'name',assetClass:'asset_class',quantity:'quantity',costBasis:'cost_basis',manualPrice:'manual_price',sector:'sector',region:'region',note:'note'};
+    const sets:string[]=[]; const params:unknown[]=[accountId,id];
+    for(const [key,column] of Object.entries(columns)){
+      if(!(key in patch))continue;
+      params.push((patch as Record<string,unknown>)[key]);
+      sets.push(`${column}=$${params.length}`);
+    }
+    // A price the user typed is stamped when it is typed, so the screen can say
+    // how old it is rather than presenting it as a current quote.
+    if('manualPrice' in patch)sets.push(patch.manualPrice==null?'manual_price_at=null':'manual_price_at=now()');
+    if(!sets.length)return (await this.pool.query('select 1 from public_investment_holdings where account_id=$1 and id=$2',[accountId,id])).rowCount!>0;
+    const r=await this.pool.query(`update public_investment_holdings set ${sets.join(',')},updated_at=now() where account_id=$1 and id=$2`,params);
+    return (r.rowCount??0)>0;
+  }
+  async deleteInvestmentHolding(accountId:string,id:string){
+    const r=await this.pool.query('delete from public_investment_holdings where account_id=$1 and id=$2',[accountId,id]);
+    return (r.rowCount??0)>0;
+  }
+  async createInvestmentTransaction(accountId:string,v:Omit<InvestmentTransaction,'id'|'source'>):Promise<InvestmentTransaction|undefined>{
+    const r=await this.pool.query(
+      `insert into public_investment_transactions(account_id,investment_account_id,holding_id,kind,amount,quantity,occurred_at,tax_year,note)
+       select $1,$2,$3,$4,$5,$6,to_timestamp($7/1000.0),$8,$9
+        where exists (select 1 from public_investment_accounts where id=$2 and account_id=$1)
+       returning id,investment_account_id as "investmentAccountId",holding_id as "holdingId",kind,amount,quantity,occurred_at as "occurredAt",tax_year as "taxYear",note,source`,
+      [accountId,v.investmentAccountId,v.holdingId,v.kind,v.amount,v.quantity,v.occurredAt,v.taxYear,v.note]);
+    const row=r.rows[0];
+    return row?{...row,amount:Number(row.amount),quantity:row.quantity===null?null:Number(row.quantity),
+      occurredAt:new Date(row.occurredAt).getTime(),taxYear:row.taxYear===null?null:Number(row.taxYear)} as InvestmentTransaction:undefined;
+  }
+  async deleteInvestmentTransaction(accountId:string,id:string){
+    const r=await this.pool.query('delete from public_investment_transactions where account_id=$1 and id=$2',[accountId,id]);
+    return (r.rowCount??0)>0;
+  }
+  async createInvestmentGoal(accountId:string,v:Omit<InvestmentGoal,'id'>):Promise<InvestmentGoal>{
+    const r=await this.pool.query(
+      'insert into public_investment_goals(account_id,label,target_amount,target_year,note) values($1,$2,$3,$4,$5) returning id,label,target_amount as "targetAmount",target_year as "targetYear",note',
+      [accountId,v.label,v.targetAmount,v.targetYear,v.note]);
+    const row=r.rows[0];
+    return {...row,targetAmount:row.targetAmount===null?null:Number(row.targetAmount),targetYear:row.targetYear===null?null:Number(row.targetYear)} as InvestmentGoal;
+  }
+  async deleteInvestmentGoal(accountId:string,id:string){
+    const r=await this.pool.query('delete from public_investment_goals where account_id=$1 and id=$2',[accountId,id]);
+    return (r.rowCount??0)>0;
+  }
+  // One reading per Eastern day, last of the day standing. Never back-filled:
+  // nothing can price a fund as of last March, so an earlier curve would be one
+  // that never happened.
+  async recordInvestmentSnapshot(accountId:string,onDate:string,value:number,contributions:number){
+    await this.pool.query(
+      `insert into public_investment_snapshots(account_id,on_date,value,contributions) values($1,$2::date,$3,$4)
+       on conflict (account_id,on_date) do update set value=excluded.value,contributions=excluded.contributions`,
+      [accountId,onDate,value,contributions]);
   }
   async audit(event:string,accountId:string|undefined,metadata:Record<string,unknown>){await this.pool.query('insert into public_audit_events(event,account_id,metadata) values($1,$2,$3)',[event,accountId??null,metadata])}
 }

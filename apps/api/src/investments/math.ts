@@ -239,10 +239,14 @@ export function concentrationFlags(
     });
   }
 
-  if (byClass.length === 1 && priced.length > 1) {
+  // Bound rather than indexed: the length check proves it is there, but a
+  // compiler with noUncheckedIndexedAccess on cannot see that, and the public
+  // mirror of this file is built under one.
+  const [onlyClass] = byClass;
+  if (onlyClass && byClass.length === 1 && priced.length > 1) {
     flags.push({
       severity: 'note',
-      text: `Every holding you have priced is in one asset class — ${byClass[0].label}.`,
+      text: `Every holding you have priced is in one asset class — ${onlyClass.label}.`,
     });
   }
 
