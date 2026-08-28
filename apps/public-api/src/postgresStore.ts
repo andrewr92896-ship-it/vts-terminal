@@ -1,7 +1,8 @@
 import pg from 'pg';
-import type { NewTradingNote, TradingNotePatch, NetWorthItem, NetWorthSnapshot, InvestmentAccount, InvestmentGoal, InvestmentHolding, InvestmentSnapshot, InvestmentTransaction, BudgetCategory, BudgetEntry, Challenge, NewBudgetCategory, NewBudgetEntry, PublicAccount, PublicStore, RateLimitResult, Session, TodoItemRow, TodoSectionRow, TrustedDevice } from './types.js';
+import type { NewStudyDeck, StudyDeckDetail, StudyDeckPatch, StudyDeckRow, NewTradingNote, TradingNotePatch, NetWorthItem, NetWorthSnapshot, InvestmentAccount, InvestmentGoal, InvestmentHolding, InvestmentSnapshot, InvestmentTransaction, BudgetCategory, BudgetEntry, Challenge, NewBudgetCategory, NewBudgetEntry, PublicAccount, PublicStore, RateLimitResult, Session, TodoItemRow, TodoSectionRow, TrustedDevice } from './types.js';
 import { STARTER_SECTIONS } from './todo.js';
 import type { NoteRow } from './notes.js';
+import type { DeckQuestion } from './studies.js';
 const {Pool}=pg;
 
 export class PostgresPublicStore implements PublicStore {
@@ -363,6 +364,111 @@ export class PostgresPublicStore implements PublicStore {
   async deleteTradingNote(accountId:string,id:string):Promise<boolean>{
     const r=await this.pool.query('delete from public_trading_notes where account_id=$1 and id=$2',[accountId,id]);
     return (r.rowCount??0)>0;
+  }
+  // ---- study games ----------------------------------------------------------
+  //
+  // Every statement carries `account_id=$1`. Questions are written as one batch
+  // per deck inside a transaction with the deck itself, because a deck that
+  // exists with half its questions is worse than one that failed to save.
+  private deckRow(v:Record<string,unknown>):StudyDeckRow{
+    return {id:String(v.id),name:String(v.name),description:(v.description??null) as string|null,
+      source:String(v.source),
+      categories:Array.isArray(v.categories)?v.categories as string[]:[],
+      categoryWeights:(v.categoryWeights??null) as Record<string,number>|null,
+      questionCount:Number(v.questionCount??0),
+      createdAt:new Date(String(v.createdAt)).getTime()};
+  }
+  private deckColumns=`id,name,description,source,categories,category_weights as "categoryWeights",created_at as "createdAt"`;
+  async listStudyDecks(accountId:string):Promise<StudyDeckRow[]>{
+    const r=await this.pool.query(
+      `select d.id,d.name,d.description,d.source,d.categories,d.category_weights as "categoryWeights",d.created_at as "createdAt",
+              (select count(*) from public_study_questions q where q.deck_id=d.id)::int as "questionCount"
+         from public_study_decks d where d.account_id=$1 order by d.created_at desc`,[accountId]);
+    return r.rows.map((v)=>this.deckRow(v));
+  }
+  async getStudyDeck(accountId:string,id:string):Promise<StudyDeckDetail|undefined>{
+    const r=await this.pool.query(`select ${this.deckColumns} from public_study_decks where account_id=$1 and id=$2`,[accountId,id]);
+    const row=r.rows[0];
+    if(!row)return undefined;
+    const q=await this.pool.query(
+      `select seq,topic,stem,options,answer,explanation,source_name as "sourceName"
+         from public_study_questions where deck_id=$1 order by seq`,[id]);
+    const questions=q.rows as DeckQuestion[];
+    return {...this.deckRow(row),questionCount:questions.length,questions};
+  }
+  private async writeQuestions(client:pg.PoolClient,deckId:string,questions:DeckQuestion[]):Promise<void>{
+    await client.query('delete from public_study_questions where deck_id=$1',[deckId]);
+    if(questions.length===0)return;
+    // One statement for the whole deck: a thousand round trips would make an
+    // ordinary import feel broken.
+    const values:unknown[]=[deckId];
+    const rows=questions.map((q)=>{
+      const at=values.length;
+      values.push(q.seq,q.topic,q.stem,JSON.stringify(q.options),q.answer,q.explanation,q.sourceName);
+      return `($1,$${at+1},$${at+2},$${at+3},$${at+4}::jsonb,$${at+5},$${at+6},$${at+7})`;
+    });
+    await client.query(`insert into public_study_questions(deck_id,seq,topic,stem,options,answer,explanation,source_name) values ${rows.join(',')}`,values);
+  }
+  async createStudyDeck(accountId:string,v:NewStudyDeck):Promise<StudyDeckDetail>{
+    const client=await this.pool.connect();
+    try{
+      await client.query('begin');
+      const r=await client.query(
+        `insert into public_study_decks(account_id,name,description,source,categories,category_weights)
+         values($1,$2,$3,$4,$5::jsonb,$6::jsonb) returning ${this.deckColumns}`,
+        [accountId,v.name,v.description,v.source,JSON.stringify(v.categories),v.categoryWeights==null?null:JSON.stringify(v.categoryWeights)]);
+      const deck=this.deckRow(r.rows[0]);
+      await this.writeQuestions(client,deck.id,v.questions);
+      await client.query('commit');
+      return {...deck,questionCount:v.questions.length,questions:v.questions};
+    }catch(error){
+      await client.query('rollback').catch(()=>{});
+      throw error;
+    }finally{client.release()}
+  }
+  async updateStudyDeck(accountId:string,id:string,patch:StudyDeckPatch):Promise<StudyDeckDetail|undefined>{
+    const client=await this.pool.connect();
+    try{
+      await client.query('begin');
+      const owned=await client.query('select 1 from public_study_decks where account_id=$1 and id=$2',[accountId,id]);
+      if((owned.rowCount??0)===0){await client.query('rollback');return undefined}
+      const columns:Record<string,string>={name:'name',description:'description',categories:'categories',categoryWeights:'category_weights'};
+      const json=new Set(['categories','categoryWeights']);
+      const sets:string[]=[]; const params:unknown[]=[accountId,id];
+      for(const [key,column] of Object.entries(columns)){
+        if(!(key in patch))continue;
+        const raw=(patch as Record<string,unknown>)[key];
+        params.push(json.has(key)?(raw==null?null:JSON.stringify(raw)):raw??null);
+        sets.push(`${column}=$${params.length}${json.has(key)?'::jsonb':''}`);
+      }
+      if(sets.length)await client.query(`update public_study_decks set ${sets.join(',')},updated_at=now() where account_id=$1 and id=$2`,params);
+      if(patch.questions)await this.writeQuestions(client,id,patch.questions);
+      await client.query('commit');
+    }catch(error){
+      await client.query('rollback').catch(()=>{});
+      throw error;
+    }finally{client.release()}
+    return this.getStudyDeck(accountId,id);
+  }
+  async deleteStudyDeck(accountId:string,id:string):Promise<boolean>{
+    // The questions, the learner's progress and the banked runs all cascade from
+    // the deck row — there is nothing left for them to be progress THROUGH.
+    const r=await this.pool.query('delete from public_study_decks where account_id=$1 and id=$2',[accountId,id]);
+    return (r.rowCount??0)>0;
+  }
+  async getStudyDeckGame(accountId:string,deckId:string):Promise<string|null>{
+    const r=await this.pool.query('select state from public_study_deck_game where account_id=$1 and deck_id=$2',[accountId,deckId]);
+    return r.rows[0]?.state??null;
+  }
+  async saveStudyDeckGame(accountId:string,deckId:string,state:string):Promise<void>{
+    await this.pool.query(
+      `insert into public_study_deck_game(account_id,deck_id,state) values($1,$2,$3)
+       on conflict (account_id,deck_id) do update set state=excluded.state,updated_at=now()`,
+      [accountId,deckId,state]);
+  }
+  async recordStudyDeckRun(accountId:string,deckId:string,attempted:number,correct:number,bestStep:number):Promise<void>{
+    await this.pool.query('insert into public_study_deck_runs(account_id,deck_id,attempted,correct,best_step) values($1,$2,$3,$4,$5)',
+      [accountId,deckId,attempted,correct,bestStep]);
   }
   async audit(event:string,accountId:string|undefined,metadata:Record<string,unknown>){await this.pool.query('insert into public_audit_events(event,account_id,metadata) values($1,$2,$3)',[event,accountId??null,metadata])}
 }

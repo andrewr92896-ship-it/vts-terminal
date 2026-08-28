@@ -110,6 +110,20 @@ const liveRecords:Record<string,(...args:any[])=>Promise<unknown>>={
   settleNote:(id:string,outcome:string,reflection?:string|null)=>publicRequest(`/notes/${encodeURIComponent(id)}/settle`,{method:'POST',body:JSON.stringify({outcome,reflection})}),
   reflectOnNote:(id:string,reflection:string)=>publicRequest(`/notes/${encodeURIComponent(id)}/reflect`,{method:'POST',body:JSON.stringify({reflection})}),
   removeNote:(id:string)=>publicRequest(`/notes/${encodeURIComponent(id)}`,{method:'DELETE'}),
+
+  // Study games. `confirmStudyDeck` is the REVIEWED-QUESTIONS path and is the
+  // only way a game is created here — every AI route (generate, preview,
+  // categorize, audit) is refused by name in the proxy below until the provider
+  // migration, so nothing on this path implies a capability that is not wired.
+  studyDecks:()=>publicRequest('/studies/decks'),
+  studyDeck:(id:string)=>publicRequest(`/studies/decks/${encodeURIComponent(id)}`),
+  confirmStudyDeck:(input:unknown)=>publicRequest('/studies/decks',{method:'POST',body:JSON.stringify(input)}),
+  updateStudyDeck:(id:string,patch:unknown)=>publicRequest(`/studies/decks/${encodeURIComponent(id)}`,{method:'PATCH',body:JSON.stringify(patch)}),
+  deleteStudyDeck:(id:string)=>publicRequest(`/studies/decks/${encodeURIComponent(id)}`,{method:'DELETE'}),
+  mergeStudyDecks:(input:unknown)=>publicRequest('/studies/decks/merge',{method:'POST',body:JSON.stringify(input)}),
+  studyDeckGame:(id:string)=>publicRequest(`/studies/decks/${encodeURIComponent(id)}/game`),
+  saveStudyDeckGame:(id:string,state:string)=>publicRequest(`/studies/decks/${encodeURIComponent(id)}/game`,{method:'PUT',body:JSON.stringify({state})}),
+  archiveStudyDeckGame:(id:string,state:string)=>publicRequest(`/studies/decks/${encodeURIComponent(id)}/game/archive`,{method:'POST',body:JSON.stringify({state})}),
 };
 
 

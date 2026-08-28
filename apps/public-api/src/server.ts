@@ -4,9 +4,11 @@ import { loadPublicConfig } from './config.js';
 import { PublicAuthService, AuthError } from './auth.js';
 import { PostgresPublicStore } from './postgresStore.js';
 import { HttpPublicMarketProvider, SmtpPublicMailer } from './adapters.js';
-import type { BudgetKind, NetWorthCategory, NetWorthKind, PublicMarketProvider, PublicStore, TodoItemRow } from './types.js';
+import type { BudgetKind, NetWorthCategory, NetWorthKind, PublicMarketProvider, PublicStore, StudyDeckDetail, StudyDeckRow, TodoItemRow } from './types.js';
 import { NET_WORTH_CATEGORIES } from './types.js';
 import { buildSections, dailyDone, etTodayMs, nextEtMidnight } from './todo.js';
+import { MAX_DECKS, MAX_DESCRIPTION, MAX_NAME, StudyError, normalizeState, readCategories,
+  readCategoryWeights, readQuestions, statsFromState, type DeckQuestion } from './studies.js';
 import { CONFIDENCE_STATED, MAX_BODY, MAX_INSTRUMENT, MAX_PER_WEEK, MAX_REFLECTION, MAX_TITLE,
   computeStats, defaultWindow, etWeekKey, isLocked, isWeekKey, shiftWeekKey, toView, weekRange,
   type NoteDirection, type NoteKind, type NoteOutcome, type NoteRow } from './notes.js';
@@ -101,7 +103,19 @@ const cookies=(req:IncomingMessage)=>Object.fromEntries((req.headers.cookie||'')
 const cookie=(name:string,value:string,maxAge:number)=>`${name}=${encodeURIComponent(value)}; Path=${PUBLIC_COOKIE_PATH}; Max-Age=${maxAge}; HttpOnly; Secure; SameSite=Strict${config.cookieDomain?`; Domain=${config.cookieDomain}`:''}`;
 const clearCookie=(name:string)=>cookie(name,'',0);
 const json=(res:ServerResponse,status:number,body:unknown,headers:Record<string,string|string[]>={})=>{res.writeHead(status,{'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store',...headers});res.end(JSON.stringify(body))};
-const readBody=async(req:IncomingMessage)=>{let body='';for await(const chunk of req){body+=chunk;if(body.length>16_384)throw new AuthError(413,'Request too large.')}try{return body?JSON.parse(body):{}}catch{throw new AuthError(400,'Invalid JSON.')}};
+// 16 KB is plenty for every record family EXCEPT two, and both of them carry
+// something the learner authored rather than a form somebody filled in: a study
+// game's questions, and the per-deck game state. A deck with many categories
+// keeps a rolling answer window for each, so a real state blob genuinely runs to
+// tens of kilobytes — and the client saves progress fire-and-forget, so a cap it
+// silently exceeded would stop recording somebody's progress with nothing on
+// screen to say so.
+const BODY_LIMIT=16_384;
+// Comfortably above MAX_STATE_BYTES so the state cap is the thing that refuses a
+// state, with a message that says so, rather than a body limit refusing it as
+// "too large" — and roomy enough for a thousand-question import.
+const STUDY_BODY_LIMIT=2_000_000;
+const readBody=async(req:IncomingMessage,limit=BODY_LIMIT)=>{let body='';for await(const chunk of req){body+=chunk;if(body.length>limit)throw new AuthError(413,'Request too large.')}try{return body?JSON.parse(body):{}}catch{throw new AuthError(400,'Invalid JSON.')}};
 const ip=(req:IncomingMessage)=>String(req.headers['x-forwarded-for']||req.socket.remoteAddress||'unknown').split(',')[0]!.trim();
 const unsafe=(req:IncomingMessage)=>!['GET','HEAD','OPTIONS'].includes(req.method||'GET');
 const guardOrigin=(req:IncomingMessage)=>{if(!unsafe(req))return;const origin=req.headers.origin;if(!origin||!config.allowedOrigins.has(origin)||req.headers['x-vts-public-csrf']!=='1')throw new AuthError(403,'Request origin rejected.');};
@@ -362,6 +376,35 @@ const readOutcome=(v:unknown):NoteOutcome=>{
   if(v==='hit'||v==='miss'||v==='partial'||v==='unsettleable')return v;
   throw new AuthError(400,'An outcome is hit, miss, partial, or unsettleable.');
 };
+
+// A deck as the portal's own launcher reads it.
+//
+// `isSample` is FALSE and `hasLeaderboard` is FALSE on every public deck, and
+// both are stated rather than omitted. `isSample` marks the terminal's built-in
+// example games, and nothing is seeded here — a game nobody created must not be
+// presented as one somebody did. `hasLeaderboard` is what the client keys the
+// board tab on, so a false here is what hides it cleanly instead of opening an
+// empty board that reads as broken.
+const deckView=(deck:StudyDeckRow)=>({
+  ...deck,isSample:false,hasLeaderboard:false,
+  // The portal shows who made a game on a shared library. Here every game is the
+  // reader's own, so there is nobody else it could have been.
+  createdBy:null,createdByName:null,
+});
+const deckDetailView=(deck:StudyDeckDetail)=>({...deckView(deck),questions:deck.questions});
+
+// The category list and its weights, derived together.
+//
+// A category list that is not supplied is READ OFF THE QUESTIONS' OWN TOPICS,
+// which is what keeps the two from disagreeing: a category nothing is filed
+// under is a heading with no paper behind it, and a topic with no category is a
+// question that can never be drawn by a weighted test.
+function deckShape(body:{categories?:unknown;categoryWeights?:unknown},questions:DeckQuestion[]){
+  const asked=readCategories(body.categories);
+  const fromQuestions=readCategories(questions.map((q)=>q.topic));
+  const categories=asked.length>0?asked:fromQuestions;
+  return {categories,categoryWeights:readCategoryWeights(body.categoryWeights,categories)};
+}
 
 async function authenticatedAccount(req:IncomingMessage,service:PublicAuthService){
   const current=await service.session(sessionCookie(req));
@@ -818,9 +861,147 @@ export async function handleRequest(req:IncomingMessage,res:ServerResponse,depen
       }
       throw new AuthError(404,'Public route not found.');
     }
+    // ---- study games -----------------------------------------------------------
+    //
+    // THERE IS NO LEADERBOARD ROUTE, and its absence is deliberate. On the
+    // private side a built-in game is ranked across every copy of itself on the
+    // whole install; here that would put one visitor's display name and accuracy
+    // on a stranger's screen. Every deck reports `hasLeaderboard: false`, so the
+    // client hides the tab rather than opening an empty board.
+    //
+    // A deck belongs to ONE account and no route takes a "whose" parameter.
+    if(path==='/public/v1/studies/decks'&&method==='GET'){
+      const id=await authenticatedAccount(req,authService);
+      const decks=await dependencies.store.listStudyDecks(id);
+      return json(res,200,{decks:decks.map((deck)=>deckView(deck))});
+    }
+    if(path==='/public/v1/studies/decks'&&method==='POST'){
+      const id=await authenticatedAccount(req,authService); const body=await readBody(req,STUDY_BODY_LIMIT);
+      const name=text(body.name,MAX_NAME);
+      if(!name)throw new AuthError(400,'Give the study game a name.');
+      // A runaway-input guard, not a product limit.
+      if((await dependencies.store.listStudyDecks(id)).length>=MAX_DECKS){
+        throw new AuthError(400,`That is ${MAX_DECKS} study games already.`);
+      }
+      const questions=readQuestions(body.questions);
+      const created=await dependencies.store.createStudyDeck(id,{
+        name,description:text(body.description,MAX_DESCRIPTION),
+        // 'upload' is the reviewed-questions path. `source` is server-owned:
+        // nothing a client sends may claim a game was generated when the AI
+        // paths are switched off.
+        source:'upload',
+        ...deckShape(body,questions),
+        questions,
+      });
+      return json(res,201,{deck:deckDetailView(created),decks:(await dependencies.store.listStudyDecks(id)).map((deck)=>deckView(deck))});
+    }
+    if(path==='/public/v1/studies/decks/merge'&&method==='POST'){
+      const id=await authenticatedAccount(req,authService); const body=await readBody(req);
+      const name=text(body.name,MAX_NAME);
+      if(!name)throw new AuthError(400,'Give the combined game a name.');
+      const ids=Array.isArray(body.deckIds)?body.deckIds.map((v:unknown)=>String(v)):[];
+      if(ids.length<2)throw new AuthError(400,'Pick at least two games to combine.');
+      const sources=[];
+      for(const deckId of ids){
+        const deck=await dependencies.store.getStudyDeck(id,deckId);
+        // Refused rather than combining what it could reach: a game silently
+        // missing one of its sources is one nobody can tell is incomplete.
+        if(!deck)throw new AuthError(404,'No such study game.');
+        sources.push(deck);
+      }
+      // Renumbered from 1 across the whole set, because `seq` is identity within
+      // ONE deck — carrying the originals across would collide on the way in and
+      // silently drop questions.
+      const questions=readQuestions(sources.flatMap((deck)=>deck.questions.map((q)=>({
+        ...q,sourceName:body.tagSource===true?deck.name:null,
+      }))));
+      const created=await dependencies.store.createStudyDeck(id,{
+        name,description:text(body.description,MAX_DESCRIPTION),source:'merge',
+        // Combined DELIBERATELY UNWEIGHTED, whatever the sources carried: two
+        // exam blueprints do not add up to a third, and a weight carried over
+        // would score the combined game against a paper that does not exist.
+        categories:readCategories(sources.flatMap((deck)=>deck.categories)),
+        categoryWeights:null,
+        questions,
+      });
+      return json(res,201,{deck:deckDetailView(created),decks:(await dependencies.store.listStudyDecks(id)).map((deck)=>deckView(deck))});
+    }
+    if(path.startsWith('/public/v1/studies/decks/')){
+      const id=await authenticatedAccount(req,authService);
+      const rest=decodeURIComponent(path.slice('/public/v1/studies/decks/'.length));
+      const slash=rest.indexOf('/');
+      const deckId=slash>0?rest.slice(0,slash):rest;
+      const action=slash>0?rest.slice(slash+1):'';
+      // 404 rather than 403 throughout: an id the caller does not own must not
+      // be distinguishable from one that does not exist.
+      const deck=await dependencies.store.getStudyDeck(id,deckId);
+      if(!deck)throw new AuthError(404,'No such study game.');
+
+      if(action===''&&method==='GET')return json(res,200,{deck:deckDetailView(deck)});
+      if(action===''&&method==='DELETE'){
+        await dependencies.store.deleteStudyDeck(id,deckId);
+        return json(res,200,{decks:(await dependencies.store.listStudyDecks(id)).map((d)=>deckView(d))});
+      }
+      if(action===''&&method==='PATCH'){
+        const body=await readBody(req,STUDY_BODY_LIMIT);
+        const patch:Record<string,unknown>={};
+        if('name' in body){const name=text(body.name,MAX_NAME); if(!name)throw new AuthError(400,'Give the study game a name.'); patch.name=name}
+        if('description' in body)patch.description=text(body.description,MAX_DESCRIPTION);
+        const questions='questions' in body?readQuestions(body.questions):undefined;
+        if(questions)patch.questions=questions;
+        // The categories and their weights move TOGETHER, always. A weight whose
+        // category has gone would otherwise keep counting toward a denominator
+        // nothing on screen can see, which is a score nobody could reconcile.
+        if('categories' in body||'categoryWeights' in body){
+          const shape=deckShape({categories:'categories' in body?body.categories:deck.categories,
+            categoryWeights:'categoryWeights' in body?body.categoryWeights:deck.categoryWeights},
+            questions??deck.questions);
+          patch.categories=shape.categories; patch.categoryWeights=shape.categoryWeights;
+        }else if(questions){
+          // Questions replaced without a category list: re-derive it from the
+          // topics that ACTUALLY ARRIVED — passing the old list here would let a
+          // category survive as a heading no question is filed under, keeping its
+          // weight in the denominator of a score nothing on screen explains.
+          const shape=deckShape({categoryWeights:deck.categoryWeights},questions);
+          patch.categories=shape.categories; patch.categoryWeights=shape.categoryWeights;
+        }
+        const updated=await dependencies.store.updateStudyDeck(id,deckId,patch);
+        if(!updated)throw new AuthError(404,'No such study game.');
+        return json(res,200,{deck:deckDetailView(updated),decks:(await dependencies.store.listStudyDecks(id)).map((d)=>deckView(d))});
+      }
+      if(action==='game'&&method==='GET'){
+        return json(res,200,{state:await dependencies.store.getStudyDeckGame(id,deckId)});
+      }
+      if(action==='game'&&method==='PUT'){
+        // The state is stored WHOLE and OPAQUE, exactly as the private side
+        // stores it: the level ladder and streak scoring live in the client's
+        // shared engine, and a second reading of them here would be a second
+        // answer to what level somebody is on.
+        const state=normalizeState((await readBody(req,STUDY_BODY_LIMIT)).state);
+        if(state==null)throw new AuthError(400,'That is not a game state.');
+        await dependencies.store.saveStudyDeckGame(id,deckId,state);
+        return json(res,200,{ok:true});
+      }
+      if(action==='game/archive'&&method==='POST'){
+        const state=normalizeState((await readBody(req,STUDY_BODY_LIMIT)).state);
+        if(state==null)throw new AuthError(400,'That is not a game state.');
+        // Resetting clears the live state, and this row is the only trace the run
+        // happened — without it "reset progress" would quietly mean "delete my
+        // history". A run with nothing answered in it is not a run and is not
+        // recorded, rather than being banked as a row of zeroes.
+        const stats=statsFromState(state);
+        if(stats)await dependencies.store.recordStudyDeckRun(id,deckId,stats.attempted,stats.correct,stats.bestStep);
+        return json(res,200,{ok:true});
+      }
+      throw new AuthError(404,'Public route not found.');
+    }
     if(path.startsWith('/public/v1/ai/'))return json(res,501,{message:'Public AI is not available.'});
     return json(res,404,{message:'Public route not found.'});
-  } catch(error){const status=error instanceof AuthError?error.status:Number((error as {status?:number}).status)||500;const message=status>=500?'Public service unavailable.':error instanceof Error?error.message:'Request failed.';return json(res,status,{message});}
+  } catch(error){
+    // A study problem NAMES the thing — "Question 47 is missing option D" — and
+    // is the caller's to fix, so it is a 400 rather than a fault.
+    if(error instanceof StudyError)return json(res,400,{message:error.message});
+    const status=error instanceof AuthError?error.status:Number((error as {status?:number}).status)||500;const message=status>=500?'Public service unavailable.':error instanceof Error?error.message:'Request failed.';return json(res,status,{message});}
 }
 
 const startedDirectly=process.argv[1]?import.meta.url===pathToFileURL(process.argv[1]).href:false;

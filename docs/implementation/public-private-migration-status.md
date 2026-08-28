@@ -102,8 +102,38 @@ Updated: 2026-08-27.
   matching the private route exactly, so the adapter carries no unit conversion —
   the one place a 100× error could hide silently.
 - Still demo-only, and now visibly so: the investments and trading-notes WRITE
-  paths in the demo store (they fall through to an empty fixture), and every
-  Studies record family.
+  paths in the demo store (they fall through to an empty fixture).
+
+- Gave the public terminal a sixth record family with real storage: STUDY GAMES
+  — the decks, their questions, each learner's progress, and combining games.
+  That is Study Game, Practice Tests and Progress working on a real account,
+  plus the reviewed-questions creation path.
+- **No leaderboard, and its absence is the decision worth recording.** On the
+  private side a built-in game is ranked across every copy of itself on the whole
+  install; doing that here would put one public visitor's display name and
+  accuracy on a stranger's screen — a product and privacy question with a
+  moderation dimension, since display names are typed by the person. Every deck
+  reports `hasLeaderboard: false`, there is no board route, and the client keys
+  its tab on that flag so it hides rather than opening an empty board.
+- **Nothing is seeded.** A new account has no games and the screen says so.
+  Seeding invented ones would present something nobody created as something
+  somebody did — the same rule the Live Wall's `sample` union and the funded
+  account fix already enforce.
+- `seq` is assigned by the SERVER by position, never taken from the file: it is a
+  question's stable identity within its deck and the saved draw is keyed on it,
+  so a file whose questions all claim the same seq would collide silently and
+  start asking a mid-round learner the wrong questions.
+- Two faults were caught by the tests rather than by reading: the game-state cap
+  was unreachable behind a 16 KB request-body limit (a real state blob runs to
+  tens of kilobytes, and the client saves progress fire-and-forget, so progress
+  would have silently stopped recording), and replacing a game's questions left
+  a category no question was filed under, keeping its weight in the denominator
+  of a score nothing on screen explained.
+
+- Still demo-only: the Study PACKAGE, sharing and public-library half. Sharing by
+  username and a moderated public library both mean one public account's content
+  reaching another's screen, plus an attestation and a review queue with no admin
+  surface on the public side. That is a product decision, not a port.
 
 ## Partially completed
 
@@ -121,7 +151,7 @@ Updated: 2026-08-27.
 ## Blocked/manual
 
 - Provision separate Railway services.
-- Provision a public database and public API (the API exists and has auth, market data, layout, early access, budget, to-do, investments, net worth and trading notes; the remaining record families are still demo-only).
+- Provision a public database and public API (the API exists and has auth, market data, layout, early access, budget, to-do, investments, net worth, trading notes and study games; the remaining record families are still demo-only).
 - Configure separate public authentication.
 - Configure private MFA.
 - Populate `PRIVATE_ACCESS_USER_IDS`. Since 7.42 an entry may be an ID, a username or an email — a username survives the database changing, which an ID does not.
