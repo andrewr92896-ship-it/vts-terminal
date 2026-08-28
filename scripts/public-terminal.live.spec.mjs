@@ -13,6 +13,12 @@ import { test, expect } from '@playwright/test';
 // Each case below therefore asserts that DATA THAT WAS SEEDED IS ON THE SCREEN,
 // not merely that the page rendered. A blank page passes "the root is visible";
 // only the trade's own instrument proves the payload arrived and was understood.
+// What the harness does NOT prove: the market board and the news feed are
+// driven by an upstream provider that is not wired yet, so here they answer
+// 503 — the state the public service actually ships in. Every screen is shown
+// to survive that. What they render against a REAL market payload is not
+// covered by anything, and is the next thing worth a check once a provider
+// exists.
 const base = process.env.PUBLIC_LIVE_BASE ?? 'http://127.0.0.1:4174';
 const cookie = process.env.PUBLIC_LIVE_COOKIE ?? '';
 
@@ -152,7 +158,13 @@ test('every remaining screen renders without throwing', async ({ page }) => {
   // The ones with nothing seeded. Nothing is asserted about their content —
   // there is none — but a thrown render leaves the root dead for every later
   // hash navigation, so one broken screen would blank the rest.
-  const screens = ['my_access', 'my_prefs', 'my_settings',
+  const screens = ['my_access', 'my_prefs', 'my_settings', 'my_rules',
+    // The market-facing screens. The harness serves an EMPTY market payload,
+    // which is the case worth covering: a provider that answered with nothing
+    // is a real state, and a screen that throws on it takes every later hash
+    // navigation down with it.
+    'data', 'news', 'news_world', 'news_politics',
+    'st_packages', 'hp_news', 'hp_notes', 'hp_suggest',
     'inv_overview', 'inv_accounts', 'inv_allocation', 'inv_projections', 'st_decks', 'st_test', 'st_progress',
     'hp_howto', 'hp_rules', 'hp_terms', 'hp_privacy'];
   const broken = [];

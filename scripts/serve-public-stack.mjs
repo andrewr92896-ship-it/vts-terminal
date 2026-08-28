@@ -25,9 +25,13 @@ const { handleRequest } = await import('../apps/public-api/dist/src/server.js');
 const { PostgresPublicStore } = await import('../apps/public-api/dist/src/postgresStore.js');
 
 const store = new PostgresPublicStore(url);
-// No market provider in the harness: the board is not what is under test here,
-// and an empty answer is a truthful one rather than invented figures.
-const market = { marketData: async () => ({}), marketNews: async () => ({}) };
+// The market provider REFUSES, exactly as `HttpPublicMarketProvider` does when
+// no upstream is configured — which is the state the public service actually
+// ships in until one is wired. Answering `{}` instead was a shape production
+// never serves, and the screens crashed on it for a reason that could never
+// have happened; a 503 is the real thing they have to survive.
+const refuse = async () => { throw Object.assign(new Error('Public market data provider is not configured.'), { status: 503 }); };
+const market = { marketData: refuse, marketNews: refuse };
 
 const root = path.resolve('apps/public-terminal/dist');
 const port = Number(process.env.PORT || 4174);
