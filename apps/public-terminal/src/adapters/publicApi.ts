@@ -45,7 +45,74 @@ const baseApi={
   // `watching`, `notify` and `cols` straight off it and a missing array is a
   // render crash rather than an empty wall.
   async marketNewsStreams(){return {streams:{channels:[],watching:[],docked:null,cols:2,notify:{},maxWatching:1},liveConfigured:false}},
+
 };
+
+// ---- The record families that have real storage ----------------------------
+//
+// WITHOUT THESE, EVERY ONE OF THEM 404s ON A REAL ACCOUNT. The proxy below
+// sends any name it does not recognise to `/records/<name>`, which the public
+// API has never served — so a signed-in visitor's budget, to-do list,
+// portfolio, net worth and predictions would all fail while the storage behind
+// them sat there working. It is invisible today only because nothing but the
+// demo has ever run, and the demo answers out of module memory.
+//
+// THE DEMO IS CHECKED FIRST, in the proxy below, and that ordering is the whole
+// reason these live in their own map rather than beside `marketData`. Anything
+// on `baseApi` is returned before the demo branch is reached, so a record
+// method there would try to reach a service the demo deliberately cannot talk
+// to — and the showcase would break on the one path that is actually running.
+//
+// Each entry maps ONE portal call to the route that already exists. Nothing
+// here computes a total or reshapes a payload: the server sends the shape the
+// portal component reads, so an adapter doing arithmetic would be a second
+// definition of a figure that must have exactly one.
+const monthQuery=(month?:string)=>month?`?month=${encodeURIComponent(month)}`:'';
+const liveRecords:Record<string,(...args:any[])=>Promise<unknown>>={
+  budgetMonth:(month?:string)=>publicRequest(`/budget${monthQuery(month)}`),
+  addBudgetCategory:(input:unknown)=>publicRequest('/budget/categories',{method:'POST',body:JSON.stringify(input)}),
+  updateBudgetCategory:(id:string,patch:unknown,month?:string)=>publicRequest(`/budget/categories/${encodeURIComponent(id)}${monthQuery(month)}`,{method:'PATCH',body:JSON.stringify(patch)}),
+  removeBudgetCategory:(id:string,month?:string)=>publicRequest(`/budget/categories/${encodeURIComponent(id)}${monthQuery(month)}`,{method:'DELETE'}),
+  addBudgetEntry:(input:unknown)=>publicRequest('/budget/entries',{method:'POST',body:JSON.stringify(input)}),
+  removeBudgetEntry:(id:string,month?:string)=>publicRequest(`/budget/entries/${encodeURIComponent(id)}${monthQuery(month)}`,{method:'DELETE'}),
+
+  getTodo:()=>publicRequest('/todo'),
+  addTodoItem:(sectionId:string,text:string)=>publicRequest('/todo/items',{method:'POST',body:JSON.stringify({sectionId,text})}),
+  toggleTodoItem:(id:string)=>publicRequest(`/todo/items/${encodeURIComponent(id)}/toggle`,{method:'PATCH'}),
+  removeTodoItem:(id:string)=>publicRequest(`/todo/items/${encodeURIComponent(id)}`,{method:'DELETE'}),
+  restoreTodoItem:(item:unknown)=>publicRequest('/todo/items/restore',{method:'POST',body:JSON.stringify(item)}),
+
+  // An investments write answers with the row it touched; the portal's screens
+  // read the WHOLE portfolio back. So a write is followed by a fresh read
+  // rather than by a locally patched copy — the totals, the allocation and the
+  // unpriced count are all derived, and re-deriving them here would be a second
+  // answer to "what is this portfolio worth".
+  investmentPortfolio:()=>publicRequest('/investments/portfolio'),
+  createInvestmentAccount:async(input:unknown)=>({id:(await publicRequest<{id:string}>('/investments/accounts',{method:'POST',body:JSON.stringify(input)})).id,portfolio:await publicRequest('/investments/portfolio')}),
+  updateInvestmentAccount:async(id:string,patch:unknown)=>{await publicRequest(`/investments/accounts/${encodeURIComponent(id)}`,{method:'PATCH',body:JSON.stringify(patch)});return {portfolio:await publicRequest('/investments/portfolio')}},
+  deleteInvestmentAccount:async(id:string)=>{await publicRequest(`/investments/accounts/${encodeURIComponent(id)}`,{method:'DELETE'});return {portfolio:await publicRequest('/investments/portfolio')}},
+  createInvestmentHolding:async(input:unknown)=>({id:(await publicRequest<{id:string}>('/investments/holdings',{method:'POST',body:JSON.stringify(input)})).id,portfolio:await publicRequest('/investments/portfolio')}),
+  updateInvestmentHolding:async(id:string,patch:unknown)=>{await publicRequest(`/investments/holdings/${encodeURIComponent(id)}`,{method:'PATCH',body:JSON.stringify(patch)});return {portfolio:await publicRequest('/investments/portfolio')}},
+  deleteInvestmentHolding:async(id:string)=>{await publicRequest(`/investments/holdings/${encodeURIComponent(id)}`,{method:'DELETE'});return {portfolio:await publicRequest('/investments/portfolio')}},
+  createInvestmentTransaction:(input:unknown)=>publicRequest('/investments/transactions',{method:'POST',body:JSON.stringify(input)}),
+  deleteInvestmentTransaction:(id:string)=>publicRequest(`/investments/transactions/${encodeURIComponent(id)}`,{method:'DELETE'}),
+  createInvestmentGoal:(input:unknown)=>publicRequest('/investments/goals',{method:'POST',body:JSON.stringify(input)}),
+  deleteInvestmentGoal:(id:string)=>publicRequest(`/investments/goals/${encodeURIComponent(id)}`,{method:'DELETE'}),
+
+  netWorth:()=>publicRequest('/net-worth'),
+  createNetWorthItem:(input:unknown)=>publicRequest('/net-worth/items',{method:'POST',body:JSON.stringify(input)}),
+  updateNetWorthItem:(id:string,patch:unknown)=>publicRequest(`/net-worth/items/${encodeURIComponent(id)}`,{method:'PATCH',body:JSON.stringify(patch)}),
+  deleteNetWorthItem:(id:string)=>publicRequest(`/net-worth/items/${encodeURIComponent(id)}`,{method:'DELETE'}),
+
+  tradingNotes:(week?:string)=>publicRequest(week?`/notes?week=${encodeURIComponent(week)}`:'/notes'),
+  createNote:(input:unknown)=>publicRequest('/notes',{method:'POST',body:JSON.stringify(input)}),
+  updateNote:(id:string,patch:unknown)=>publicRequest(`/notes/${encodeURIComponent(id)}`,{method:'PATCH',body:JSON.stringify(patch)}),
+  settleNote:(id:string,outcome:string,reflection?:string|null)=>publicRequest(`/notes/${encodeURIComponent(id)}/settle`,{method:'POST',body:JSON.stringify({outcome,reflection})}),
+  reflectOnNote:(id:string,reflection:string)=>publicRequest(`/notes/${encodeURIComponent(id)}/reflect`,{method:'POST',body:JSON.stringify({reflection})}),
+  removeNote:(id:string)=>publicRequest(`/notes/${encodeURIComponent(id)}`,{method:'DELETE'}),
+};
+
+
 
 const emptyTradeSummary=()=>({total:0,open:0,closed:0,wins:0,losses:0,breakeven:0,winRate:0,totalRealizedPl:0,totalUnrealizedPl:0,avgSlippage:null});
 const emptyExcluded=()=>({beforeCutoff:0,belowFloor:0,cutoffFrom:null});
@@ -68,7 +135,7 @@ const evidenceEmpty=(name:string):any=>{
   investmentProjection:{points:[],startValue:0,monthlyContribution:0,annualRatePct:0,years:0},
   generalNews:{headlines:[],source:null},getTodo:{sections:[{id:'public-todo',title:'To Do',tag:'trading',items:[]}]},
   netWorth:{tracked:{investments:0,trading:0,tradingEnabled:false,available:true,note:null},assets:[],liabilities:[],totals:{assets:0,liabilities:0,netWorth:0,manualAssets:0},history:[],totalDays:0,asOf:Date.now()},
-  budgetMonth:{month:new Date().toISOString().slice(0,7),categories:[],income:0,expenses:0,remaining:0},
+  budgetMonth:{month:new Date().toISOString().slice(0,7),categories:[],entries:[],incomeCents:0,spentCents:0,netCents:0,plannedIncomeCents:0,plannedSpendCents:0,plannedNetCents:0,hasTargets:false},
   listStudyPackages:{packages:[]},sharedStudyPackages:{pending:[],accepted:[]},browseStudyLibrary:{entries:[]},
   studyFlashcardSets:{sets:[]},teamFlashcardSets:{sets:[]},studyGuides:{guides:[]},
   studyDecks:{decks:[]},studyGames:{decks:[]},siteContent:{howto:{}},patchNotes:{notes:[]},
@@ -79,7 +146,15 @@ export const api:any=new Proxy(baseApi as any,{get(target,key:string){if(key in 
  // AI fails closed EVERYWHERE until the separate provider migration, demo
  // included: a showcase must never imply a capability that is not wired.
  if(/(import|extract|chat|generate|analyze|audit|categorize|preview|fixture|tutor)/i.test(key)||/^ai/i.test(key))throw new ApiError(501,'AI features are moving to a new provider and are switched off in the public terminal.');
+ // The DEMO comes first, always. It is the showcase, it answers out of module
+ // memory, and `publicRequest` refuses to reach the service from inside it.
  if(isDemo()){const answered=demoCall(key,args);return answered.handled?answered.value:evidenceEmpty(key)}
+ // Then the families that have real storage behind them.
+ const live=liveRecords[key];
+ if(live)return live(...args);
+ // Everything else is still demo-only. `/records/<name>` is not a route the
+ // public API serves, so this is a 404 that SAYS the feature has no public
+ // storage yet, rather than a screen that silently renders nothing.
  const write=/^(add|create|update|save|remove|delete|restore|toggle|send|reply|archive|unarchive|withdraw|submit|respond|share|revoke)/.test(key);
  return publicRequest('/records/'+encodeURIComponent(key),{method:write?'POST':'GET',body:write?JSON.stringify({args}):undefined});
 }}});

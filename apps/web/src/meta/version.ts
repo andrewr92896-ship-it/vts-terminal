@@ -11,9 +11,18 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 7.47';
+export const APP_VERSION = 'Beta V 7.48';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 7.48',
+    date: 'August 28, 2026',
+    notes: [
+      'Fixed: on the public terminal, Budget, To Do, Investments, Net Worth and Trading Notes had working storage that nothing could actually reach. They are wired up now.',
+      'The budget month now comes back with its totals added up, and the net worth screen gets the two figures it was missing.',
+      'Budget amounts are entered in dollars, the same as everywhere else, and converted once on the server.',
+    ],
+  },
   {
     version: 'Beta V 7.47',
     date: 'August 28, 2026',
