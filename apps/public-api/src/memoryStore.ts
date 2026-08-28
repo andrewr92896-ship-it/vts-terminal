@@ -1,6 +1,7 @@
-import type { BugReport, BugRole, Suggestion, FlashcardSetDetail, FlashcardSetPatch, FlashcardSetRow, NewFlashcardSet, NewStudyGuide, StudyGuideDetail, StudyGuidePatch, StudyGuideRow, NewStudyDeck, StudyDeckDetail, StudyDeckPatch, StudyDeckRow, NewTradingNote, TradingNotePatch, NetWorthItem, NetWorthSnapshot, InvestmentAccount, InvestmentGoal, InvestmentHolding, InvestmentSnapshot, InvestmentTransaction, BudgetCategory, BudgetEntry, Challenge, NewBudgetCategory, NewBudgetEntry, PublicAccount, PublicStore, RateLimitResult, Session, TodoItemRow, TodoSectionRow, TrustedDevice } from './types.js';
+import type { NewTrade, BugReport, BugRole, Suggestion, FlashcardSetDetail, FlashcardSetPatch, FlashcardSetRow, NewFlashcardSet, NewStudyGuide, StudyGuideDetail, StudyGuidePatch, StudyGuideRow, NewStudyDeck, StudyDeckDetail, StudyDeckPatch, StudyDeckRow, NewTradingNote, TradingNotePatch, NetWorthItem, NetWorthSnapshot, InvestmentAccount, InvestmentGoal, InvestmentHolding, InvestmentSnapshot, InvestmentTransaction, BudgetCategory, BudgetEntry, Challenge, NewBudgetCategory, NewBudgetEntry, PublicAccount, PublicStore, RateLimitResult, Session, TodoItemRow, TodoSectionRow, TrustedDevice } from './types.js';
 import { STARTER_SECTIONS } from './todo.js';
 import type { NoteRow } from './notes.js';
+import type { TradeRow } from './trades.js';
 
 
 export class MemoryPublicStore implements PublicStore {
@@ -420,6 +421,39 @@ export class MemoryPublicStore implements PublicStore {
     const row={accountId,id:crypto.randomUUID(),author:'You',body,status:'new',createdAt:this.now()};
     this.suggestions.set(row.id,row);
     return structuredClone(this.strip(row)) as Suggestion;
+  }
+  // ---- trades ---------------------------------------------------------------
+  trades=new Map<string,TradeRow&{accountId:string}>();
+  async listTrades(accountId:string,deleted:boolean){
+    return this.mine(this.trades,accountId)
+      .filter((t)=>(t.deletedAt!=null)===deleted)
+      .sort((a,b)=>(deleted?(b.deletedAt??0)-(a.deletedAt??0):b.openedAt-a.openedAt))
+      .map((t)=>structuredClone(this.strip(t))) as TradeRow[];
+  }
+  async getTrade(accountId:string,id:string){
+    const row=this.trades.get(id);
+    if(!row||row.accountId!==accountId)return undefined;
+    return structuredClone(this.strip(row)) as TradeRow;
+  }
+  async countTrades(accountId:string){return this.mine(this.trades,accountId).length}
+  async createTrade(accountId:string,value:NewTrade){
+    const row={accountId,...value,id:crypto.randomUUID()};
+    this.trades.set(row.id,row);
+    return structuredClone(this.strip(row)) as TradeRow;
+  }
+  async updateTrade(accountId:string,id:string,value:NewTrade){
+    const row=this.trades.get(id); if(!row||row.accountId!==accountId)return undefined;
+    const next={...row,...value,id};
+    this.trades.set(id,next);
+    return structuredClone(this.strip(next)) as TradeRow;
+  }
+  async softDeleteTrade(accountId:string,id:string){
+    const row=this.trades.get(id); if(!row||row.accountId!==accountId||row.deletedAt!=null)return false;
+    row.deletedAt=this.now(); return true;
+  }
+  async restoreTrade(accountId:string,id:string){
+    const row=this.trades.get(id); if(!row||row.accountId!==accountId||row.deletedAt==null)return false;
+    row.deletedAt=null; return true;
   }
   async audit(event:string,accountId:string|undefined,metadata:Record<string,unknown>){this.audits.push({event,accountId,metadata})}
 }

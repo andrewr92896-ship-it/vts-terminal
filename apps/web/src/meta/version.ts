@@ -11,9 +11,18 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 7.53';
+export const APP_VERSION = 'Beta V 7.54';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 7.54',
+    date: 'August 28, 2026',
+    notes: [
+      'The trade log and Deleted Trades now work on a real public account: log a trade, edit it, delete it, put it back.',
+      'A trade that has not closed shows no result rather than a zero, so it cannot be counted as a flat trade.',
+      'Deleting a trade is reversible — it goes to Deleted Trades rather than being lost.',
+    ],
+  },
   {
     version: 'Beta V 7.53',
     date: 'August 28, 2026',

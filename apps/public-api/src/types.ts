@@ -1,5 +1,6 @@
 import type { NoteDirection, NoteKind, NoteRow } from './notes.js';
 import type { DeckQuestion, Flashcard, GuideSlide } from './studies.js';
+import type { TradeRow } from './trades.js';
 
 export type PublicAccount = { id:string; email:string; passwordHash:string; displayName:string; forcePasswordChange:boolean; temporaryPasswordExpiresAt?:number; privateGroupWarning:boolean; disabled:boolean };
 export type Challenge = { accountId:string; codeHash:string; expiresAt:number; attempts:number; consumedAt?:number };
@@ -90,6 +91,12 @@ export type BugRole='user'|'ai'|'admin';
 export type BugMessage={id:string;role:BugRole;body:string;createdAt:number};
 export type BugReport={id:string;author:string;summary:string;status:string;createdAt:number;updatedAt:number;messages:BugMessage[]};
 export type Suggestion={id:string;author:string;body:string;status:string;createdAt:number};
+
+// ---- the hand-kept trade log ------------------------------------------------
+//
+// No broker behind any of it. Deleting is SOFT, because a hand-typed trade
+// exists nowhere else and no broker can re-import it.
+export type NewTrade=Omit<TradeRow,'id'>;
 
 export interface PublicStore {
   findAccountByEmail(email:string):Promise<PublicAccount|undefined>;
@@ -195,6 +202,14 @@ export interface PublicStore {
   createBugReport(accountId:string,summary:string,body:string):Promise<BugReport>;
   appendBugMessage(accountId:string,id:string,role:BugRole,body:string):Promise<BugReport|undefined>;
   createSuggestion(accountId:string,body:string):Promise<Suggestion>;
+  // Trades. `deleted` selects which half of the book is being read.
+  listTrades(accountId:string,deleted:boolean):Promise<TradeRow[]>;
+  getTrade(accountId:string,id:string):Promise<TradeRow|undefined>;
+  countTrades(accountId:string):Promise<number>;
+  createTrade(accountId:string,value:NewTrade):Promise<TradeRow>;
+  updateTrade(accountId:string,id:string,value:NewTrade):Promise<TradeRow|undefined>;
+  softDeleteTrade(accountId:string,id:string):Promise<boolean>;
+  restoreTrade(accountId:string,id:string):Promise<boolean>;
   audit(event:string,accountId:string|undefined,metadata:Record<string,unknown>):Promise<void>;
 }
 

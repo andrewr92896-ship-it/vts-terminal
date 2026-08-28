@@ -144,6 +144,20 @@ const liveRecords:Record<string,(...args:any[])=>Promise<unknown>>={
   createBugReport:(body:string)=>publicRequest('/support/bugs',{method:'POST',body:JSON.stringify({body})}),
   replyBugReport:(id:string,body:string)=>publicRequest(`/support/bugs/${encodeURIComponent(id)}/reply`,{method:'POST',body:JSON.stringify({body})}),
   sendSuggestion:(body:string)=>publicRequest('/support/suggestions',{method:'POST',body:JSON.stringify({body})}),
+
+  // The hand-kept trade log. No broker behind any of it, which is what makes it
+  // safe here — every row exists because somebody wrote it down.
+  tradeLog:()=>publicRequest('/trades'),
+  addTrade:(trade:unknown)=>publicRequest('/trades',{method:'POST',body:JSON.stringify(trade)}),
+  updateTrade:(id:string,patch:unknown)=>publicRequest(`/trades/${encodeURIComponent(id)}`,{method:'PATCH',body:JSON.stringify(patch)}),
+  removeTrade:(id:string)=>publicRequest(`/trades/${encodeURIComponent(id)}`,{method:'DELETE'}),
+  deletedTrades:()=>publicRequest('/trades/deleted'),
+  restoreDeletedTrade:(id:string)=>publicRequest(`/trades/${encodeURIComponent(id)}/restore`,{method:'POST'}),
+  // Undo, straight after a delete. The row is put back by its own id rather
+  // than rebuilt from what the delete handed over, so an undo restores the
+  // trade that was removed and not a copy of it.
+  restoreTrade:(trade:{id:string})=>publicRequest(`/trades/${encodeURIComponent(trade.id)}/restore`,{method:'POST'})
+    .then(()=>publicRequest('/trades')),
 };
 
 

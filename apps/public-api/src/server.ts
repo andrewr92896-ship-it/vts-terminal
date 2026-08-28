@@ -11,6 +11,7 @@ import { buildSections, dailyDone, etTodayMs, nextEtMidnight } from './todo.js';
 import { MAX_DECKS, MAX_DESCRIPTION, MAX_NAME, StudyError, normalizeState, readCards, readCategories,
   readCategoryWeights, readQuestions, readSlides, slidesForRead, statsFromState,
   type DeckQuestion } from './studies.js';
+import { MAX_TRADES, TradeError, readTrade, summarize, type TradeRow } from './trades.js';
 import { CONFIDENCE_STATED, MAX_BODY, MAX_INSTRUMENT, MAX_PER_WEEK, MAX_REFLECTION, MAX_TITLE,
   computeStats, defaultWindow, etWeekKey, isLocked, isWeekKey, shiftWeekKey, toView, weekRange,
   type NoteDirection, type NoteKind, type NoteOutcome, type NoteRow } from './notes.js';
@@ -392,6 +393,57 @@ const setView=(set:FlashcardSetRow)=>({...set,createdBy:null,createdByName:null}
 const setDetailView=(set:FlashcardSetDetail)=>({...setView(set),cards:set.cards});
 const guideView=(guide:StudyGuideRow)=>({...guide,createdBy:null,createdByName:null});
 const guideDetailView=(guide:StudyGuideDetail)=>({...guideView(guide),slides:slidesForRead(guide.slides)});
+
+// A trade as the portal's own Trade Log reads it.
+//
+// `owner` is the reader themselves throughout and `isMine` is always true: a
+// public account has no desk and no teammates, so there is nobody else a row
+// could belong to. `editable` is true because every row here was hand-typed —
+// on the private side that flag separates a hand-logged trade from a broker
+// fill, and there are no broker fills here.
+const tradeView=(trade:TradeRow)=>({
+  ...trade,
+  ownerId:'you',owner:'you',ownerName:'You',isMine:true,
+  broker:null,source:'manual' as const,editable:true,
+  // Slippage is entry minus plan, signed so a worse fill is positive on both
+  // sides. Null when no plan was stated — which is not the same as no slippage.
+  slippage:trade.plannedEntry==null?null
+    :Number(((trade.side==='short'?trade.plannedEntry-trade.entryPrice:trade.entryPrice-trade.plannedEntry)).toFixed(8)),
+  // No live price stands behind a hand-kept open trade, so what it is currently
+  // worth is not something anybody here can know. Null, never 0.
+  unrealizedPl:null,
+  code:null,
+});
+const removedView=(trade:TradeRow)=>({
+  id:trade.id,broker:null,instrument:trade.instrument,side:trade.side,status:trade.status,
+  plannedEntry:trade.plannedEntry,entryPrice:trade.entryPrice,exitPrice:trade.exitPrice,
+  takeProfit:trade.takeProfit,stopLoss:trade.stopLoss,units:trade.units,realizedPl:trade.realizedPl,
+  strategy:trade.strategy,timeframe:trade.timeframe,openedAt:trade.openedAt,closedAt:trade.closedAt,
+  notes:trade.notes,createdAt:trade.createdAt,
+});
+const deletedView=(trade:TradeRow)=>({
+  id:trade.id,kind:'manual' as const,ownerId:'you',owner:'you',isMine:true,broker:null,
+  instrument:trade.instrument,side:trade.side,status:trade.status,units:trade.units,
+  entryPrice:trade.entryPrice,exitPrice:trade.exitPrice,realizedPl:trade.realizedPl,
+  openedAt:trade.openedAt,closedAt:trade.closedAt,deletedAt:trade.deletedAt??0,
+});
+
+async function tradeLog(store:PublicStore,accountId:string){
+  const trades=await store.listTrades(accountId,false);
+  return {
+    trades:trades.map(tradeView),
+    summary:summarize(trades),
+    // Exactly flat, stated in the fields the screen reads so its own recompute
+    // agrees with this one. See trades.ts for why the band is fixed here.
+    breakEvenMode:'percent' as const,breakEvenPct:0,breakEvenAmount:0,breakEvenOverrides:[],
+    minTradeUnits:0,
+    // NOTHING IS EXCLUDED, and this says so rather than being omitted. On the
+    // private side these count what a connection cutoff or a test-trade floor
+    // left out; neither exists here, so every trade written down is counted.
+    excluded:{beforeCutoff:0,belowFloor:0,cutoffFrom:null},
+    canDeleteAny:false,
+  };
+}
 
 // A deck as the portal's own launcher reads it.
 //
@@ -1138,12 +1190,73 @@ export async function handleRequest(req:IncomingMessage,res:ServerResponse,depen
       if(!body)throw new AuthError(400,'Write the suggestion.');
       return json(res,201,{suggestion:await dependencies.store.createSuggestion(id,body)});
     }
+    // ---- the hand-kept trade log --------------------------------------------------
+    //
+    // NO BROKER IS INVOLVED IN ANY OF THIS, which is what makes it safe to have
+    // here: no credential is stored, no order is placed, no position is read.
+    // Every row exists because a person wrote it down, so `source` is fixed at
+    // 'manual' server-side — a client must not be able to claim a row came from
+    // a broker fill, which is a claim about where a number came from.
+    //
+    // The break-even band is fixed at exactly flat and SAID SO in the payload,
+    // because the screen recomputes the summary itself whenever a filter is on.
+    // Given the same config it computes the same answer, so the server's summary
+    // and the screen's cannot disagree about a win rate.
+    if(path==='/public/v1/trades'&&method==='GET'){
+      const id=await authenticatedAccount(req,authService);
+      return json(res,200,await tradeLog(dependencies.store,id));
+    }
+    if(path==='/public/v1/trades'&&method==='POST'){
+      const id=await authenticatedAccount(req,authService);
+      if(await dependencies.store.countTrades(id)>=MAX_TRADES)throw new AuthError(400,`That is ${MAX_TRADES} trades already.`);
+      const trade=readTrade(await readBody(req));
+      const {id:_ignored,...value}=trade; void _ignored;
+      await dependencies.store.createTrade(id,value);
+      return json(res,201,await tradeLog(dependencies.store,id));
+    }
+    if(path.startsWith('/public/v1/trades/')){
+      const id=await authenticatedAccount(req,authService);
+      const rest=decodeURIComponent(path.slice('/public/v1/trades/'.length));
+      if(rest==='deleted'&&method==='GET'){
+        return json(res,200,{trades:(await dependencies.store.listTrades(id,true)).map(deletedView),canDeleteAny:false});
+      }
+      const slash=rest.lastIndexOf('/');
+      const action=slash>0?rest.slice(slash+1):'';
+      const tradeId=action==='restore'?rest.slice(0,slash):rest;
+      const existing=await dependencies.store.getTrade(id,tradeId);
+      // 404 rather than 403: an id the caller does not own must not be
+      // distinguishable from one that does not exist.
+      if(!existing)throw new AuthError(404,'No such trade.');
+
+      if(action==='restore'&&method==='POST'){
+        await dependencies.store.restoreTrade(id,tradeId);
+        return json(res,200,{trades:(await dependencies.store.listTrades(id,true)).map(deletedView),canDeleteAny:false});
+      }
+      if(action===''&&method==='PATCH'){
+        // A DELETED trade is not editable. It is in the bin, and letting it be
+        // rewritten there would mean restoring something other than what was
+        // removed.
+        if(existing.deletedAt!=null)throw new AuthError(409,'That trade is in Deleted Trades. Restore it first.');
+        const {id:_drop,...value}=readTrade(await readBody(req),existing); void _drop;
+        await dependencies.store.updateTrade(id,tradeId,value);
+        return json(res,200,await tradeLog(dependencies.store,id));
+      }
+      if(action===''&&method==='DELETE'){
+        await dependencies.store.softDeleteTrade(id,tradeId);
+        // The removed row goes back with the log so the screen can offer an undo
+        // that puts back what was taken rather than something rebuilt from it.
+        return json(res,200,{...await tradeLog(dependencies.store,id),removed:removedView(existing)});
+      }
+      throw new AuthError(404,'Public route not found.');
+    }
     if(path.startsWith('/public/v1/ai/'))return json(res,501,{message:'Public AI is not available.'});
     return json(res,404,{message:'Public route not found.'});
   } catch(error){
     // A study problem NAMES the thing — "Question 47 is missing option D" — and
     // is the caller's to fix, so it is a 400 rather than a fault.
     if(error instanceof StudyError)return json(res,400,{message:error.message});
+    // A trade problem names the thing and is the caller's to fix.
+    if(error instanceof TradeError)return json(res,400,{message:error.message});
     const status=error instanceof AuthError?error.status:Number((error as {status?:number}).status)||500;const message=status>=500?'Public service unavailable.':error instanceof Error?error.message:'Request failed.';return json(res,status,{message});}
 }
 

@@ -147,10 +147,32 @@ Updated: 2026-08-27.
   intake conversation to draw a usable description out of a person; here the
   report is simply what was written.
 
-- Still demo-only BY DECISION and written down: the hand-kept trade log and the
-  funded book (`addTrade`, the funded account and trade writes). Both are
-  public-safe features — a record of trades somebody typed in, no broker behind
-  them — and both are storage that has not been built yet.
+- Gave the public terminal a tenth record family with real storage: THE
+  HAND-KEPT TRADE LOG, with Deleted Trades behind it. No broker is involved in
+  any of it — no credential stored, no order placed, no position read — which is
+  what makes it safe to have here at all. `source` is fixed server-side, because
+  claiming a row came from a broker fill is a claim about where a number came
+  from.
+- **The break-even band is fixed at exactly flat, and SAID SO in the payload.**
+  The private terminal scores against a band the desk sets; setting it is a
+  desk-settings surface and the public terminal has none, so there is nothing to
+  honour and nothing to diverge from. It matters that the payload states it: the
+  SCREEN recomputes the summary itself whenever a filter is on, so given the
+  same config the two halves cannot disagree about a win rate.
+- The tests are mostly about the difference between ZERO and UNKNOWN, because
+  getting it wrong does not error — it quietly scores a trade nobody scored. An
+  open trade's result is null however it arrives; a hand-kept open trade's
+  unrealized P/L is null because no live price stands behind it; slippage is
+  null when no plan was stated; and a log with nothing scored reports no total
+  rather than a flat zero.
+- Deleting is SOFT. A hand-typed trade exists nowhere else and no broker can
+  re-import it, so a hard delete would be the one act on that screen with no way
+  back. A row in the bin cannot be edited either — rewriting it there would mean
+  restoring something other than what was removed.
+
+- Still demo-only BY DECISION and written down: the funded book (the funded
+  account and trade writes). Public-safe — a record of what a prop firm is
+  holding, typed in by hand — and storage that is not built yet.
 
 - Gave the public terminal a sixth record family with real storage: STUDY GAMES
   — the decks, their questions, each learner's progress, and combining games.
@@ -219,7 +241,7 @@ Updated: 2026-08-27.
 ## Blocked/manual
 
 - Provision separate Railway services.
-- Provision a public database and public API (the API exists and has auth, market data, layout, early access, budget, to-do, investments, net worth, trading notes, study games, flashcards, presentations and support; the remaining record families are still demo-only).
+- Provision a public database and public API (the API exists and has auth, market data, layout, early access, budget, to-do, investments, net worth, trading notes, study games, flashcards, presentations, support and the hand-kept trade log; the remaining record families are still demo-only).
 - Configure separate public authentication.
 - Configure private MFA.
 - Populate `PRIVATE_ACCESS_USER_IDS`. Since 7.42 an entry may be an ID, a username or an email — a username survives the database changing, which an ID does not.

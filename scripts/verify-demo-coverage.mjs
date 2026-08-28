@@ -69,7 +69,9 @@ const ACCEPTED = {
   admin: ['addAnnouncement', 'removeAnnouncement', 'bugReports', 'replyToBugReport', 'setBugReportStatus'],
   // Editing or restoring a logged trade. The public Trade Log is read-only —
   // there is no broker behind it and no order that could have produced a row.
-  trades: ['restoreTrade', 'updateHistoryTrade', 'updateTrade', 'removeTrade', 'restoreDeletedTrade'],
+  // Editing a CLOSED trade through the History route, which the public terminal
+  // does not have — the log's own PATCH is what edits a row here.
+  trades: ['updateHistoryTrade'],
 };
 // Answered by the demo but NOT wired for a real account. Each of these works in
 // the showcase and 404s for a customer, so each needs a reason to still be here.
@@ -79,8 +81,9 @@ const DEMO_ONLY = {
   // — and both are storage that has not been built yet. Until it is, these three
   // nav rows are demo-only, which is why they are written down rather than
   // discovered by a customer.
-  handKeptTrades: [
-    'addTrade', 'updateTrade', 'removeTrade', 'restoreDeletedTrade',
+  // The funded book. A record of what a prop firm is holding, typed in by
+  // hand — public-safe, and storage that is not built yet.
+  fundedBook: [
     'addFundedAccount', 'updateFundedAccount', 'removeFundedAccount',
     'addFundedTrade', 'removeFundedTrade',
   ],

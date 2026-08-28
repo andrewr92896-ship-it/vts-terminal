@@ -1,8 +1,9 @@
 import pg from 'pg';
-import type { BugReport, BugRole, Suggestion, FlashcardSetDetail, FlashcardSetPatch, FlashcardSetRow, NewFlashcardSet, NewStudyGuide, StudyGuideDetail, StudyGuidePatch, StudyGuideRow, NewStudyDeck, StudyDeckDetail, StudyDeckPatch, StudyDeckRow, NewTradingNote, TradingNotePatch, NetWorthItem, NetWorthSnapshot, InvestmentAccount, InvestmentGoal, InvestmentHolding, InvestmentSnapshot, InvestmentTransaction, BudgetCategory, BudgetEntry, Challenge, NewBudgetCategory, NewBudgetEntry, PublicAccount, PublicStore, RateLimitResult, Session, TodoItemRow, TodoSectionRow, TrustedDevice } from './types.js';
+import type { NewTrade, BugReport, BugRole, Suggestion, FlashcardSetDetail, FlashcardSetPatch, FlashcardSetRow, NewFlashcardSet, NewStudyGuide, StudyGuideDetail, StudyGuidePatch, StudyGuideRow, NewStudyDeck, StudyDeckDetail, StudyDeckPatch, StudyDeckRow, NewTradingNote, TradingNotePatch, NetWorthItem, NetWorthSnapshot, InvestmentAccount, InvestmentGoal, InvestmentHolding, InvestmentSnapshot, InvestmentTransaction, BudgetCategory, BudgetEntry, Challenge, NewBudgetCategory, NewBudgetEntry, PublicAccount, PublicStore, RateLimitResult, Session, TodoItemRow, TodoSectionRow, TrustedDevice } from './types.js';
 import { STARTER_SECTIONS } from './todo.js';
 import type { NoteRow } from './notes.js';
 import type { DeckQuestion, Flashcard, GuideSlide } from './studies.js';
+import type { TradeRow } from './trades.js';
 const {Pool}=pg;
 
 export class PostgresPublicStore implements PublicStore {
@@ -678,6 +679,70 @@ export class PostgresPublicStore implements PublicStore {
     const row=r.rows[0];
     return {id:String(row.id),author:'You',body:String(row.body),status:String(row.status),
       createdAt:new Date(String(row.createdAt)).getTime()};
+  }
+  // ---- trades ---------------------------------------------------------------
+  private tradeColumns=`id,instrument,side,status,planned_entry as "plannedEntry",entry_price as "entryPrice",
+       exit_price as "exitPrice",take_profit as "takeProfit",stop_loss as "stopLoss",units,
+       realized_pl as "realizedPl",strategy,timeframe,notes,
+       opened_at as "openedAt",closed_at as "closedAt",deleted_at as "deletedAt",
+       created_at as "createdAt",updated_at as "updatedAt"`;
+  private tradeRow(v:Record<string,unknown>):TradeRow{
+    const ms=(x:unknown):number|null=>x==null?null:new Date(x as string).getTime();
+    const num=(x:unknown):number|null=>x==null?null:Number(x);
+    return {...v,
+      plannedEntry:num(v.plannedEntry),entryPrice:Number(v.entryPrice),exitPrice:num(v.exitPrice),
+      takeProfit:num(v.takeProfit),stopLoss:num(v.stopLoss),units:Number(v.units),realizedPl:num(v.realizedPl),
+      openedAt:ms(v.openedAt)??0,closedAt:ms(v.closedAt),deletedAt:ms(v.deletedAt),
+      createdAt:ms(v.createdAt)??0,updatedAt:ms(v.updatedAt)??0} as TradeRow;
+  }
+  private tradeValues(v:NewTrade):unknown[]{
+    const at=(ms:number|null)=>ms==null?null:new Date(ms).toISOString();
+    return [v.instrument,v.side,v.status,v.plannedEntry,v.entryPrice,v.exitPrice,v.takeProfit,v.stopLoss,
+      v.units,v.realizedPl,v.strategy,v.timeframe,v.notes,at(v.openedAt),at(v.closedAt)];
+  }
+  async listTrades(accountId:string,deleted:boolean):Promise<TradeRow[]>{
+    const r=await this.pool.query(
+      `select ${this.tradeColumns} from public_trades
+        where account_id=$1 and deleted_at is ${deleted?'not null':'null'}
+        order by ${deleted?'deleted_at':'opened_at'} desc`,[accountId]);
+    return r.rows.map((v)=>this.tradeRow(v));
+  }
+  async getTrade(accountId:string,id:string):Promise<TradeRow|undefined>{
+    const r=await this.pool.query(`select ${this.tradeColumns} from public_trades where account_id=$1 and id=$2`,[accountId,id]);
+    const row=r.rows[0];
+    return row?this.tradeRow(row):undefined;
+  }
+  async countTrades(accountId:string):Promise<number>{
+    const r=await this.pool.query('select count(*)::int as n from public_trades where account_id=$1',[accountId]);
+    return Number(r.rows[0]?.n??0);
+  }
+  async createTrade(accountId:string,v:NewTrade):Promise<TradeRow>{
+    const r=await this.pool.query(
+      `insert into public_trades(account_id,instrument,side,status,planned_entry,entry_price,exit_price,
+         take_profit,stop_loss,units,realized_pl,strategy,timeframe,notes,opened_at,closed_at)
+       values($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16) returning ${this.tradeColumns}`,
+      [accountId,...this.tradeValues(v)]);
+    return this.tradeRow(r.rows[0]);
+  }
+  async updateTrade(accountId:string,id:string,v:NewTrade):Promise<TradeRow|undefined>{
+    const r=await this.pool.query(
+      `update public_trades set instrument=$3,side=$4,status=$5,planned_entry=$6,entry_price=$7,exit_price=$8,
+         take_profit=$9,stop_loss=$10,units=$11,realized_pl=$12,strategy=$13,timeframe=$14,notes=$15,
+         opened_at=$16,closed_at=$17,updated_at=now()
+       where account_id=$1 and id=$2 returning ${this.tradeColumns}`,
+      [accountId,id,...this.tradeValues(v)]);
+    const row=r.rows[0];
+    return row?this.tradeRow(row):undefined;
+  }
+  async softDeleteTrade(accountId:string,id:string):Promise<boolean>{
+    // Soft: a hand-typed trade exists nowhere else and no broker can re-import
+    // it, so a hard delete would be the one act on this screen with no way back.
+    const r=await this.pool.query('update public_trades set deleted_at=now() where account_id=$1 and id=$2 and deleted_at is null',[accountId,id]);
+    return (r.rowCount??0)>0;
+  }
+  async restoreTrade(accountId:string,id:string):Promise<boolean>{
+    const r=await this.pool.query('update public_trades set deleted_at=null where account_id=$1 and id=$2 and deleted_at is not null',[accountId,id]);
+    return (r.rowCount??0)>0;
   }
   async audit(event:string,accountId:string|undefined,metadata:Record<string,unknown>){await this.pool.query('insert into public_audit_events(event,account_id,metadata) values($1,$2,$3)',[event,accountId??null,metadata])}
 }
