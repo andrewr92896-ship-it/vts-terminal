@@ -252,14 +252,73 @@ with no control that can publish one**.
 
 ### The public API (`apps/public-api`)
 
-Its own service, database, cookies (`vts_public_session_v1`, path `/public`) and
-secrets. Today it serves **auth, market data, the market-data layout and
-early-access requests only**; every other record family is demo-only, so the
-storage contract for them is unbuilt. Early access is unauthenticated by
-necessity — the person asking has no account — so it is rate limited, bounded in
-what it stores, and answered identically whether or not the address is already
-on the list. The server listens only when it is the process being run, so a
-route can be tested by importing it.
+Its own service, database (**Postgres**, via `pg`), cookies
+(`vts_public_session_v1`, path `/public`) and secrets. Early access is
+unauthenticated by necessity — the person asking has no account — so it is rate
+limited, bounded in what it stores, and answered identically whether or not the
+address is already on the list. The server listens only when it is the process
+being run, so a route can be tested by importing it.
+
+**Eleven record families have real storage** (2026-08): budget, to-do,
+investments, net worth, trading notes, study games, flashcard sets, study
+presentations, support, the hand-kept trade log and the funded book. Everything
+else a public screen can reach is either refused as AI or deliberately unbuilt —
+see the coverage check below, which is what keeps that sentence true.
+
+**EVERY ROUTE RESOLVES THE ACCOUNT FROM THE SESSION.** No route anywhere takes a
+"whose" parameter, and an id the caller does not own answers **404 rather than
+403**, so a guessed id cannot be probed for. There is no team dimension and no
+admin surface on the public side at all — which is why, for instance, a support
+reply can only ever be posted as `user`: a client must not be able to post a
+message that renders as staff having answered.
+
+**Two adapter files carry the seam and they are not the same job.**
+`apps/public-terminal/src/adapters/publicApi.ts` maps a portal `api.*` call to a
+public route; `apps/public-terminal/src/demo/demoStore.ts` answers the same names
+out of module memory. **The demo is checked FIRST** in the proxy — `publicRequest`
+refuses to reach the service from inside it — which is why the live map sits
+behind that branch rather than beside the market-data methods. Putting a record
+method on `baseApi` breaks the demo, because anything there is returned before
+the demo branch is reached.
+
+**Three checks keep the public terminal honest, and each was proved to fail
+rather than observed to pass:**
+
+- **`verify:demo-coverage`** walks the public screen tree, collects every `api.*`
+  call reachable from it, and requires each to be answered — live, demo, refused
+  as AI, or NAMED in the script with the reason it is deliberately unbuilt. It
+  catches **two** classes: nothing answers it, and *only the demo* answers it.
+  The second is the expensive one — it works in the showcase and 404s for the
+  first real customer, so the screen that was the proof the product works is the
+  screen that breaks. The named lists are the point: a gap somebody decided to
+  leave is fine, a gap nobody knows about is not.
+- **`verify:demo-writes`** drives every demo write to the act it exists for,
+  asserting on the field the SCREEN destructures. This is the half a screenshot
+  test cannot see: a capture asserts a page rendered, not that pressing "add" on
+  it did anything. The whole Investments workspace shipped broken behind a
+  passing screenshot because an unhandled name answers with an
+  empty-but-generic payload, so `const { portfolio } = await api.create…()`
+  destructured `undefined`.
+- **`verify:postgres`** applies every migration to an empty schema and drives one
+  round trip through each record family against a real database. Its own CI job
+  with a Postgres service, separate from `verify`, which deliberately needs
+  nothing. It is NOT a second copy of the behavioural tests — those belong with
+  the memory store, where they are fast and total. What is checked here is only
+  what the memory store cannot: that the statements are valid, and that what
+  goes in comes back out as the same shape. **Assert every column on the way
+  back, not the few a summary happens to use** — the first version missed a
+  wrong alias because the win rate it checked was computed from prices.
+
+**`npm run db:migrate:public` is the runner**, idempotent, on the API's start
+command so every deploy applies what is pending. It **refuses to run against a
+database holding non-`public_*` tables** — that is the private database's shape,
+and pointing it there is the worst thing the script could do. Every public table
+is prefixed for exactly that reason, and `verify:migrations` enforces it across
+**all** migrations (it read the first two by name, so everything added later was
+covered by none of its guards).
+
+`docs/implementation/public-launch-runbook.md` is what is left to provision, all
+of which needs a Railway account and a domain.
 
 ## Architecture
 
