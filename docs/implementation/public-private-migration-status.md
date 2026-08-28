@@ -243,6 +243,30 @@ Updated: 2026-08-27.
   reaching another's screen, plus an attestation and a review queue with no admin
   surface on the public side. That is a product decision, not a port.
 
+- **THE POSTGRES STORE NOW ACTUALLY RUNS, AGAINST A REAL DATABASE.** Every other
+  test drives the in-memory store, which is a faithful model of the contract and
+  executes none of the SQL — so twelve migrations and every query in
+  `postgresStore.ts` had never once been run. A wrong column name, a bad jsonb
+  cast or an inverted soft-delete predicate would have surfaced for the first
+  time when the public service was deployed, looking like the feature was broken
+  rather than like one wrong word.
+- `npm run verify:postgres` applies every migration to an empty schema and
+  drives one round trip through each of the eleven record families. It runs in
+  CI as its own job with a Postgres service — separate from `verify`, which
+  deliberately needs nothing at all.
+- It is NOT a second copy of the behavioural tests. Those belong with the memory
+  store, where they are fast and total. What is checked here is only what the
+  memory store cannot check: that the statements are valid, and that what goes
+  into the database comes back out as the same shape.
+- **Proved to catch two classes of fault**, not merely observed to pass: a wrong
+  column alias and an inverted soft-delete predicate. The first attempt did NOT
+  catch the alias — the assertions read a summary computed from prices, so an
+  `undefined` came back unnoticed — so the reads now assert every column rather
+  than the few a summary happens to use.
+- The last case is the one nothing else could see: deleting an account and then
+  checking that no table anywhere still holds rows for it. Every record family
+  cascades correctly.
+
 ## Partially completed
 
 - `PRIVATE_DATABASE_URL` is supported, but the physical existing database has not been moved or renamed.

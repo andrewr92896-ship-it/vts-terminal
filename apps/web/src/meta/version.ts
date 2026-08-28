@@ -11,9 +11,16 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 7.55';
+export const APP_VERSION = 'Beta V 7.56';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 7.56',
+    date: 'August 28, 2026',
+    notes: [
+      'The public terminal\u2019s database code now runs against a real database in the build, rather than being checked only against a stand-in.',
+    ],
+  },
   {
     version: 'Beta V 7.55',
     date: 'August 28, 2026',

@@ -10,6 +10,13 @@ export class PostgresPublicStore implements PublicStore {
   private pool:pg.Pool;
   constructor(url:string){this.pool=new Pool({connectionString:url,application_name:'vts-public-api'})}
   async close(){await this.pool.end()}
+  /**
+   * Run a statement directly. The ONLY caller is the Postgres integration test,
+   * which applies the migrations and then checks that deleting an account left
+   * nothing behind — neither of which is something a store method should offer.
+   * It is not a general escape hatch: every route goes through a typed method.
+   */
+  async raw(sql:string):Promise<unknown[]>{return (await this.pool.query(sql)).rows}
   async findAccountByEmail(email:string){const r=await this.pool.query('select id,email,password_hash as "passwordHash",display_name as "displayName",force_password_change as "forcePasswordChange",extract(epoch from temporary_password_expires_at)*1000 as "temporaryPasswordExpiresAt",private_group_warning as "privateGroupWarning",disabled from public_accounts where email=$1',[email]);const v=r.rows[0];return v?{...v,temporaryPasswordExpiresAt:v.temporaryPasswordExpiresAt?Number(v.temporaryPasswordExpiresAt):undefined} as PublicAccount:undefined}
   async findAccountById(id:string){const r=await this.pool.query('select id,email,password_hash as "passwordHash",display_name as "displayName",force_password_change as "forcePasswordChange",extract(epoch from temporary_password_expires_at)*1000 as "temporaryPasswordExpiresAt",private_group_warning as "privateGroupWarning",disabled from public_accounts where id=$1',[id]);const v=r.rows[0];return v?{...v,temporaryPasswordExpiresAt:v.temporaryPasswordExpiresAt?Number(v.temporaryPasswordExpiresAt):undefined} as PublicAccount:undefined}
   async updatePassword(id:string,passwordHash:string,force:boolean,expiresAt?:number){await this.pool.query('update public_accounts set password_hash=$2,force_password_change=$3,temporary_password_expires_at=case when $4::double precision is null then null else to_timestamp($4/1000.0) end,password_changed_at=now() where id=$1',[id,passwordHash,force,expiresAt??null])}

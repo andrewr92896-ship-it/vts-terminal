@@ -57,7 +57,8 @@
     "verify:public-api": "npm --workspace @vts/public-api test && npm --workspace @vts/public-api run verify:migrations",
     "db:check-two-factor": "npm --workspace @vts/api run db:check-two-factor",
     "verify:demo-writes": "npm --workspace @vts/web run verify:demo-writes",
-    "verify:demo-coverage": "node scripts/verify-demo-coverage.mjs"
+    "verify:demo-coverage": "node scripts/verify-demo-coverage.mjs",
+    "verify:postgres": "npm --workspace @vts/public-api run test:postgres"
   },
   "devDependencies": {
     "npm-run-all": "^4.1.5"
