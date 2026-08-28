@@ -25,6 +25,7 @@ export const PATCH_NOTES: PatchNote[] = [
       'Fixed: on a real public account, the Investments overview was blank as soon as you added an account. It worked while empty, which is why it took a real account to find.',
       'Fixed: on a real public account, the To Do list showed nothing and could not be added to, whatever was in it.',
       'The public predictions screen now carries the same "informational only, not investment advice" line every other screen of its kind does.',
+      'You can sign out of the public terminal. There was no control for it anywhere, so an account signed in on a shared computer stayed signed in.',
     ],
   },
   {

@@ -241,3 +241,31 @@ test('every remaining screen renders without throwing', async ({ page }) => {
   }
   expect(broken, 'screens that threw on a real account').toEqual([]);
 });
+
+// LAST, deliberately: it revokes the session every other test signs in with.
+test('signing out revokes the session, not just the screen', async ({ browser, request }) => {
+  // There was no way out at all — the account chip has never had a handler and
+  // the adapter's logout was a stub — so a signed-in public account stayed
+  // signed in on whatever computer it was signed in on, for the twelve hours
+  // the session cookie lasts. The route and the client method both existed the
+  // whole time.
+  const context = await browser.newContext({ ignoreHTTPSErrors: true });
+  await context.addCookies([{
+    name, value: decodeURIComponent(value ?? ''), domain: '127.0.0.1', path: '/',
+    httpOnly: true, secure: true, sameSite: 'Lax',
+  }]);
+  const page = await context.newPage();
+  await page.goto(`${base}/#live`, { waitUntil: 'networkidle' });
+  await page.getByRole('button', { name: 'Sign out' }).click();
+
+  // Back at the sign-in card.
+  await expect(page.getByText(/Explore the demo|Sign in/i).first()).toBeVisible();
+
+  // And the session is DEAD on the server, which is the half that matters: a
+  // screen that merely forgot you is not a sign-out.
+  const still = await request.get(`${base}/public/v1/auth/session`, {
+    headers: { cookie }, ignoreHTTPSErrors: true,
+  });
+  expect(still.status(), 'the session still answered after signing out').toBe(401);
+  await context.close();
+});

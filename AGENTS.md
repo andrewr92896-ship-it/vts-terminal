@@ -323,6 +323,16 @@ belongs on it. The demo already set it, so this worked in the showcase and was
 dead for a real account — the same shape as the Investments screens above, and
 the reason the live-account suite exists.
 
+**SIGNING OUT IS `signOut` IN `adapters/publicAuth.ts`, AND IT HAS TO REVOKE.**
+There was no control for it anywhere in the public terminal and the adapter's
+`logout` was a stub returning nothing, so an account, once in, could not get out
+— on a shared computer, for the twelve hours the session cookie lasts. The
+`/auth/logout` route and `publicAuth.logout()` both existed the whole time;
+only the wiring and a button were missing. The demo is the one case that reaches
+no service: leaving it is dropping the module flag, which a load of the bare URL
+does. The live suite's last test asserts the session answers **401 afterwards**,
+because a screen that merely forgot you is not a sign-out.
+
 **Two adapter files carry the seam and they are not the same job.**
 `apps/public-terminal/src/adapters/publicApi.ts` maps a portal `api.*` call to a
 public route; `apps/public-terminal/src/demo/demoStore.ts` answers the same names
