@@ -11,9 +11,18 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 7.49';
+export const APP_VERSION = 'Beta V 7.50';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 7.50',
+    date: 'August 28, 2026',
+    notes: [
+      'Flashcard sets and study presentations now save for real on the public terminal.',
+      'Reordering a presentation keeps each slide the same slide, so nothing pointing at one is left describing something else.',
+      'A screenshot that is too large is now refused with the slide named, instead of being dropped so quietly you find out while presenting.',
+    ],
+  },
   {
     version: 'Beta V 7.49',
     date: 'August 28, 2026',

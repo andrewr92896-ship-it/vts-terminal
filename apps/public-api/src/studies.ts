@@ -193,3 +193,108 @@ export function statsFromState(raw:string):RunStats|null{
   const levelCorrect=Number(state.levelCorrect)||correct;
   return {attempted,correct,bestStep:Math.max(Number(state.bestStep)||0,stepForCorrect(levelCorrect))};
 }
+
+// ---- Flashcards -------------------------------------------------------------
+
+export type Flashcard={seq:number;term:string;def:string;topic:string|null};
+
+export const MAX_CARDS=2000;
+export const MAX_TERM=600;
+export const MAX_DEF=4000;
+
+// A card needs BOTH sides. One without a definition renders as a card that
+// cannot be turned over, which reads as a broken set rather than a bad import,
+// so it is refused here with the card named.
+export function readCards(raw:unknown):Flashcard[]{
+  if(!Array.isArray(raw)||raw.length===0)throw new StudyError('A flashcard set needs at least one card.');
+  if(raw.length>MAX_CARDS)throw new StudyError(`That is more than ${MAX_CARDS} cards.`);
+  return raw.map((value,index)=>{
+    const at=`Card ${index+1}`;
+    if(!value||typeof value!=='object')throw new StudyError(`${at} is not a card.`);
+    const card=value as Record<string,unknown>;
+    const term=clean(card.term,MAX_TERM);
+    if(!term)throw new StudyError(`${at} has no term.`);
+    const def=clean(card.def,MAX_DEF);
+    if(!def)throw new StudyError(`${at} has nothing on the back.`);
+    // Numbered from 1 HERE, by position. A client-supplied seq could collide
+    // with itself and silently drop a card on the way in.
+    return {seq:index+1,term,def,topic:clean(card.topic,MAX_TOPIC)||null};
+  });
+}
+
+// ---- Study presentations ----------------------------------------------------
+
+export type GuideSlide={id:string|null;title:string;body:string;image:string|null};
+
+export const MAX_SLIDES=40;
+export const MAX_SLIDE_TITLE=200;
+export const MAX_SLIDE_BODY=4000;
+// A screenshot arrives as a base64 data URL, which is why the routes that write
+// a presentation carry a far larger body allowance than anything else here.
+export const MAX_SLIDE_IMAGE=4_000_000;
+
+// WHAT MAKES A SLIDE THE SAME SLIDE TOMORROW.
+//
+// A presentation is stored as one blob, so an array position identifies nothing
+// — it changes the moment somebody drags a slide up the deck. Each slide
+// therefore carries its own id, and these two functions are the whole mechanism:
+//
+//   * `keepSlideId` NEVER MINTS, because it runs on READ as well as write. A
+//     read that invented identity would hand out a different id every time.
+//   * `withSlideIds` mints only for a slide that has none — new, or from a
+//     presentation that predates ids.
+//
+// The consequence to remember: the id has to ROUND-TRIP through the editor, or
+// every save looks like a deck of brand new slides.
+export function keepSlideId(raw:unknown):string|null{
+  const value=(raw??{}) as {id?:unknown};
+  return typeof value.id==='string'&&value.id.trim()?value.id.trim().slice(0,80):null;
+}
+
+// One slide, read. `mint` supplies an id for a slide that has none — passed in
+// rather than called here so this same function serves reads and writes.
+function readSlide(raw:unknown,mint:(()=>string)|null,index=0):GuideSlide|null{
+  if(!raw||typeof raw!=='object')return null;
+  const value=raw as Record<string,unknown>;
+  const title=clean(value.title,MAX_SLIDE_TITLE);
+  const body=clean(value.body,MAX_SLIDE_BODY);
+  let image:string|null=null;
+  if(typeof value.image==='string'&&value.image.startsWith('data:image/')){
+    // AN OVERSIZED SCREENSHOT IS REFUSED, NOT DROPPED. Dropping it saves the
+    // presentation with a slide the author believes has a picture on it, and
+    // they find out when they present. Same family of rule as a preset chip the
+    // trader typed: something somebody put there must not vanish unexplained.
+    if(value.image.length>MAX_SLIDE_IMAGE){
+      throw new StudyError(`The image on slide ${index+1} is too large. Scale it down and try again.`);
+    }
+    image=value.image;
+  }
+  // A slide with neither text nor a picture is nothing at all, and presenting it
+  // is a blank screen the author cannot see the cause of.
+  if(!title&&!body&&!image)return null;
+  const id=keepSlideId(value);
+  return {id:id??(mint?mint():null),title,body,image};
+}
+
+export function readSlides(raw:unknown,mint:()=>string):GuideSlide[]{
+  if(!Array.isArray(raw))throw new StudyError('A presentation needs slides.');
+  const out:GuideSlide[]=[];
+  raw.forEach((value,index)=>{
+    if(out.length>=MAX_SLIDES)return;
+    const slide=readSlide(value,mint,index);
+    if(slide)out.push(slide);
+  });
+  if(out.length===0)throw new StudyError('A presentation needs at least one slide with something on it.');
+  return out;
+}
+
+// Slides on the way OUT. Mints nothing — see keepSlideId.
+export function slidesForRead(raw:unknown):GuideSlide[]{
+  if(!Array.isArray(raw))return [];
+  const out:GuideSlide[]=[];
+  for(const value of raw){
+    const slide=readSlide(value,null);
+    if(slide)out.push(slide);
+  }
+  return out;
+}
