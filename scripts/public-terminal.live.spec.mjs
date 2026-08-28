@@ -181,6 +181,26 @@ test('a write made through the UI lands, and survives a reload', async ({ page }
   expect(after).toEqual([]);
 });
 
+test('the compliance disclaimers are actually on the screens that must carry them', async ({ page }) => {
+  // Written down, reviewed, and then rendered by a component behind a
+  // conditional is a disclaimer that is not there. Nothing else checks that
+  // these reach a real account's screen, and this is the half the product's
+  // regulatory posture actually rests on: informational only, never advice.
+  for (const screen of ['inv_overview', 'inv_accounts', 'inv_holdings', 'inv_allocation',
+    'inv_performance', 'inv_dividends', 'inv_contributions', 'inv_projections']) {
+    const errors = await open(page, screen);
+    await expect(page.getByText(/Informational only/i).first(),
+      `${screen} rendered without its disclaimer`).toBeVisible();
+    expect(errors).toEqual([]);
+  }
+
+  // Trading Notes says it in its own words, because a prediction is the most
+  // advice-shaped thing a public account can write down.
+  const notes = await open(page, 'notes');
+  await expect(page.getByText(/personal record, not a recommendation/i).first()).toBeVisible();
+  expect(notes).toEqual([]);
+});
+
 test('every remaining screen renders without throwing', async ({ page }) => {
   // The ones with nothing seeded. Nothing is asserted about their content —
   // there is none — but a thrown render leaves the root dead for every later

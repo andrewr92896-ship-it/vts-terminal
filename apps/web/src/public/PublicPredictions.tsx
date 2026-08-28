@@ -26,6 +26,7 @@ export function PublicPredictions({theme}:{theme:Theme}){
  }
  return <div style={{maxWidth:980,margin:'0 auto',color:'#eef3ff'}}>
   <header style={{marginBottom:18}}><h2 style={{margin:0,fontSize:20}}>Trading Notes & Predictions</h2><p style={{color:'#9fb0d6',fontSize:12.5,lineHeight:1.55}}>Write the call before the window opens, then compare it with what happened. A public prediction is private to your account: it cannot be published, shared, copied, routed, or distributed.</p></header>
+  <p style={{color:'#8fa0c9',fontSize:11.5,lineHeight:1.6,fontFamily:'ui-monospace,SFMono-Regular,Menlo,monospace',marginTop:0,marginBottom:16}}>Trading Notes are a personal record, not a recommendation. Informational only, not investment advice.</p>
   <section style={panel(theme)}>
    <input value={title} onChange={e=>setTitle(e.target.value)} placeholder="The call, in one line" style={input}/>
    <div style={{display:'grid',gridTemplateColumns:'1.1fr .7fr',gap:10,marginTop:10}}>
