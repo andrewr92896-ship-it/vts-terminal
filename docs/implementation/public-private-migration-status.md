@@ -285,6 +285,17 @@ Updated: 2026-08-27.
 - `docs/implementation/public-launch-runbook.md` is the ordered list of what is
   left, all of which needs a Railway account and a domain.
 
+- **`npm run verify:public-wiring` checks the adapter's paths against the
+  server's routes.** `publicApi.ts` names 66 of them and `server.ts` serves
+  them; both are written by hand and had never been run together. Nothing else
+  could have caught a typo there — the adapter is not typechecked against the
+  routes, the demo never reaches them, and the API's own tests write the paths a
+  second time in the test file. So it reads the paths OUT OF THE ADAPTER and
+  calls each against a real server on a real database. Proved by misspelling one.
+- It counts only a route-not-found. A 400 means the route is there and did not
+  like an empty body, which is a different question and one the API's own tests
+  already answer.
+
 ## Partially completed
 
 - `PRIVATE_DATABASE_URL` is supported, but the physical existing database has not been moved or renamed.
