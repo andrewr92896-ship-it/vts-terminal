@@ -7,6 +7,9 @@ import { HttpPublicMarketProvider, SmtpPublicMailer } from './adapters.js';
 import type { BudgetKind, NetWorthCategory, NetWorthKind, PublicMarketProvider, PublicStore, TodoItemRow } from './types.js';
 import { NET_WORTH_CATEGORIES } from './types.js';
 import { buildSections, dailyDone, etTodayMs, nextEtMidnight } from './todo.js';
+import { CONFIDENCE_STATED, MAX_BODY, MAX_INSTRUMENT, MAX_PER_WEEK, MAX_REFLECTION, MAX_TITLE,
+  computeStats, defaultWindow, etWeekKey, isLocked, isWeekKey, shiftWeekKey, toView, weekRange,
+  type NoteDirection, type NoteKind, type NoteOutcome, type NoteRow } from './notes.js';
 import { INVESTMENT_ASSET_CLASSES, allocateBy, concentrationFlags, totalPortfolio, valueHolding,
   type HoldingValue, type InvestmentAssetClass, type PricedHolding } from './investmentsMath.js';
 
@@ -227,6 +230,63 @@ async function readNetWorth(store:PublicStore,accountId:string){
     daysRecorded:history.length,
   };
 }
+
+// The whole Trading Notes screen from ONE read.
+//
+// The board, the queue, the record and the observations are all views of the
+// same set of rows, so they are derived from a single list rather than fetched
+// separately: four reads of a moving table can disagree with each other, and a
+// screen whose record says 12 calls above a board showing 13 is worse than a
+// slower one.
+//
+// `tradeLinks` is ALWAYS EMPTY and that is not a stub. On the private side it
+// answers "did you trade your own call" from the trader's own positions; the
+// public terminal has no broker connections and no positions at all, so there is
+// nothing to match against. Returning [] says "no matches" honestly; inventing
+// one would be the exact failure the rest of this file is written against.
+async function readNotes(store:PublicStore,accountId:string,owner:string,weekKeyParam:string|null){
+  const now=Date.now();
+  const key=weekKeyParam&&isWeekKey(weekKeyParam)?weekKeyParam:etWeekKey(new Date(now));
+  const rows=await store.listTradingNotes(accountId);
+  const view=(row:NoteRow)=>toView(row,accountId,owner,now);
+  const range=weekRange(key);
+  const predictions=rows.filter((r)=>r.kind==='prediction');
+  return {
+    week:{
+      weekKey:key,startsOn:range.startsOn,endsOn:range.endsOn,
+      prevWeek:shiftWeekKey(key,-1),nextWeek:shiftWeekKey(key,1),
+      isCurrent:key===etWeekKey(new Date(now)),
+      notes:rows.filter((r)=>r.weekKey===key).map(view),
+    },
+    // Everything still owed an answer: past its deadline with no outcome, or
+    // settled with no reflection. Soonest deadline first.
+    queue:predictions
+      .filter((r)=>(r.outcome==null&&r.deadlineAt!=null&&r.deadlineAt<=now)||(r.outcome!=null&&!r.reflection))
+      .sort((a,b)=>(a.deadlineAt??0)-(b.deadlineAt??0))
+      .map(view),
+    stats:computeStats(rows),
+    observations:rows.filter((r)=>r.kind==='observation').slice(0,60).map(view),
+    tradeLinks:[],
+  };
+}
+
+// A confidence is 1-5 or nothing. Anything outside that is read as UNSTATED
+// rather than clamped into the nearest level: clamping would put a call in a
+// calibration bucket its author never chose, and the whole point of the table is
+// comparing what somebody SAID with what happened.
+const readConfidence=(v:unknown):number|null=>{
+  if(v==null)return null;
+  const n=Math.round(Number(v));
+  return Number.isFinite(n)&&CONFIDENCE_STATED[n]!=null?n:null;
+};
+// Only up/down, deliberately: those are the two a price feed can settle without
+// being told what "flat" means for this instrument. A rangebound call is written
+// freeform and settled by its author, which is honest.
+const readDirection=(v:unknown):NoteDirection|null=>v==='up'||v==='down'?v:null;
+const readOutcome=(v:unknown):NoteOutcome=>{
+  if(v==='hit'||v==='miss'||v==='partial'||v==='unsettleable')return v;
+  throw new AuthError(400,'An outcome is hit, miss, partial, or unsettleable.');
+};
 
 async function authenticatedAccount(req:IncomingMessage,service:PublicAuthService){
   const current=await service.session(sessionCookie(req));
@@ -558,6 +618,123 @@ export async function handleRequest(req:IncomingMessage,res:ServerResponse,depen
       if('sortOrder' in body&&Number.isInteger(body.sortOrder))patch.sortOrder=Number(body.sortOrder);
       if(!await dependencies.store.updateNetWorthItem(id,target,patch))throw new AuthError(404,'No such item.');
       return json(res,200,{ok:true});
+    }
+    // ---- trading notes ---------------------------------------------------------
+    //
+    // THERE IS NO VISIBILITY ROUTE HERE, and its absence is the feature. The
+    // public terminal has no groups, so a call is the author's own and nothing
+    // in this API can publish, share, copy, route or distribute one — absent
+    // from the routes rather than hidden behind a guard somebody has to
+    // remember.
+    //
+    // Everything else about the record survives: a call freezes once its window
+    // opens and only its reflection may be written afterwards, a verdict is
+    // given once, and `unsettleable` is a real answer that is never scored.
+    if(path==='/public/v1/notes'&&method==='GET'){
+      const id=await authenticatedAccount(req,authService);
+      const account=await dependencies.store.findAccountById(id);
+      const week=new URL(req.url||'/','http://public.invalid').searchParams.get('week');
+      return json(res,200,await readNotes(dependencies.store,id,account?.displayName??'You',week));
+    }
+    if(path==='/public/v1/notes'&&method==='POST'){
+      const id=await authenticatedAccount(req,authService); const body=await readBody(req);
+      const account=await dependencies.store.findAccountById(id);
+      const title=text(body.title,MAX_TITLE);
+      if(!title)throw new AuthError(400,'A note needs a title.');
+      const kind:NoteKind=body.kind==='observation'?'observation':'prediction';
+      const weekKey=typeof body.weekKey==='string'&&isWeekKey(body.weekKey)?body.weekKey:etWeekKey();
+      // A runaway-input guard, not a product limit.
+      if(await dependencies.store.countTradingNotesInWeek(id,weekKey)>=MAX_PER_WEEK){
+        throw new AuthError(400,`That is ${MAX_PER_WEEK} notes in one week already.`);
+      }
+      const prediction=kind==='prediction';
+      const window=defaultWindow(weekKey);
+      const windowOpensAt=prediction?(optionalNumber(body.windowOpensAt,'A window')??window.opensAt):null;
+      const deadlineAt=prediction?(optionalNumber(body.deadlineAt,'A deadline')??window.deadlineAt):null;
+      if(prediction&&windowOpensAt!=null&&deadlineAt!=null&&deadlineAt<=windowOpensAt){
+        throw new AuthError(400,'A prediction has to settle after its window opens.');
+      }
+      const created=await dependencies.store.createTradingNote(id,{
+        kind,title,body:text(body.body,MAX_BODY),instrument:text(body.instrument,MAX_INSTRUMENT),
+        direction:prediction?readDirection(body.direction):null,
+        targetPrice:prediction?optionalNumber(body.targetPrice,'A target price'):null,
+        confidence:prediction?readConfidence(body.confidence):null,
+        weekKey,windowOpensAt,deadlineAt,
+        // Nothing here can share a call, so nothing here stamps a lock. A call
+        // still freezes on its own when its window opens — see isLocked.
+        lockedAt:null,
+      });
+      return json(res,201,{note:toView(created,id,account?.displayName??'You',Date.now())});
+    }
+    if(path.startsWith('/public/v1/notes/')&&(method==='PATCH'||method==='DELETE'||method==='POST')){
+      const id=await authenticatedAccount(req,authService);
+      const account=await dependencies.store.findAccountById(id);
+      const owner=account?.displayName??'You';
+      const rest=decodeURIComponent(path.slice('/public/v1/notes/'.length));
+      const slash=rest.lastIndexOf('/');
+      const action=slash>0?rest.slice(slash+1):'';
+      const noteId=action==='settle'||action==='reflect'?rest.slice(0,slash):rest;
+      // 404 rather than 403 throughout: an id the caller does not own must not
+      // be distinguishable from one that does not exist, or it can be probed for.
+      const row=await dependencies.store.getTradingNote(id,noteId);
+      if(!row)throw new AuthError(404,'Note not found.');
+      const now=Date.now();
+
+      if(method==='DELETE'){
+        await dependencies.store.deleteTradingNote(id,noteId);
+        return json(res,200,{ok:true});
+      }
+
+      if(method==='POST'&&action==='settle'){
+        if(row.kind!=='prediction')throw new AuthError(400,'Only a prediction is settled.');
+        // Settling twice would let a verdict be revised after the fact, which is
+        // the same hole the lock closes on the call itself.
+        if(row.outcome!=null)throw new AuthError(400,'That call is already settled.');
+        const settleBody=await readBody(req);
+        const outcome=readOutcome(settleBody.outcome);
+        // A reflection may arrive with the verdict, which is how the screen
+        // settles and reflects in one press. Absent, the note stays in the queue
+        // owing one, which is correct rather than a gap.
+        const reflection=text(settleBody.reflection,MAX_REFLECTION);
+        const patch={outcome,settledAt:now,settledBy:'self' as const,
+          ...(reflection?{reflection,reflectedAt:now}:{})};
+        await dependencies.store.updateTradingNote(id,noteId,patch);
+        return json(res,200,{note:toView({...row,...patch,updatedAt:now},id,owner,now)});
+      }
+
+      if(method==='POST'&&action==='reflect'){
+        // Deliberately the ONE thing that stays editable on a locked call:
+        // looking back at a call is something you do more than once, and nothing
+        // about the record depends on the reflection being fixed.
+        const reflection=text((await readBody(req)).reflection,MAX_REFLECTION);
+        const patch={reflection,reflectedAt:reflection?now:null};
+        await dependencies.store.updateTradingNote(id,noteId,patch);
+        return json(res,200,{note:toView({...row,...patch,updatedAt:now},id,owner,now)});
+      }
+
+      if(method==='PATCH'){
+        // RULE 1. Everything below this line is the call itself, and the call is
+        // what must not change once the week has started. A call rewritten
+        // mid-week is not the call that was made.
+        if(row.kind==='prediction'&&isLocked(row,now)){
+          throw new AuthError(409,'This call is locked. You can still add a reflection to it.');
+        }
+        const body=await readBody(req);
+        const patch:Record<string,unknown>={};
+        if('title' in body){const t=text(body.title,MAX_TITLE); if(!t)throw new AuthError(400,'A note needs a title.'); patch.title=t}
+        if('body' in body)patch.body=text(body.body,MAX_BODY);
+        if('instrument' in body)patch.instrument=text(body.instrument,MAX_INSTRUMENT);
+        if(row.kind==='prediction'){
+          if('direction' in body)patch.direction=readDirection(body.direction);
+          if('targetPrice' in body)patch.targetPrice=optionalNumber(body.targetPrice,'A target price');
+          if('confidence' in body)patch.confidence=readConfidence(body.confidence);
+          if('windowOpensAt' in body)patch.windowOpensAt=optionalNumber(body.windowOpensAt,'A window');
+          if('deadlineAt' in body)patch.deadlineAt=optionalNumber(body.deadlineAt,'A deadline');
+        }
+        await dependencies.store.updateTradingNote(id,noteId,patch);
+        return json(res,200,{note:toView({...row,...patch,updatedAt:now} as NoteRow,id,owner,now)});
+      }
+      throw new AuthError(404,'Public route not found.');
     }
     if(path.startsWith('/public/v1/ai/'))return json(res,501,{message:'Public AI is not available.'});
     return json(res,404,{message:'Public route not found.'});

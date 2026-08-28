@@ -1,3 +1,5 @@
+import type { NoteDirection, NoteKind, NoteRow } from './notes.js';
+
 export type PublicAccount = { id:string; email:string; passwordHash:string; displayName:string; forcePasswordChange:boolean; temporaryPasswordExpiresAt?:number; privateGroupWarning:boolean; disabled:boolean };
 export type Challenge = { accountId:string; codeHash:string; expiresAt:number; attempts:number; consumedAt?:number };
 export type Session = { accountId:string; expiresAt:number; forcePasswordChange:boolean; revokedAt?:number };
@@ -13,6 +15,7 @@ export type BudgetKind = 'income'|'expense';
 export type BudgetCategory = { id:string; name:string; kind:BudgetKind; monthlyLimit:number|null; icon:string|null; sortOrder:number; archived:boolean };
 export type BudgetEntry = { id:string; categoryId:string; amountCents:number; note:string|null; occurredOn:string; source:string };
 export type NewBudgetCategory = { name:string; kind:BudgetKind; monthlyLimit:number|null; icon:string|null };
+export type NewBudgetEntry = { categoryId:string; amountCents:number; note:string|null; occurredOn:string };
 // ---- to do ------------------------------------------------------------------
 //
 // The shapes the portal's To Do component already reads. `code` is unused by
@@ -41,7 +44,18 @@ export type NetWorthCategory=(typeof NET_WORTH_CATEGORIES)[number];
 export type NetWorthKind='asset'|'liability';
 export type NetWorthItem={id:string;kind:NetWorthKind;category:NetWorthCategory;label:string;value:number;note:string|null;active:boolean;sortOrder:number;updatedAt:number};
 export type NetWorthSnapshot={onDate:string;assets:number;liabilities:number;netWorth:number};
-export type NewBudgetEntry = { categoryId:string; amountCents:number; note:string|null; occurredOn:string };
+// ---- trading notes ----------------------------------------------------------
+//
+// A prediction carries a window, a deadline and an outcome it still owes; an
+// observation leaves all of those null and is never settled. The rules and the
+// Eastern week arithmetic live in notes.ts.
+//
+// THERE IS NO `visibility` COLUMN AND NO PUBLISH ROUTE. The public terminal has
+// no groups, so a note is the author's own and there is nothing here that could
+// make it anybody else's — absent from the schema rather than hidden behind a
+// guard somebody has to remember.
+export type NewTradingNote={kind:NoteKind;title:string;body:string|null;instrument:string|null;direction:NoteDirection|null;targetPrice:number|null;confidence:number|null;weekKey:string;windowOpensAt:number|null;deadlineAt:number|null;lockedAt:number|null};
+export type TradingNotePatch=Partial<Pick<NoteRow,'title'|'body'|'instrument'|'direction'|'targetPrice'|'confidence'|'windowOpensAt'|'deadlineAt'|'outcome'|'settledAt'|'settledBy'|'settleNote'|'reflection'|'reflectedAt'>>;
 
 export interface PublicStore {
   findAccountByEmail(email:string):Promise<PublicAccount|undefined>;
@@ -109,6 +123,15 @@ export interface PublicStore {
   deleteNetWorthItem(accountId:string,id:string):Promise<boolean>;
   listNetWorthSnapshots(accountId:string):Promise<NetWorthSnapshot[]>;
   recordNetWorthSnapshot(accountId:string,onDate:string,assets:number,liabilities:number,netWorth:number):Promise<void>;
+  // Trading notes. Every read filters on the account and no method takes a
+  // "whose" parameter — there is no version of this feature where somebody
+  // else's calls are readable.
+  listTradingNotes(accountId:string,weekKey?:string):Promise<NoteRow[]>;
+  countTradingNotesInWeek(accountId:string,weekKey:string):Promise<number>;
+  getTradingNote(accountId:string,id:string):Promise<NoteRow|undefined>;
+  createTradingNote(accountId:string,value:NewTradingNote):Promise<NoteRow>;
+  updateTradingNote(accountId:string,id:string,patch:TradingNotePatch):Promise<boolean>;
+  deleteTradingNote(accountId:string,id:string):Promise<boolean>;
   audit(event:string,accountId:string|undefined,metadata:Record<string,unknown>):Promise<void>;
 }
 

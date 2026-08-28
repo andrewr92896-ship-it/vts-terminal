@@ -68,6 +68,22 @@ Updated: 2026-08-27.
   and refuses an incomplete total rather than approximating one — writing no
   history point in that state either.
 
+- Gave the public terminal a fifth record family with real storage: Trading
+  Notes. The three rules that make it a record rather than a diary are kept and
+  tested, because each fails silently if it regresses: a call FREEZES once its
+  window opens and only its reflection may be written afterwards, a verdict is
+  given once, and `unsettleable` is a real outcome that is counted on its own
+  and never scored as a miss. The Eastern, Monday-based week key is STORED
+  rather than derived, so a call cannot move between weeks when somebody changes
+  their display zone.
+- The group half is ABSENT rather than disabled: no `visibility` column, no
+  publish route, and nothing in the public API that could share, copy, route or
+  distribute a call. `autoSettles` is hard false and `openPrice` stays null
+  because there is no price feed — a `true` there would tell a trader the
+  terminal will grade the call for them, and it never would. `gradeCall` is kept
+  and tested anyway, so the rules a feed must follow (an unchanged price is a
+  MISS; no reference is unsettleable, never a miss) are already pinned.
+
 ## Partially completed
 
 - `PRIVATE_DATABASE_URL` is supported, but the physical existing database has not been moved or renamed.
@@ -84,7 +100,7 @@ Updated: 2026-08-27.
 ## Blocked/manual
 
 - Provision separate Railway services.
-- Provision a public database and public API (the API exists and has auth, market data, layout, early access, budget, to-do, investments and net worth; the remaining record families are still demo-only).
+- Provision a public database and public API (the API exists and has auth, market data, layout, early access, budget, to-do, investments, net worth and trading notes; the remaining record families are still demo-only).
 - Configure separate public authentication.
 - Configure private MFA.
 - Populate `PRIVATE_ACCESS_USER_IDS`. Since 7.42 an entry may be an ID, a username or an email — a username survives the database changing, which an ID does not.

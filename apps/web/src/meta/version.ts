@@ -11,9 +11,19 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 7.46';
+export const APP_VERSION = 'Beta V 7.47';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 7.47',
+    date: 'August 28, 2026',
+    notes: [
+      'Trading Notes now saves for real on the public terminal, rather than only in the demo.',
+      'A call locks once its week has started — after that you can add a reflection to it, but not change what you said.',
+      'A call that could not be settled is counted on its own and never scored as a miss, so it cannot drag a record down.',
+      'A public prediction is private to your account. There is no way to publish, share or send one.',
+    ],
+  },
   {
     version: 'Beta V 7.46',
     date: 'August 28, 2026',
