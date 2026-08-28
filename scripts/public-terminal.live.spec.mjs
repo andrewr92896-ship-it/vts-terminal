@@ -21,6 +21,10 @@ import { test, expect } from '@playwright/test';
 // exists.
 const base = process.env.PUBLIC_LIVE_BASE ?? 'https://127.0.0.1:4174';
 const cookie = process.env.PUBLIC_LIVE_COOKIE ?? '';
+// A second session on the same account. The sign-out test revokes whatever it
+// uses, so it burns this one rather than the one every other test needs — which
+// is what keeps the suite repeatable without reseeding between runs.
+const spareCookie = process.env.PUBLIC_LIVE_SPARE_COOKIE || cookie;
 
 const [name, value] = cookie.split('=');
 
@@ -46,6 +50,13 @@ async function open(page, screen) {
   const record = (error) => errors.push(`${screen}: ${error.stack ?? String(error)}`);
   page.on('pageerror', record);
   try {
+    // `about:blank` first, so this is always a REAL document load. Navigating
+    // to a URL the page is already on — same path, same hash — is a
+    // same-document navigation the browser does not reload for, so opening the
+    // screen you are already on did nothing at all: every "and it is still
+    // there after a reload" assertion was reading the DOM already on screen,
+    // which proves the opposite of what it claims.
+    await page.goto('about:blank');
     await page.goto(`${base}/#${screen}`, { waitUntil: 'networkidle' });
     await expect(page.locator('#root')).toBeVisible();
     // A render that throws asynchronously does so after the network settles, so
@@ -221,6 +232,96 @@ test('a visitor with no account can ask for early access', async ({ browser }) =
   await context.close();
 });
 
+test('a prediction and an investment account, written through the UI', async ({ page }) => {
+  // Two more of the write paths a customer actually uses, and two different
+  // response shapes: the note route answers with the row it made, the account
+  // route answers with the row and the adapter re-reads the portfolio around
+  // it. A screen reading the wrong key off either renders nothing and reports
+  // nothing, which is what makes writes worth driving rather than posting.
+  const errors = await open(page, 'notes');
+  const call = `Probe call ${Date.now()}`;
+  await page.getByPlaceholder('The call, in one line').fill(call);
+  await page.getByRole('button', { name: 'Save private prediction' }).click();
+  await expect(page.getByText(call).first()).toBeVisible();
+  expect(errors, 'the predictions screen threw while saving').toEqual([]);
+
+  const accounts = await open(page, 'inv_accounts');
+  const label = `Probe Brokerage ${Date.now()}`;
+  await page.getByRole('button', { name: 'Add an account' }).click();
+  await page.getByPlaceholder('Fidelity 401(k)').fill(label);
+  await page.getByRole('button', { name: 'Add account', exact: true }).click();
+  await expect(page.getByText(label).first()).toBeVisible();
+  expect(accounts, 'the accounts screen threw while saving').toEqual([]);
+
+  // Still there after a reload, which separates a row that was saved from one
+  // that was only rendered.
+  const again = await open(page, 'inv_accounts');
+  await expect(page.getByText(label).first()).toBeVisible();
+  expect(again).toEqual([]);
+
+  // The whole workspace shares one portfolio snapshot, so a write answering
+  // with a shape the other screens cannot read takes THEM down rather than the
+  // screen that made it — which is exactly how the Overview fault stayed
+  // hidden. Nothing is asserted about their content; that they still render on
+  // an account that now holds something is the point.
+  for (const screen of ['inv_overview', 'inv_holdings', 'inv_allocation']) {
+    expect(await open(page, screen), `${screen} threw after a write`).toEqual([]);
+  }
+});
+
+test('answering a study question is remembered by the server', async ({ page, browser }) => {
+  // The one public surface where state ACCUMULATES per deck rather than being a
+  // row somebody typed: the level, the streak and the per-category standing are
+  // computed from an answer count the server keeps. A game that plays fine and
+  // forgets everything on reload looks identical while you are playing it.
+  // Relative, never absolute: the deck carries whatever has already been
+  // answered against it, so what is checked is that answering MOVED the count.
+  // A deck with no history does not draw the line at all, so ABSENT is zero
+  // rather than a failure to read — the state this runs against on a fresh
+  // account, and the one an assertion written against a used deck misses.
+  const answered = async () => {
+    const line = page.getByText(/correct all-time/).first();
+    if (await line.count() === 0) return 0;
+    return Number((await line.innerText()).match(/\/\s*(\d+)/)?.[1] ?? NaN);
+  };
+
+  const errors = await open(page, 'st_game');
+  await page.getByRole('button', { name: 'Play' }).first().click();
+  await expect(page.locator('button').filter({ hasText: 'Answer A' }).first()).toBeVisible();
+  const before = await answered();
+
+  await page.locator('button').filter({ hasText: 'Answer A' }).first().click();
+  await page.getByRole('button', { name: /^Confirm/ }).click();
+  await expect.poll(answered, { message: 'answering did not move the count' }).toBe(before + 1);
+  expect(errors, 'the study game threw while answering').toEqual([]);
+
+  // Reloading is what separates a counter held in the component from one the
+  // server was actually told about.
+  // A DIFFERENT BROWSER, not a reload. The player keeps its own per-deck state
+  // on the device and syncs it up, so a reload in the same browser shows the
+  // count back whether or not the server was ever told — this test passed with
+  // the save path broken until it was written this way. Only a context that has
+  // never seen this deck can tell the two apart, which is also the case that
+  // matters: the same account on a second machine.
+  const elsewhere = await browser.newContext({ ignoreHTTPSErrors: true });
+  await elsewhere.addCookies([{
+    name, value: decodeURIComponent(value ?? ''), domain: '127.0.0.1', path: '/',
+    httpOnly: true, secure: true, sameSite: 'Lax',
+  }]);
+  const second = await elsewhere.newPage();
+  await second.goto(`${base}/#st_game`, { waitUntil: 'networkidle' });
+  await second.getByRole('button', { name: 'Play' }).first().click();
+  await expect(second.locator('button').filter({ hasText: 'Answer A' }).first()).toBeVisible();
+  // POLLED: the deck loads first and the account's saved progress is a second
+  // request behind it, so reading once races the hydrate.
+  await expect.poll(async () => {
+    const line = second.getByText(/correct all-time/).first();
+    if (await line.count() === 0) return 0;
+    return Number((await line.innerText()).match(/\/\s*(\d+)/)?.[1] ?? NaN);
+  }, { message: 'a second browser on the same account saw no progress' }).toBe(before + 1);
+  await elsewhere.close();
+});
+
 test('every remaining screen renders without throwing', async ({ page }) => {
   // The ones with nothing seeded. Nothing is asserted about their content —
   // there is none — but a thrown render leaves the root dead for every later
@@ -249,9 +350,20 @@ test('signing out revokes the session, not just the screen', async ({ browser, r
   // signed in on whatever computer it was signed in on, for the twelve hours
   // the session cookie lasts. The route and the client method both existed the
   // whole time.
+  // Signing out CONSUMES a session, so this test cannot be repeated against one
+  // seed. Rather than fail on a second local run and look like a regression, it
+  // says what happened: in CI the seed runs before every suite, so it always
+  // has a live session and always runs.
+  const alive = await request.get(`${base}/public/v1/auth/session`, {
+    headers: { cookie: spareCookie }, ignoreHTTPSErrors: true,
+  });
+  test.skip(alive.status() !== 200,
+    'the spare session was already signed out — reseed to run this again');
+
+  const [spareName, spareValue] = spareCookie.split('=');
   const context = await browser.newContext({ ignoreHTTPSErrors: true });
   await context.addCookies([{
-    name, value: decodeURIComponent(value ?? ''), domain: '127.0.0.1', path: '/',
+    name: spareName, value: decodeURIComponent(spareValue ?? ''), domain: '127.0.0.1', path: '/',
     httpOnly: true, secure: true, sameSite: 'Lax',
   }]);
   const page = await context.newPage();
@@ -264,7 +376,7 @@ test('signing out revokes the session, not just the screen', async ({ browser, r
   // And the session is DEAD on the server, which is the half that matters: a
   // screen that merely forgot you is not a sign-out.
   const still = await request.get(`${base}/public/v1/auth/session`, {
-    headers: { cookie }, ignoreHTTPSErrors: true,
+    headers: { cookie: spareCookie }, ignoreHTTPSErrors: true,
   });
   expect(still.status(), 'the session still answered after signing out').toBe(401);
   await context.close();
