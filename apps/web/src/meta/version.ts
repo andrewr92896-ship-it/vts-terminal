@@ -11,9 +11,16 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 7.65';
+export const APP_VERSION = 'Beta V 7.66';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 7.66',
+    date: '2026-08-28',
+    notes: [
+      'Fixed on the public terminal: on a phone, tapping a workspace closed the navigation drawer, so you had to reopen it to pick the section you were going for. It stays open now and closes when you pick a section.',
+    ],
+  },
   {
     version: 'Beta V 7.65',
     date: '2026-08-28',

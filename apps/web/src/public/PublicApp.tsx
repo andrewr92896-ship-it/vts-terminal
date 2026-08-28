@@ -53,12 +53,17 @@ export function PublicApp(){
   if(!stay)setWorkspace(publicWorkspaceFor(next).key);
   location.hash=next;setScreen(next);setMobileOpen(false);
  };
+ // THE PHONE DRAWER STAYS OPEN WHEN THE WORKSPACE CHANGES, and closes only on a
+ // SECTION (see `select` above). Picking a workspace is half a choice — the
+ // section list underneath it has just been replaced and is what you came for —
+ // so closing here means reopening the drawer every single time to finish the
+ // job you started. The private terminal has always worked this way; this shell
+ // was closing on both.
  const selectWorkspace=(next:PublicWorkspaceKey)=>{
   const nav=publicNavFor(next);
   const first=next===MY_TERMINAL_WORKSPACE?[...myTerminalKeys][0] as PublicScreenKey|undefined:nav.sections[0]?.key;
   setWorkspace(next);
   if(first){location.hash=first;setScreen(first)}
-  setMobileOpen(false);
  };
  async function saveSections(next:MyTerminalLayout){
   setSaving(true);

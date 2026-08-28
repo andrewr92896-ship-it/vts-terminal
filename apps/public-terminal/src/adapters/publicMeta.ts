@@ -2,8 +2,11 @@ export interface PatchNote{version:string;date:string;notes:string[]}
 // The public terminal's own version and its historical archive. Separate from the
 // private terminal's `meta/version` (replaced at the build seam) because they are
 // different products on different release trains.
-export const APP_VERSION='Public Candidate V 1.3';
+export const APP_VERSION='Public Candidate V 1.4';
 export const PATCH_NOTES:PatchNote[]=[
+ {version:'Public Candidate V 1.4',date:'August 28, 2026',notes:[
+  'Fixed: on a phone, tapping a workspace closed the navigation drawer, so you had to reopen it to pick the section you were going for. It stays open now, and closes when you pick a section.',
+ ]},
  {version:'Public Candidate V 1.3',date:'August 28, 2026',notes:[
   'Fixed: on a phone the sidebar opened as a column of unlabelled icons. At that width it is a slide-over drawer, and a drawer has to carry its labels.',
   'Fixed: the menu button on a phone was drawing a blank square.',

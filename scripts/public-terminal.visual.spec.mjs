@@ -238,8 +238,15 @@ test('the phone drawer opens with labels, not a column of icons', async ({ page 
   await expect(sidebar.getByText('Advanced Trading', { exact: true }).first()).toBeVisible();
   await expect(sidebar.getByText('Market Data', { exact: true }).first()).toBeVisible();
 
-  // And picking a row closes the drawer rather than leaving it over the screen.
-  await sidebar.getByText('Market Data', { exact: true }).first().click();
+  // Picking a WORKSPACE keeps the drawer open: its section list has just been
+  // replaced and is what you came for, so closing here means reopening the
+  // drawer every time to finish the job. Closing on both is what it did.
+  await sidebar.getByText('Studies', { exact: true }).first().click();
+  await expect(sidebar).toBeInViewport();
+  await expect(sidebar.getByText('Flashcards', { exact: true }).first()).toBeVisible();
+
+  // Picking a SECTION is the whole choice, so the drawer gets out of the way.
+  await sidebar.getByText('Flashcards', { exact: true }).first().click();
   await expect(sidebar).not.toBeInViewport();
 });
 
