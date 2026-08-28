@@ -316,6 +316,13 @@ rather than observed to pass:**
   paths a second time. Only a route-not-found counts — a 400 means the route is
   there and disliked an empty body.
 
+- **The `live-account` CI job** drives the terminal as a real signed-in account
+  against the real API and a real database, and asserts that SEEDED DATA IS ON
+  THE SCREEN rather than that the page rendered. The demo job cannot see this: a
+  field the server spells one way and a component reads another renders as an
+  empty list, never as an error, and a blank page still passes "the root is
+  visible". Proved by renaming a payload key and watching exactly one test fail.
+
 **`npm run db:migrate:public` is the runner**, idempotent, on the API's start
 command so every deploy applies what is pending. It **refuses to run against a
 database holding non-`public_*` tables** — that is the private database's shape,

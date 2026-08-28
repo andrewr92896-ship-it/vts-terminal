@@ -44,3 +44,74 @@ jobs:
           path: test-results/public-terminal-update-existing-pages-v1
           if-no-files-found: error
           retention-days: 14
+
+  # The same terminal, driven as a REAL SIGNED-IN ACCOUNT against the real API
+  # and a real database.
+  #
+  # The job above drives the DEMO, which answers out of module memory. So the one
+  # thing neither it nor anything else can see is whether the server's payloads
+  # actually satisfy what the screens read — a field the server spells one way
+  # and a component reads another renders as an empty list, not as an error. That
+  # exact fault shipped once and was found by hand.
+  live-account:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          # Not `public`: that is a reserved role in Postgres.
+          POSTGRES_PASSWORD: vts
+          POSTGRES_USER: vts
+          POSTGRES_DB: public_live
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U vts"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      PUBLIC_DATABASE_URL: postgres://vts:vts@127.0.0.1:5432/public_live
+      PUBLIC_SESSION_SIGNING_KEY: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+      PUBLIC_CHALLENGE_PEPPER: bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
+      PUBLIC_TRUSTED_DEVICE_SIGNING_KEY: cccccccccccccccccccccccccccccccccccccccccccccccc
+      # Throwaway values for a throwaway database, and they are in the file
+      # deliberately: nothing here protects anything, and a repository secret
+      # would imply otherwise. The same reason `verify` generates its own.
+      PUBLIC_ALLOWED_ORIGINS: https://127.0.0.1:4174
+      PUBLIC_COOKIE_SECURE: 'true'
+      PUBLIC_MAIL_FROM: no-reply@example.com
+      PUBLIC_SMTP_URL: smtp://127.0.0.1:1025
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run build:public
+      - run: npm --workspace @vts/public-api run build
+      - run: npm install --no-save --package-lock=false @playwright/test@1.55.0
+      - run: npx playwright install --with-deps chromium
+
+      - run: npm run db:migrate:public
+
+      - name: Seed one real account
+        run: echo "PUBLIC_LIVE_COOKIE=$(node scripts/seed-public-account.mjs --cookie)" >> $GITHUB_ENV
+
+      - name: Start the public stack
+        run: PORT=4174 node scripts/serve-public-stack.mjs > /tmp/vts-public-stack.log 2>&1 &
+
+      - name: Wait for the stack
+        run: |
+          for attempt in {1..30}; do
+            curl --fail --silent http://127.0.0.1:4174/public/v1/health >/dev/null && exit 0
+            sleep 1
+          done
+          cat /tmp/vts-public-stack.log
+          exit 1
+
+      - run: npx playwright test --config=playwright.live.config.mjs
