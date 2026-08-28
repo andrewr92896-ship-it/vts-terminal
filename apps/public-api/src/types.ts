@@ -81,6 +81,16 @@ export type StudyGuideDetail=StudyGuideRow&{slides:GuideSlide[]};
 export type NewStudyGuide={name:string;description:string|null;slides:GuideSlide[]};
 export type StudyGuidePatch={name?:string;description?:string|null;slides?:GuideSlide[]};
 
+// ---- support ----------------------------------------------------------------
+//
+// Reporting a bug is free on every account and never sits behind the paid or AI
+// paths — a user who cannot reach help is a user who cannot tell you their
+// payment failed.
+export type BugRole='user'|'ai'|'admin';
+export type BugMessage={id:string;role:BugRole;body:string;createdAt:number};
+export type BugReport={id:string;author:string;summary:string;status:string;createdAt:number;updatedAt:number;messages:BugMessage[]};
+export type Suggestion={id:string;author:string;body:string;status:string;createdAt:number};
+
 export interface PublicStore {
   findAccountByEmail(email:string):Promise<PublicAccount|undefined>;
   findAccountById(id:string):Promise<PublicAccount|undefined>;
@@ -178,6 +188,13 @@ export interface PublicStore {
   createStudyGuide(accountId:string,value:NewStudyGuide):Promise<StudyGuideDetail>;
   updateStudyGuide(accountId:string,id:string,patch:StudyGuidePatch):Promise<StudyGuideDetail|undefined>;
   deleteStudyGuide(accountId:string,id:string):Promise<boolean>;
+  // Support. Reads are the caller's own reports; there is no admin surface on
+  // the public side, so nothing here answers for anybody else.
+  listBugReports(accountId:string):Promise<BugReport[]>;
+  getBugReport(accountId:string,id:string):Promise<BugReport|undefined>;
+  createBugReport(accountId:string,summary:string,body:string):Promise<BugReport>;
+  appendBugMessage(accountId:string,id:string,role:BugRole,body:string):Promise<BugReport|undefined>;
+  createSuggestion(accountId:string,body:string):Promise<Suggestion>;
   audit(event:string,accountId:string|undefined,metadata:Record<string,unknown>):Promise<void>;
 }
 

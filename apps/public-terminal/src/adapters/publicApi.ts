@@ -136,6 +136,14 @@ const liveRecords:Record<string,(...args:any[])=>Promise<unknown>>={
   saveStudyGuide:(input:unknown)=>publicRequest('/studies/guides',{method:'POST',body:JSON.stringify(input)}),
   updateStudyGuide:(id:string,patch:unknown)=>publicRequest(`/studies/guides/${encodeURIComponent(id)}`,{method:'PUT',body:JSON.stringify(patch)}),
   deleteStudyGuide:(id:string)=>publicRequest(`/studies/guides/${encodeURIComponent(id)}`,{method:'DELETE'}),
+
+  // Reporting a bug is free on every account and is the channel through which
+  // everything else gets reported, so it is wired for real accounts rather than
+  // left as a demo-only screen.
+  myBugReports:()=>publicRequest('/support/bugs'),
+  createBugReport:(body:string)=>publicRequest('/support/bugs',{method:'POST',body:JSON.stringify({body})}),
+  replyBugReport:(id:string,body:string)=>publicRequest(`/support/bugs/${encodeURIComponent(id)}/reply`,{method:'POST',body:JSON.stringify({body})}),
+  sendSuggestion:(body:string)=>publicRequest('/support/suggestions',{method:'POST',body:JSON.stringify({body})}),
 };
 
 
@@ -171,11 +179,12 @@ const evidenceEmpty=(name:string):any=>{
 export const api:any=new Proxy(baseApi as any,{get(target,key:string){if(key in target)return target[key];return async(...args:any[])=>{
  // AI fails closed EVERYWHERE until the separate provider migration, demo
  // included: a showcase must never imply a capability that is not wired.
- // `flashcardsFromGame` is named in full because none of the words below appear
- // in it: it is an AI route (the model pulls the terms out of a study game), and
- // without it the call fell through to a "route not found" — which reads as a
- // broken button rather than a feature that is switched off.
- if(/(import|extract|chat|generate|analyze|audit|categorize|preview|fixture|tutor)/i.test(key)||/^ai/i.test(key)||key==='flashcardsFromGame')throw new ApiError(501,'AI features are moving to a new provider and are switched off in the public terminal.');
+ // Two names are spelled out because none of the words below appear in them,
+ // and both are AI routes: `flashcardsFromGame` has a model pull the terms out
+ // of a study game, and `closeFundedTrade` reads the result off a screenshot.
+ // Without them the calls fell through to a "route not found", which reads as a
+ // broken button rather than a feature that is deliberately switched off.
+ if(/(import|extract|chat|generate|analyze|audit|categorize|preview|fixture|tutor)/i.test(key)||/^ai/i.test(key)||key==='flashcardsFromGame'||key==='closeFundedTrade')throw new ApiError(501,'AI features are moving to a new provider and are switched off in the public terminal.');
  // The DEMO comes first, always. It is the showcase, it answers out of module
  // memory, and `publicRequest` refuses to reach the service from inside it.
  if(isDemo()){const answered=demoCall(key,args);return answered.handled?answered.value:evidenceEmpty(key)}

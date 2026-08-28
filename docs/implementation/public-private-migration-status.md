@@ -101,8 +101,56 @@ Updated: 2026-08-27.
 - Budget money now arrives as DOLLARS and is converted to cents at the edge,
   matching the private route exactly, so the adapter carries no unit conversion —
   the one place a 100× error could hide silently.
-- Still demo-only, and now visibly so: the investments and trading-notes WRITE
-  paths in the demo store (they fall through to an empty fixture).
+- **Fixed the demo's own write gaps.** The Investments workspace BROKE in the
+  demo, silently: an unhandled name answers with an empty-but-generic payload,
+  so `const { portfolio } = await api.createInvestmentAccount(...)`
+  destructured `undefined` and the screen published nothing — no error, just a
+  blank workspace the moment a visitor tried the first thing they think of. All
+  ten investment writes, the contribution/goal/dividend paths and the to-do undo
+  are handled now, each mutating the seeded state the reads already derive from,
+  so a write and the figure it changes cannot disagree.
+- `npm run verify:demo-writes` drives every one of them to the act it exists
+  for, asserting on the field the SCREEN destructures. It is in `verify`, so CI
+  runs it. This is the half a screenshot test cannot see: a capture asserts a
+  page rendered, not that pressing "add" on it did anything.
+- **`npm run verify:demo-coverage` closes the whole class.** It walks the public
+  screen tree, collects every `api.*` call reachable from it, and requires each
+  to be answered — served live, served by the demo, refused as AI, or NAMED in
+  the script with the reason it is deliberately unbuilt. The named list is the
+  point: a gap somebody decided to leave is fine, a gap nobody knows about is
+  not. Proved to fail by removing a handler, not merely observed to pass.
+- Auditing that way found the rest of the class and fixed it: the hand-kept
+  funded book's writes (Manual Trades is a retained nav row), and reporting a
+  bug — which is free on every account, is what somebody evaluating the product
+  is most likely to press, and put `undefined` straight into the list the screen
+  renders.
+- It also found a SECOND AI route slipping the guard by name, after
+  `flashcardsFromGame`: `closeFundedTrade` reads the result off a screenshot.
+  Both are now refused by name rather than falling through to "route not found".
+- **The check now covers a second class: works in the demo, 404s for a real
+  account.** That one is easy to miss and expensive — the screen that was the
+  proof the product works is the screen that breaks for the first customer.
+  Twelve calls were in that state. Each is now either wired live or NAMED in
+  `DEMO_ONLY` with its reason. Proved to fail by unnaming one.
+
+- Gave the public terminal a ninth record family with real storage: SUPPORT —
+  reporting a bug, replying on the thread, and sending a suggestion. Wired for
+  real accounts rather than left demo-only because it is the channel through
+  which everything else gets reported: a user who cannot reach help is a user
+  who cannot tell you their payment failed. It sits on nothing but a session —
+  no tier, no opt-in, no entitlement.
+- A reply can only ever be posted as `user`. There is no admin surface on the
+  public side, so a client must not be able to post a message that renders as
+  staff having answered. The summary is derived from the first line rather than
+  typed: a reporter should not have to title their own bug report.
+- No AI triage, and that is stated rather than stubbed. The private side runs an
+  intake conversation to draw a usable description out of a person; here the
+  report is simply what was written.
+
+- Still demo-only BY DECISION and written down: the hand-kept trade log and the
+  funded book (`addTrade`, the funded account and trade writes). Both are
+  public-safe features — a record of trades somebody typed in, no broker behind
+  them — and both are storage that has not been built yet.
 
 - Gave the public terminal a sixth record family with real storage: STUDY GAMES
   — the decks, their questions, each learner's progress, and combining games.
@@ -171,7 +219,7 @@ Updated: 2026-08-27.
 ## Blocked/manual
 
 - Provision separate Railway services.
-- Provision a public database and public API (the API exists and has auth, market data, layout, early access, budget, to-do, investments, net worth, trading notes, study games, flashcards and presentations; the remaining record families are still demo-only).
+- Provision a public database and public API (the API exists and has auth, market data, layout, early access, budget, to-do, investments, net worth, trading notes, study games, flashcards, presentations and support; the remaining record families are still demo-only).
 - Configure separate public authentication.
 - Configure private MFA.
 - Populate `PRIVATE_ACCESS_USER_IDS`. Since 7.42 an entry may be an ID, a username or an email — a username survives the database changing, which an ID does not.

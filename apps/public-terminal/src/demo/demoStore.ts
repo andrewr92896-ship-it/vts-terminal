@@ -170,6 +170,18 @@ const DEMO_DIVIDENDS = [0, 3, 6, 9].flatMap((quarter, index) => ([
   { id: `dv-${index}-b`, accountId: 'ia3', kind: 'dividend', symbol: 'BND', amount: 22.4 + index * 1.2, quantity: null, price: null, occurredAt: new Date(demoAgo(quarter * 30 + 5)).toISOString().slice(0, 10), taxYear: new Date().getFullYear(), note: null, createdAt: demoAgo(quarter * 30 + 5) },
 ])) as any[];
 
+// Contributions and goals are seeded EMPTY on purpose — they are the two things
+// a visitor is most likely to add themselves, and an empty list is what makes
+// "add one and watch the figure move" the first thing they see.
+const DEMO_CONTRIBUTIONS: any[] = [];
+const DEMO_GOALS: any[] = [];
+
+// A bug report a demo visitor files is kept for the session, like every other
+// demo write. `myBugReports` is a fixture-only name otherwise, so the report
+// would be accepted and then not be in the list it was just added to.
+const DEMO_BUG_REPORTS: any[] = [];
+const DEMO_SUGGESTIONS: any[] = [];
+
 // ---- Writes -----------------------------------------------------------------
 //
 // Each one mutates module state and returns the same payload its read returns,
@@ -259,6 +271,197 @@ const writes: Record<string, (args: any[]) => unknown> = {
     if (index >= 0) demoState.budgetEntries.splice(index, 1);
     return budget();
   },
+  // ---- Investments ----------------------------------------------------------
+  //
+  // WITHOUT THESE THE WORKSPACE BREAKS IN THE DEMO, and it breaks silently: an
+  // unhandled name answers with an empty-but-generic payload, so
+  // `const { portfolio } = await api.createInvestmentAccount(...)` destructures
+  // `undefined` and the screen publishes nothing. The demo is the showcase, and
+  // Investments is the workspace a visitor is most likely to try adding to.
+  //
+  // Each one mutates the seeded arrays that `portfolio()` already derives from,
+  // so the totals, the allocation and the unpriced count all move with the write
+  // rather than being patched separately.
+  createInvestmentAccount: ([input]) => {
+    const id = nextId('demo-ia');
+    demoAccounts.push({ id, kind: String(input?.kind ?? 'brokerage'), label: String(input?.label ?? 'New account'),
+      institution: input?.institution ?? null, source: 'manual', cashBalance: num(input?.cashBalance),
+      note: input?.note ?? null, createdAt: Date.now(), updatedAt: Date.now() });
+    return { id, portfolio: portfolio() };
+  },
+  updateInvestmentAccount: ([id, patch]) => {
+    const row = demoAccounts.find((a) => a.id === id);
+    if (row) Object.assign(row, patch, { cashBalance: num(patch?.cashBalance, row.cashBalance), updatedAt: Date.now() });
+    return { portfolio: portfolio() };
+  },
+  deleteInvestmentAccount: ([id]) => {
+    const index = demoAccounts.findIndex((a) => a.id === id);
+    if (index >= 0) demoAccounts.splice(index, 1);
+    // The holdings go with the account they were in — leaving them would put a
+    // holding in the totals that belongs to an account no longer on the screen.
+    for (let i = demoHoldings.length - 1; i >= 0; i -= 1) {
+      if (demoHoldings[i]!.accountId === id) demoHoldings.splice(i, 1);
+    }
+    return { portfolio: portfolio() };
+  },
+  createInvestmentHolding: ([input]) => {
+    const id = nextId('demo-ih');
+    const account = demoAccounts.find((a) => a.id === input?.accountId) ?? demoAccounts[0];
+    const price = input?.manualPrice == null ? null : num(input.manualPrice);
+    demoHoldings.push({
+      id, accountId: account?.id ?? 'ia1', accountLabel: account?.label ?? '',
+      symbol: input?.symbol ?? null, name: String(input?.name ?? 'New holding'),
+      assetClass: String(input?.assetClass ?? 'fund'), quantity: num(input?.quantity),
+      costBasis: input?.costBasis == null ? null : num(input.costBasis),
+      // NO LIVE QUOTES in the demo, so a holding is priced from what was typed or
+      // it is UNPRICED — which `portfolio()` counts and leaves out of the totals
+      // rather than valuing at zero. Adding one with no price is the honest way
+      // to show that behaviour.
+      price, priceSource: price == null ? 'none' : 'manual', previousClose: null,
+      sector: input?.sector ?? null, region: input?.region ?? null,
+      value: null, gain: null, gainPct: null, dayChange: null, dayChangePct: null,
+      manualPrice: price, manualPriceAt: price == null ? null : Date.now(),
+      note: input?.note ?? null, createdAt: Date.now(), updatedAt: Date.now(),
+    });
+    return { id, portfolio: portfolio() };
+  },
+  updateInvestmentHolding: ([id, patch]) => {
+    const row = demoHoldings.find((h) => h.id === id);
+    if (row) {
+      const price = patch?.manualPrice === undefined ? row.price : (patch.manualPrice == null ? null : num(patch.manualPrice));
+      Object.assign(row, patch, { price, manualPrice: price, priceSource: price == null ? 'none' : 'manual',
+        quantity: num(patch?.quantity, row.quantity), updatedAt: Date.now() });
+    }
+    return { portfolio: portfolio() };
+  },
+  deleteInvestmentHolding: ([id]) => {
+    const index = demoHoldings.findIndex((h) => h.id === id);
+    if (index >= 0) demoHoldings.splice(index, 1);
+    return { portfolio: portfolio() };
+  },
+  createInvestmentTransaction: ([input]) => {
+    const id = nextId('demo-itx');
+    const occurredAt = new Date(num(input?.occurredAt, Date.now())).toISOString().slice(0, 10);
+    const row = { id, accountId: input?.accountId ?? demoAccounts[0]?.id, kind: String(input?.kind ?? 'contribution'),
+      symbol: input?.symbol ?? null, amount: Math.abs(num(input?.amount)), quantity: input?.quantity ?? null,
+      price: input?.price ?? null, occurredAt, taxYear: input?.taxYear ?? new Date().getFullYear(),
+      note: input?.note ?? null, createdAt: Date.now() };
+    // A dividend belongs on the Dividends screen and a contribution on
+    // Contributions, so each lands where its own screen reads from — otherwise
+    // the entry is recorded and then appears nowhere.
+    (row.kind === 'dividend' ? DEMO_DIVIDENDS : DEMO_CONTRIBUTIONS).unshift(row);
+    return { id, entries: clone(row.kind === 'dividend' ? DEMO_DIVIDENDS : DEMO_CONTRIBUTIONS) };
+  },
+  deleteInvestmentTransaction: ([id]) => {
+    for (const list of [DEMO_DIVIDENDS, DEMO_CONTRIBUTIONS]) {
+      const index = list.findIndex((e) => e.id === id);
+      if (index >= 0) { list.splice(index, 1); return { entries: clone(list) }; }
+    }
+    return { entries: clone(DEMO_DIVIDENDS) };
+  },
+  createInvestmentGoal: ([input]) => {
+    const id = nextId('demo-goal');
+    DEMO_GOALS.push({ id, label: String(input?.label ?? 'New goal'), kind: input?.kind ?? null,
+      targetAmount: input?.targetAmount == null ? null : num(input.targetAmount),
+      targetDate: input?.targetDate ?? null, targetYear: input?.targetYear ?? null,
+      note: input?.note ?? null, createdAt: Date.now() });
+    return { id };
+  },
+  deleteInvestmentGoal: ([id]) => {
+    const index = DEMO_GOALS.findIndex((g) => g.id === id);
+    if (index >= 0) DEMO_GOALS.splice(index, 1);
+    return { ok: true };
+  },
+  // Undo. The item is rebuilt from what the delete handed back, so pressing undo
+  // puts back the row that was removed rather than a fresh one.
+  restoreTodoItem: ([item]) => {
+    if (item?.id && !demoState.todo.some((i) => i.id === item.id)) {
+      demoState.todo.splice(Math.min(num(item.position, demoState.todo.length), demoState.todo.length), 0, {
+        id: item.id, code: '', text: String(item.text ?? ''), marker: 'none', checkable: true,
+        done: item.done === true, recurring: false, timer: null, overdue: false, dueToday: false,
+      });
+    }
+    return todo();
+  },
+  // ---- The hand-kept funded book ---------------------------------------------
+  //
+  // Manual Trades is a retained nav row, so a visitor can reach it and press
+  // Add. Every write returns the same payload the read returns, and the
+  // account's headline figures are derived from its trades — log one and the
+  // balance above it moves.
+  addFundedAccount: ([input]) => {
+    DEMO_FUNDED_ACCOUNTS.push({
+      id: nextId('demo-fa'), ownerId: 'demo-user', owner: 'demo', isMine: true,
+      platform: String(input?.platform ?? 'Hand-kept'), label: String(input?.label ?? 'New book'),
+      currency: String(input?.currency ?? 'USD'), startingBalance: num(input?.startingBalance),
+      balance: num(input?.startingBalance), commissionPerLot: input?.commissionPerLot ?? null,
+      notes: input?.notes ?? null, realizedPl: 0, tradeCount: 0,
+      pnl: { daily: 0, weekly: 0, monthly: 0 }, trades: [],
+      createdAt: Date.now(), updatedAt: Date.now(),
+    });
+    return funded();
+  },
+  updateFundedAccount: ([id, patch]) => {
+    const row = DEMO_FUNDED_ACCOUNTS.find((a) => a.id === id);
+    if (row) Object.assign(row, patch, { updatedAt: Date.now() });
+    return funded();
+  },
+  removeFundedAccount: ([id]) => {
+    const index = DEMO_FUNDED_ACCOUNTS.findIndex((a) => a.id === id);
+    if (index >= 0) DEMO_FUNDED_ACCOUNTS.splice(index, 1);
+    return funded();
+  },
+  addFundedTrade: ([accountId, input]) => {
+    const account = DEMO_FUNDED_ACCOUNTS.find((a) => a.id === accountId) ?? DEMO_FUNDED_ACCOUNTS[0];
+    if (account) {
+      account.trades.unshift({
+        id: nextId('demo-ft'), instrument: String(input?.instrument ?? 'EUR/USD'),
+        side: input?.side === 'short' ? 'short' : 'long', units: num(input?.units),
+        entryPrice: num(input?.entryPrice), exitPrice: input?.exitPrice == null ? null : num(input.exitPrice),
+        stopLoss: input?.stopLoss ?? null, takeProfit: input?.takeProfit ?? null,
+        // Null realized P/L on an OPEN trade, never zero: a position that has
+        // not closed has not made or lost anything yet, and a zero would score
+        // as a break-even in every figure that reads it.
+        realizedPl: input?.exitPrice == null ? null : num(input?.realizedPl),
+        openedAt: Date.now(), closedAt: input?.exitPrice == null ? null : Date.now(),
+      });
+    }
+    return funded();
+  },
+  removeFundedTrade: ([id]) => {
+    for (const account of DEMO_FUNDED_ACCOUNTS) {
+      const index = account.trades.findIndex((t: any) => t.id === id);
+      if (index >= 0) { account.trades.splice(index, 1); break; }
+    }
+    return funded();
+  },
+  // ---- Reporting a bug, and sending a suggestion ------------------------------
+  //
+  // Reporting a bug is free on every account and is the one thing a visitor
+  // evaluating the product is most likely to try. Unhandled, `createBugReport`
+  // answered without a `report`, and the screen prepends that `undefined`
+  // straight into the list it renders.
+  createBugReport: ([body]) => {
+    const now = Date.now();
+    const report = { id: nextId('demo-bug'), author: 'Demo Trader', status: 'open',
+      summary: (String(body ?? '').split('\n')[0] || 'Bug report').slice(0, 140), createdAt: now, updatedAt: now,
+      messages: [{ id: nextId('demo-msg'), role: 'user', body: String(body ?? ''), createdAt: now }] };
+    DEMO_BUG_REPORTS.unshift(report);
+    return { report: clone(report) };
+  },
+  replyBugReport: ([id, body]) => {
+    const report = DEMO_BUG_REPORTS.find((r) => r.id === id);
+    if (report) {
+      report.messages.push({ id: nextId('demo-msg'), role: 'user', body: String(body ?? ''), createdAt: Date.now() });
+      report.updatedAt = Date.now();
+    }
+    return { report: clone(report ?? { id, author: 'Demo Trader', status: 'open', summary: '', createdAt: Date.now(), updatedAt: Date.now(), messages: [] }) };
+  },
+  sendSuggestion: ([body]) => {
+    const suggestion = { id: nextId('demo-sug'), body: String(body ?? ''), author: 'Demo Trader', status: 'new', createdAt: Date.now() };
+    DEMO_SUGGESTIONS.unshift(suggestion);
+    return { suggestion: clone(suggestion) };
+  },
   createNote: ([input]) => {
     demoState.notes.unshift({
       id: nextId('demo-note'), ownerId: 'demo-user', owner: 'demo', ownerName: 'Demo Trader', isMine: true,
@@ -317,7 +520,7 @@ const fundedTrade = (id: string, instrument: string, side: 'long'|'short', units
 
 // A hand-kept book with trades in it, so the screen shows what it is for rather
 // than an empty state.
-const DEMO_FUNDED = {
+const DEMO_FUNDED_ACCOUNTS: any[] = [{
   id: 'demo-funded-1', ownerId: 'demo-user', owner: 'demo', isMine: true,
   platform: 'Hand-kept', label: 'Practice book', currency: 'USD',
   balance: 12_480, startingBalance: 12_000, commissionPerLot: null, notes: null,
@@ -328,12 +531,26 @@ const DEMO_FUNDED = {
     fundedTrade('demo-ft-3', 'XAU/USD', 'long', 3, 4_598.2, null, null, 1),
   ],
   createdAt: demoAgo(60), updatedAt: demoAgo(1),
-};
+}];
+
+// The account's headline figures are DERIVED from its trades, so logging one
+// moves the balance above it rather than leaving the two to disagree.
+function fundedAccounts() {
+  return DEMO_FUNDED_ACCOUNTS.map((account) => {
+    const closed = account.trades.filter((t: any) => t.exitPrice != null);
+    const realizedPl = closed.reduce((sum: number, t: any) => sum + num(t.realizedPl), 0);
+    return { ...account, realizedPl, tradeCount: account.trades.length,
+      balance: num(account.startingBalance) + realizedPl,
+      pnl: { ...account.pnl, monthly: realizedPl } };
+  });
+}
+const funded = () => ({ accounts: clone(fundedAccounts()), fundedTileColor: null });
 
 const capitalTotal = (value: number) => ({ value, mode: 'manual' as const, stated: 1, unstated: 0, mixedCurrency: false });
 
 const reads: Record<string, () => unknown> = {
-  funded: () => ({ accounts: [clone(DEMO_FUNDED)], fundedTileColor: null }),
+  funded,
+  myBugReports: () => ({ reports: clone(DEMO_BUG_REPORTS) }),
   studyDecks: () => ({ decks: clone(DEMO_DECKS) }),
   studyGames: () => ({ decks: clone(DEMO_DECKS) }),
   studyFlashcardSets: () => ({ sets: clone(DEMO_SETS) }),
@@ -348,9 +565,25 @@ const reads: Record<string, () => unknown> = {
   tradeLog, tradeHistory, getTodo: todo, netWorth, budgetMonth: budget,
   investmentPortfolio: portfolio, tradingNotes: notes,
   deletedTrades: () => ({ trades: clone(demoState.deleted), canDeleteAny: false }),
-  investmentContributions: () => ({ taxYear: new Date().getFullYear(), limitsKnown: true, latestLimitYear: new Date().getFullYear(), groups: [], goals: [], uncappedContributed: 0 }),
+  // DERIVED from what has actually been recorded, so adding a contribution or a
+  // goal moves the figure above it. Returning a fixed empty shape here would let
+  // a visitor add one, be told it saved, and see nothing appear — which reads as
+  // a broken screen rather than a demo.
+  investmentContributions: () => {
+    const year = new Date().getFullYear();
+    const mine = DEMO_CONTRIBUTIONS.filter((e) => (e.taxYear ?? year) === year);
+    const contributed = mine.reduce((sum, e) => sum + num(e.amount), 0);
+    return {
+      taxYear: year, limitsKnown: true, latestLimitYear: year,
+      groups: [], goals: clone(DEMO_GOALS),
+      // No limit is claimed for these, so everything recorded is uncapped —
+      // stating a cap the demo has no catalog behind would be inventing a
+      // figure, which is the one thing these screens must not do.
+      uncappedContributed: contributed,
+    };
+  },
   investmentDividends: () => {
-    const entries = DEMO_DIVIDENDS;
+    const entries = clone(DEMO_DIVIDENDS);
     const total = entries.reduce((sum, e) => sum + e.amount, 0);
     const monthly = [...new Set(entries.map((e) => e.occurredAt.slice(0, 7)))].sort()
       .map((month) => ({ month, amount: entries.filter((e) => e.occurredAt.startsWith(month)).reduce((s, e) => s + e.amount, 0) }));

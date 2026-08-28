@@ -154,13 +154,13 @@ const holding = (over: Record<string, unknown>) => ({
   note: null, createdAt: ago(400), updatedAt: ago(3), ...over,
 });
 
-export const demoAccounts = [
+export const demoAccounts: any[] = [
   { id: 'ia1', kind: 'four01k', label: '401(k) · Fidelity', institution: 'Fidelity', source: 'manual', cashBalance: 1_240, note: null, createdAt: ago(900), updatedAt: ago(3) },
   { id: 'ia2', kind: 'roth_ira', label: 'Roth IRA', institution: 'Schwab', source: 'manual', cashBalance: 480, note: null, createdAt: ago(700), updatedAt: ago(3) },
   { id: 'ia3', kind: 'brokerage', label: 'Taxable brokerage', institution: 'Schwab', source: 'manual', cashBalance: 2_100, note: null, createdAt: ago(500), updatedAt: ago(3) },
 ];
 
-export const demoHoldings = [
+export const demoHoldings: any[] = [
   holding({ id: 'ih1', symbol: 'VTI', name: 'Vanguard Total Stock Market ETF', assetClass: 'equity', quantity: 210, costBasis: 41_800, price: 268.4, priceSource: 'live', previousClose: 266.9, sector: 'Diversified' }),
   holding({ id: 'ih2', accountId: 'ia2', accountLabel: 'Roth IRA', symbol: 'VXUS', name: 'Vanguard Total International Stock ETF', assetClass: 'equity', quantity: 140, costBasis: 8_900, price: 68.2, priceSource: 'live', previousClose: 67.9, region: 'International' }),
   holding({ id: 'ih3', accountId: 'ia3', accountLabel: 'Taxable brokerage', symbol: 'BND', name: 'Vanguard Total Bond Market ETF', assetClass: 'bond', quantity: 95, costBasis: 7_400, price: 74.1, priceSource: 'live', previousClose: 74.3, sector: 'Fixed income' }),

@@ -11,9 +11,35 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 7.50';
+export const APP_VERSION = 'Beta V 7.53';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 7.53',
+    date: 'August 28, 2026',
+    notes: [
+      'Reporting a bug and sending a suggestion now work on a real public account, not just in the demo.',
+      'A bug report titles itself from its first line, so you do not have to.',
+      'The build now also catches anything that works in the demo but would fail for a real account.',
+    ],
+  },
+  {
+    version: 'Beta V 7.52',
+    date: 'August 28, 2026',
+    notes: [
+      'Fixed: in the public demo, reporting a bug broke the page after you submitted it.',
+      'Manual Trades now works in the demo — adding a book or logging a trade moves the balance above it.',
+      'Added a check that every button on a public screen reaches something, so this class of fault fails the build instead of a visitor finding it.',
+    ],
+  },
+  {
+    version: 'Beta V 7.51',
+    date: 'August 28, 2026',
+    notes: [
+      'Fixed: in the public demo, adding an investment account or holding blanked the whole Investments workspace.',
+      'Contributions, goals and dividends added in the demo now actually appear, and undo on the to-do list works.',
+    ],
+  },
   {
     version: 'Beta V 7.50',
     date: 'August 28, 2026',
