@@ -101,8 +101,18 @@ Updated: 2026-08-27.
 - Budget money now arrives as DOLLARS and is converted to cents at the edge,
   matching the private route exactly, so the adapter carries no unit conversion —
   the one place a 100× error could hide silently.
-- Still demo-only, and now visibly so: the investments and trading-notes WRITE
-  paths in the demo store (they fall through to an empty fixture).
+- **Fixed the demo's own write gaps.** The Investments workspace BROKE in the
+  demo, silently: an unhandled name answers with an empty-but-generic payload,
+  so `const { portfolio } = await api.createInvestmentAccount(...)`
+  destructured `undefined` and the screen published nothing — no error, just a
+  blank workspace the moment a visitor tried the first thing they think of. All
+  ten investment writes, the contribution/goal/dividend paths and the to-do undo
+  are handled now, each mutating the seeded state the reads already derive from,
+  so a write and the figure it changes cannot disagree.
+- `npm run verify:demo-writes` drives every one of them to the act it exists
+  for, asserting on the field the SCREEN destructures. It is in `verify`, so CI
+  runs it. This is the half a screenshot test cannot see: a capture asserts a
+  page rendered, not that pressing "add" on it did anything.
 
 - Gave the public terminal a sixth record family with real storage: STUDY GAMES
   — the decks, their questions, each learner's progress, and combining games.

@@ -15,6 +15,10 @@ const STEPS = [
   ['investments math mirror (private ↔ public)', 'verify:investments-mirror'],
   ['position sizing (web ↔ server)', 'verify:sizing'],
   ['trade movement (pips and points)', 'verify:movement'],
+  // The demo is the showcase, and its writes are the half a screenshot cannot
+  // see: a capture asserts a page rendered, not that pressing "add" on it did
+  // anything.
+  ['demo writes', 'verify:demo-writes'],
   ['Desk right now responsive layout', 'verify:desk-layout'],
   ['rollover alerts and re-entry math', 'verify:rollover'],
   ['study packages', 'verify:study-packages'],

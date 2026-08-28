@@ -11,9 +11,17 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 7.50';
+export const APP_VERSION = 'Beta V 7.51';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 7.51',
+    date: 'August 28, 2026',
+    notes: [
+      'Fixed: in the public demo, adding an investment account or holding blanked the whole Investments workspace.',
+      'Contributions, goals and dividends added in the demo now actually appear, and undo on the to-do list works.',
+    ],
+  },
   {
     version: 'Beta V 7.50',
     date: 'August 28, 2026',
