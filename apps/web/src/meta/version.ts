@@ -11,9 +11,16 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 7.45';
+export const APP_VERSION = 'Beta V 7.46';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 7.46',
+    date: 'August 28, 2026',
+    notes: [
+      'The public terminal keeps your net worth now. Your investments are counted once, from the portfolio itself, so there is no way to type them in a second time — and if part of the figure cannot be worked out, it shows no total rather than one quietly missing a piece.',
+    ],
+  },
   {
     version: 'Beta V 7.45',
     date: 'August 28, 2026',

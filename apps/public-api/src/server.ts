@@ -4,7 +4,8 @@ import { loadPublicConfig } from './config.js';
 import { PublicAuthService, AuthError } from './auth.js';
 import { PostgresPublicStore } from './postgresStore.js';
 import { HttpPublicMarketProvider, SmtpPublicMailer } from './adapters.js';
-import type { BudgetKind, PublicMarketProvider, PublicStore, TodoItemRow } from './types.js';
+import type { BudgetKind, NetWorthCategory, NetWorthKind, PublicMarketProvider, PublicStore, TodoItemRow } from './types.js';
+import { NET_WORTH_CATEGORIES } from './types.js';
 import { buildSections, dailyDone, etTodayMs, nextEtMidnight } from './todo.js';
 import { INVESTMENT_ASSET_CLASSES, allocateBy, concentrationFlags, totalPortfolio, valueHolding,
   type HoldingValue, type InvestmentAssetClass, type PricedHolding } from './investmentsMath.js';
@@ -38,6 +39,34 @@ const optionalNumber=(v:unknown,what:string)=>{
   if(!Number.isFinite(n))throw new AuthError(400,`${what} must be a number.`);
   return n;
 };
+const ASSET_CATEGORIES=new Set<NetWorthCategory>(['cash','real_estate','vehicle','crypto','business','valuables','retirement_other','other_asset']);
+const readNetWorthKind=(v:unknown):NetWorthKind=>{
+  if(v!=='asset'&&v!=='liability')throw new AuthError(400,'An item is either an asset or a liability.');
+  return v;
+};
+// A category has to belong to its own side. A mortgage filed as an asset would
+// be added to what you own rather than subtracted, and nothing downstream could
+// notice — the sign comes from `kind`, so the two must agree.
+const readNetWorthCategory=(v:unknown,kind:NetWorthKind|undefined):NetWorthCategory=>{
+  const category=String(v||'') as NetWorthCategory;
+  if(!(NET_WORTH_CATEGORIES as readonly string[]).includes(category))throw new AuthError(400,'That is not a category.');
+  if(kind&&ASSET_CATEGORIES.has(category)!==(kind==='asset'))throw new AuthError(400,`${category} is not a ${kind} category.`);
+  return category;
+};
+const readNetWorthItem=(body:Record<string,unknown>)=>{
+  const label=String(body.label||'').trim();
+  if(!label||label.length>80)throw new AuthError(400,'Give it a name of 80 characters or fewer.');
+  const kind=readNetWorthKind(body.kind);
+  const value=Number(body.value);
+  if(!Number.isFinite(value))throw new AuthError(400,'A value is a number.');
+  return {
+    kind,category:readNetWorthCategory(body.category,kind),label,
+    // Stored positive; `kind` carries the sign.
+    value:Math.abs(value),note:text(body.note,500),
+    active:body.active!==false,sortOrder:Number.isInteger(body.sortOrder)?Number(body.sortOrder):0,
+  };
+};
+
 // Today's Eastern day as YYYY-MM-DD, for the one-per-day snapshot key.
 const etTodayMs2Date=()=>new Intl.DateTimeFormat('en-CA',{timeZone:ET,year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
 const isCents=(v:unknown):v is number=>typeof v==='number'&&Number.isInteger(v)&&v>0&&v<=2_147_483_647;
@@ -141,6 +170,61 @@ async function readPortfolio(store:PublicStore,accountId:string){
     totals,
     allocation:{byClass,bySector:allocateBy(valued,'sector',0),byRegion:allocateBy(valued,'region',0)},
     flags:concentrationFlags(valued,byClass,totals.value),
+  };
+}
+
+// Everything you own minus everything you owe.
+//
+// THE TRACKED HALF IS READ, NEVER STORED. It comes from the same portfolio code
+// the Investments screens use, so there is one definition of what a portfolio is
+// worth rather than two that can drift and show different totals on two screens.
+//
+// AND AN INCOMPLETE TOTAL IS REFUSED, NOT APPROXIMATED. When the tracked side
+// cannot be totalled, `netWorth` is null and the screen shows no headline figure
+// — a net worth quietly missing a chunk is worse than none, because it looks
+// complete. No snapshot is written in that state either, or the history gets a
+// permanent dip that never happened.
+//
+// What makes it unavailable HERE is narrower than on the private side, which
+// also has brokers that can refuse and accounts in other currencies. The public
+// terminal has neither, so today the tracked half is always available — the
+// branch is kept because it is the rule, not because it currently fires.
+// Unpriced holdings do NOT make it unavailable: they are excluded and COUNTED,
+// which is the Investments rule, and `note` is where that count is said out
+// loud. Refusing the whole figure over one unpriceable 401(k) fund would make
+// this screen behave differently from the same screen on the private side.
+async function readNetWorth(store:PublicStore,accountId:string){
+  const portfolio=await readPortfolio(store,accountId);
+  const unpriced=portfolio.totals.unpricedCount;
+  const tracked={
+    investments:portfolio.totals.value,
+    // The public terminal has no broker connections at all, so there is no
+    // trading side to add. Stated rather than omitted so the screen can say so.
+    trading:0,
+    tradingEnabled:false,
+    available:true,
+    note:unpriced>0
+      ? `${unpriced} ${unpriced===1?'holding is':'holdings are'} not priced, so ${unpriced===1?'it is':'they are'} not counted here.`
+      : null,
+  };
+
+  const items=await store.listNetWorthItems(accountId);
+  const active=items.filter((i)=>i.active);
+  const assetRows=active.filter((i)=>i.kind==='asset');
+  const liabilityRows=active.filter((i)=>i.kind==='liability');
+  const manualAssets=assetRows.reduce((sum,i)=>sum+i.value,0);
+  const liabilities=liabilityRows.reduce((sum,i)=>sum+i.value,0);
+  const assets=tracked.investments+manualAssets;
+  const netWorth=tracked.available?assets-liabilities:null;
+
+  const history=await store.listNetWorthSnapshots(accountId);
+  return {
+    tracked,
+    assets:assetRows,
+    liabilities:liabilityRows,
+    totals:{assets,liabilities,netWorth,manualAssets},
+    history,
+    daysRecorded:history.length,
   };
 }
 
@@ -437,6 +521,42 @@ export async function handleRequest(req:IncomingMessage,res:ServerResponse,depen
       const id=await authenticatedAccount(req,authService);
       const target=decodeURIComponent(path.slice('/public/v1/investments/goals/'.length));
       if(!await dependencies.store.deleteInvestmentGoal(id,target))throw new AuthError(404,'No such goal.');
+      return json(res,200,{ok:true});
+    }
+    // ---- net worth -------------------------------------------------------------
+    if(path==='/public/v1/net-worth'&&method==='GET'){
+      const id=await authenticatedAccount(req,authService);
+      const payload=await readNetWorth(dependencies.store,id);
+      // Only when the figure is actually complete, and only when there is
+      // something to record. A snapshot taken while the tracked side was
+      // incomplete would put a permanent dip in the history that never happened.
+      if(payload.totals.netWorth!=null&&(payload.totals.assets>0||payload.totals.liabilities>0)){
+        await dependencies.store.recordNetWorthSnapshot(id,etTodayMs2Date(),
+          payload.totals.assets,payload.totals.liabilities,payload.totals.netWorth).catch(()=>{});
+      }
+      return json(res,200,payload);
+    }
+    if(path==='/public/v1/net-worth/items'&&method==='POST'){
+      const id=await authenticatedAccount(req,authService); const body=await readBody(req);
+      return json(res,201,await dependencies.store.createNetWorthItem(id,readNetWorthItem(body)));
+    }
+    if(path.startsWith('/public/v1/net-worth/items/')&&(method==='PATCH'||method==='DELETE')){
+      const id=await authenticatedAccount(req,authService);
+      const target=decodeURIComponent(path.slice('/public/v1/net-worth/items/'.length));
+      if(method==='DELETE'){
+        if(!await dependencies.store.deleteNetWorthItem(id,target))throw new AuthError(404,'No such item.');
+        return json(res,200,{ok:true});
+      }
+      const body=await readBody(req);
+      const patch:Record<string,unknown>={};
+      if('label' in body){const label=String(body.label||'').trim(); if(!label||label.length>80)throw new AuthError(400,'Give it a name of 80 characters or fewer.'); patch.label=label}
+      if('kind' in body)patch.kind=readNetWorthKind(body.kind);
+      if('category' in body)patch.category=readNetWorthCategory(body.category,('kind' in body?patch.kind:undefined) as NetWorthKind|undefined);
+      if('value' in body){const value=Number(body.value); if(!Number.isFinite(value))throw new AuthError(400,'A value is a number.'); patch.value=Math.abs(value)}
+      if('note' in body)patch.note=text(body.note,500);
+      if('active' in body)patch.active=body.active===true;
+      if('sortOrder' in body&&Number.isInteger(body.sortOrder))patch.sortOrder=Number(body.sortOrder);
+      if(!await dependencies.store.updateNetWorthItem(id,target,patch))throw new AuthError(404,'No such item.');
       return json(res,200,{ok:true});
     }
     if(path.startsWith('/public/v1/ai/'))return json(res,501,{message:'Public AI is not available.'});
