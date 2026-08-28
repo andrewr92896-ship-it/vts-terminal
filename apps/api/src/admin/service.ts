@@ -358,6 +358,8 @@ export async function createUser(actingUserId: string, input: CreateUserInput): 
     // pick one in My Terminal ▸ Settings.
     homeWorkspace: null,
     homeScreen: null,
+    // My Terminal has not been customized — the default board, from theme/nav.ts.
+    myTerminalSections: null,
     teamId,
     viewBrokerage: input.viewBrokerage ?? false,
     active: true,

@@ -2,6 +2,7 @@ import { useState, type CSSProperties } from 'react';
 import type { WorkspaceKey } from '../theme/themes';
 import type { MembershipTier } from '../api/types';
 import { NAV, navFor, FUNDED_ONLY_SECTIONS, TEAM_ONLY_SECTIONS, type NavWorkspace } from '../theme/nav';
+import { MY_TERMINAL_WORKSPACE, myTerminalSections, parseMyTerminal } from '../theme/myTerminal';
 import { C, tint } from '../theme/tokens';
 import { SECTION_FEATURE, WORKSPACE_FEATURE, tierForKey } from '../auth/access';
 import { SECTION_REVIEW, WORKSPACE_REVIEW, type ReviewKey } from '../auth/reviewMarks';
@@ -33,6 +34,10 @@ interface SidebarProps {
   onToggle: () => void;
   onSelectWorkspace: (ws: WorkspaceKey) => void;
   onSelectScreen: (screen: string) => void;
+  // Opens the My Terminal customizer. Drawn as the last row of that workspace's
+  // section list and nowhere else — it edits one workspace, so it belongs under
+  // the list it edits rather than in a settings screen two clicks away.
+  onCustomizeMyTerminal?: () => void;
 }
 
 const navLabel: CSSProperties = {
@@ -63,6 +68,7 @@ export function Sidebar(props: SidebarProps) {
     onToggle,
     onSelectWorkspace,
     onSelectScreen,
+    onCustomizeMyTerminal,
   } = props;
 
   // Workspace order and each workspace's section order come straight from the
@@ -82,6 +88,18 @@ export function Sidebar(props: SidebarProps) {
       (canFunded || !FUNDED_ONLY_SECTIONS.has(s.key)) &&
       (canTeams || !TEAM_ONLY_SECTIONS.has(s.key)),
   );
+  // MY TERMINAL IS THE ONE CUSTOMIZABLE WORKSPACE, and its list is built by
+  // theme/myTerminal.ts rather than read straight off NAV. That module applies
+  // the very same two filters above, so a row hidden here can never be pinned
+  // there — see its comment for why the stored value is a diff and not a list.
+  const customizable = workspace === MY_TERMINAL_WORKSPACE && !!onCustomizeMyTerminal;
+  const shown = customizable
+    ? myTerminalSections(NAV, parseMyTerminal(user?.myTerminalSections ?? null), {
+        workspaces,
+        canFunded,
+        canTeams,
+      })
+    : sections;
   // The workspaces this user can access, plus any opt-in workspace they have not
   // turned on (drawn locked), all in nav order.
   const visible: NavWorkspace[] = NAV.filter(
@@ -185,7 +203,7 @@ export function Sidebar(props: SidebarProps) {
           ) : (
             <div style={navLabel}>{current.group}</div>
           )}
-          {sections.map((s) => (
+          {shown.map((s) => (
             <NavRow
               key={s.key}
               kind="sec"
@@ -193,7 +211,7 @@ export function Sidebar(props: SidebarProps) {
               active={s.key === screen}
               icon={s.icon}
               label={s.label}
-              count={s.count}
+              count={'count' in s ? (s as { count?: number }).count : undefined}
               accent={accent}
               // A star for a Premium section, a diamond for a Max one, drawn at
               // the right of the row. Shown to everyone including a Max member,
@@ -207,6 +225,17 @@ export function Sidebar(props: SidebarProps) {
               onClick={() => onSelectScreen(s.key)}
             />
           ))}
+          {customizable && (
+            <NavRow
+              kind="sec"
+              collapsed={collapsed}
+              active={false}
+              icon="list-tree"
+              label="Customize"
+              accent={accent}
+              onClick={onCustomizeMyTerminal}
+            />
+          )}
         </nav>
       )}
 

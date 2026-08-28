@@ -1,7 +1,7 @@
 import type { WorkspaceKey } from '../theme/themes';
 import { C } from '../theme/tokens';
 
-export type PublicWorkspaceKey = Extract<WorkspaceKey, 'myportal'|'trading'|'finances'|'news'|'investments'|'studies'|'help'>;
+export type PublicWorkspaceKey = Extract<WorkspaceKey, 'myportal'|'trading'|'finances'|'news'|'investments'|'studies'|'settings'|'help'>;
 export type PublicScreenKey =
   | 'live'|'data'|'desk'|'funded'|'deleted'|'notes'
   | 'td_trading'|'my_access'|'my_rules'|'my_prefs'|'my_settings'
@@ -17,12 +17,15 @@ export interface PublicNavWorkspace { key:PublicWorkspaceKey;label:string;icon:s
 // Compile-time allowlist derived from portal NAV at 0ca961d6e5a14edb9e629f11f283ee71ec454e70. Prohibited rows are
 // absent rather than hidden; ordering and stable screen keys are retained.
 export const PUBLIC_NAV:readonly PublicNavWorkspace[]=[
+ // My Terminal is the personal board. Premium Features, Preferences and Settings
+ // left for the Settings workspace, and Market Data left for Advanced Trading —
+ // it is a board of rates a trader reads beside their trades, not a personal row.
+ // Every key is unchanged, so in-app links and howto wording still resolve.
  {key:'myportal',label:'My Terminal',icon:'briefcase',accent:'#34D399',group:'My Terminal',sections:[
-  {key:'data',label:'Market Data',icon:'line-chart'},{key:'td_trading',label:'To Do',icon:'list-todo'},
-  {key:'my_access',label:'Premium Features',icon:'gem'},{key:'my_rules',label:'Site Rules',icon:'list-checks'},
-  {key:'my_prefs',label:'Preferences',icon:'settings-2'},{key:'my_settings',label:'Settings',icon:'settings'}]},
- {key:'trading',label:'Advanced Trading',icon:'candlestick-chart',accent:C.gold,group:'Trade Tracking',sections:[
-  {key:'live',label:'Live Wall',icon:'layout-dashboard'},{key:'desk',label:'Closed Trades & Metrics',icon:'candlestick-chart'},
+  {key:'td_trading',label:'To Do',icon:'list-todo'},{key:'my_rules',label:'Site Rules',icon:'list-checks'}]},
+ {key:'trading',label:'Advanced Trading',icon:'candlestick-chart',accent:C.gold,group:'Advanced Trading',sections:[
+  {key:'live',label:'Live Wall',icon:'layout-dashboard'},{key:'data',label:'Market Data',icon:'line-chart'},
+  {key:'desk',label:'Closed Trades & Metrics',icon:'candlestick-chart'},
   {key:'funded',label:'Manual Trades',icon:'pencil'},{key:'deleted',label:'Deleted Trades',icon:'trash-2'},{key:'notes',label:'Trading Notes',icon:'notebook-pen'}]},
  {key:'finances',label:'Finances',icon:'piggy-bank',accent:'#4ADE80',group:'Finances',sections:[
   {key:'fin_networth',label:'Net Worth',icon:'scale'},{key:'fin_budget',label:'Budget',icon:'receipt'}]},
@@ -43,6 +46,10 @@ export const PUBLIC_NAV:readonly PublicNavWorkspace[]=[
   {key:'hp_notes',label:'Patch notes',icon:'file-text'},{key:'hp_bug',label:'Report a bug',icon:'bug'},
   {key:'hp_suggest',label:'Suggestion',icon:'lightbulb'},{key:'hp_rules',label:'Rules & Conduct',icon:'list-checks'},
   {key:'hp_terms',label:'Terms of Service',icon:'scale'},{key:'hp_privacy',label:'Privacy Policy',icon:'file-lock-2'}]},
+ // Settings is what YOU can change; Site Help above is what the terminal tells YOU.
+ {key:'settings',label:'Settings',icon:'settings',accent:'#93A7C9',group:'Settings',sections:[
+  {key:'my_settings',label:'Settings',icon:'settings'},{key:'my_prefs',label:'Preferences',icon:'settings-2'},
+  {key:'my_access',label:'Premium Features',icon:'gem'}]},
 ] as const;
 export function publicNavFor(key:PublicWorkspaceKey){return PUBLIC_NAV.find((workspace)=>workspace.key===key)??PUBLIC_NAV[0];}
 export function publicWorkspaceFor(screen:PublicScreenKey){return PUBLIC_NAV.find((workspace)=>workspace.sections.some((section)=>section.key===screen))??PUBLIC_NAV[0];}

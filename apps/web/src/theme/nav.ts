@@ -53,17 +53,16 @@ export const NAV: NavWorkspace[] = [
       { key: 'td_trading', label: 'To Do', icon: 'list-todo' },
       // (Net Worth moved to the Finances workspace. Its key is still
       // `my_networth`, so in-app links keep working.)
-      // Memberships and the optional parts of the terminal. The key stays
-      // `my_access` though the label is now Premium Features, so a founder's
-      // saved nav.order override keeps pointing at it.
-      { key: 'my_access', label: 'Premium Features', icon: 'gem' },
+      // (Premium Features, Preferences and Settings LEFT for the Settings
+      // workspace — owner instruction, 2026-08. Their keys are unchanged
+      // (`my_access`, `my_prefs`, `my_settings`), so `howto.*` wording, the
+      // home-screen picker and every in-app link still resolve; only the
+      // workspace around them moved.)
       // The same Rules & Conduct document Site Help carries, surfaced here too
       // (owner decision, 2026-08). ONE document rendered in two places rather
       // than two documents — two rules pages disagree within a month, and the
       // one people read is always the wrong one. See RulesBody.
       { key: 'my_rules', label: 'Site Rules', icon: 'list-checks' },
-      { key: 'my_prefs', label: 'Preferences', icon: 'settings-2' },
-      { key: 'my_settings', label: 'Settings', icon: 'settings' },
     ],
   },
   // (The Markets workspace was dissolved — owner decision, 2026-08. Its two
@@ -313,29 +312,49 @@ export const NAV: NavWorkspace[] = [
       { key: 'hp_privacy', label: 'Privacy Policy', icon: 'file-lock-2' },
     ],
   },
+  // Settings — its own workspace (owner instruction, 2026-08), holding the three
+  // rows that were inside My Terminal: the account itself, how it is displayed,
+  // and what it holds. My Terminal is a personal, customizable board now, and a
+  // board you rearrange is the wrong place to keep the switches that govern the
+  // account rearranging it.
+  //
+  // The split against Site Help is deliberate and is the one to keep straight:
+  // **Settings is what YOU can change; Site Help is what the terminal tells YOU.**
+  // So the legal documents, the announcements, the patch notes and the two intake
+  // forms all stay in Site Help — none of them is a setting — and nothing that
+  // changes the account's behaviour lives there.
+  //
+  // Last in the list, under Site Help, because it is read least often.
+  {
+    key: 'settings',
+    label: 'Settings',
+    icon: 'settings',
+    accent: '#93A7C9',
+    group: 'Settings',
+    sections: [
+      // The account: sign-in, security, devices, connections.
+      { key: 'my_settings', label: 'Settings', icon: 'settings' },
+      // Underneath Settings, as instructed: how the terminal is displayed to
+      // you — time zone, zoom, leaderboard visibility, the home screen.
+      { key: 'my_prefs', label: 'Preferences', icon: 'settings-2' },
+      // What the account holds and what it has switched on. A membership and an
+      // opt-in are both answers to "what is this account set to", which is what
+      // makes this a setting rather than a My Terminal row.
+      { key: 'my_access', label: 'Premium Features', icon: 'gem' },
+    ],
+  },
 ];
 
 export function navFor(ws: WorkspaceKey): NavWorkspace | undefined {
   return NAV.find((w) => w.key === ws);
 }
 
-// Trading sections behind the nested Funded Account opt-in. The sidebar hides
-// these unless the viewer has turned Funded on (which itself requires Advanced
-// Trading); the demo never sees them.
-export const FUNDED_ONLY_SECTIONS = new Set(['prop']);
-
-// Sections behind the Trading Teams GRANT (`user.access.features.tradingTeams`).
-//
-// Hidden outright rather than drawn locked, which is the opposite of how the
-// opt-in workspaces behave and is deliberate: a padlock advertises a feature,
-// and the point here is that an ordinary account should not know teams exist.
-// There is nothing to discover and nothing to buy — the grant is handed out by a
-// software developer, so a lock icon would only invite a support ticket nobody
-// can resolve with a payment.
-//
-// The server refuses every /api/my-portal/team* route on the same grant, so this
-// is presentation only; the enforcer is requireTradingTeams.
-export const TEAM_ONLY_SECTIONS = new Set(['my_team']);
+// Both gates live in theme/navGates.ts and are re-exported here, so every
+// existing importer is unchanged. They are in their own module because
+// theme/myTerminal.ts — shared with the public terminal — needs them, and
+// importing them from this file drags the whole private NAV array into the
+// public bundle. See that file's comment.
+export { FUNDED_ONLY_SECTIONS, TEAM_ONLY_SECTIONS } from './navGates';
 
 // Workspaces a user turns on for themselves in My Terminal ▸ Premium Features, keyed
 // to the feature that reveals each. A workspace not listed here is included with

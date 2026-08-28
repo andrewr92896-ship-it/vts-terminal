@@ -112,6 +112,11 @@ export interface User {
   // the choice was stored, so an unreachable home falls back.
   homeWorkspace: string | null;
   homeScreen: string | null;
+  // My Terminal's customization, as raw JSON — `{"add":[...],"hide":[...]}`, a
+  // diff against theme/nav.ts rather than a section list, so a nav change in a
+  // later deploy still reaches a customized account. Null = never customized.
+  // Parsed by theme/myTerminal.ts, which is also where the rules live.
+  myTerminalSections: string | null;
   // The trading team the user belongs to (or null). Scopes the Studies
   // leaderboards to teammates; the Trading workspace itself stays shared.
   teamId: string | null;

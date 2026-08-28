@@ -84,19 +84,23 @@ item below is done:
 
 ### Structure and navigation
 
-- [ ] **8. [PRIVATE + DEMO] My Terminal becomes a customizable workspace.**
+- [x] **8. [PRIVATE + DEMO] My Terminal becomes a customizable workspace.**
       Add the ability to **add and remove sections** from My Terminal — e.g. put
       Closed Trades & Metrics on it if you want it there, and take it off again.
       This is the one substantive change that lands on the private portal too.
 
-- [ ] **9. [PRIVATE + DEMO] Settings becomes its own workspace**, with
+- [x] **9. [PRIVATE + DEMO] Settings becomes its own workspace**, with
       **Preferences underneath it**. Then use judgement on the rest: decide
       which subsections belong under Settings and which under Site Help, and
       organise them properly.
 
-- [ ] **10. Market Data moves to Advanced Trading.** It currently sits under My
+- [x] **10. Market Data moves to Advanced Trading.** It currently sits under My
       Terminal; since My Terminal is becoming a customizable workspace, Market
       Data belongs in Advanced Trading.
+      **Done on the PUBLIC terminal only**, per the scope note at the top — this
+      item is not marked [PRIVATE + DEMO]. Privately Market Data is still a My
+      Terminal row, and moving it there is a two-line change in `theme/nav.ts`
+      whenever the owner says so.
 
 ### Features the demo must actually demonstrate
 

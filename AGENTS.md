@@ -2489,14 +2489,30 @@ workspaces list** (see `theme/nav.ts` order).
   - `npm run verify:investments` checks the portfolio math offline against
     hand-computed fixtures (same spirit as `verify:market-macro`). Run it after
     touching `math.ts` or `limits.ts`.
-- **My Terminal** (emerald) — **the Live Wall LEFT for Advanced Trading** (owner
-  instruction, 2026-08), where it now leads that workspace; Net Worth left for
-  Finances and Market News for News. Every one of those keys still resolves, so
-  in-app links and the `howto` wording are unaffected. What is left stacks
-  Max → Premium → free like every other workspace, and `DEFAULT_SCREEN.myportal`
-  is now **Premium Features** (`my_access`) — memberships and the per-user
-  opt-ins, including the Advanced Trading switch the wall now sits behind — plus
-  one personal roll-up section:
+- **Settings** (slate, key `settings`) — **its own workspace** (owner
+  instruction, 2026-08), holding the three rows that were inside My Terminal:
+  **Settings** (`my_settings`), **Preferences** (`my_prefs`) underneath it as
+  instructed, and **Premium Features** (`my_access`). Every key is unchanged —
+  rename a label, never a key — so `howto.*`, the home-screen picker and every
+  in-app link still resolve. Last in the sidebar, under Site Help.
+  - **The split against Site Help is the thing to keep straight: Settings is
+    what YOU can change; Site Help is what the terminal tells YOU.** So the
+    legal documents, the announcements, the patch notes and the two intake forms
+    all stay in Site Help — none of them is a setting — and nothing that changes
+    the account's behaviour lives there.
+  - **Site Rules (`my_rules`) stayed on My Terminal** rather than moving here. It
+    is the same Rules & Conduct document Site Help carries, surfaced a second
+    time by an owner decision; it is a document, not a setting, and My Terminal
+    is customizable now, so anybody who does not want it can take it off.
+- **My Terminal** (emerald) — **THE ONE CUSTOMIZABLE WORKSPACE** (owner
+  instruction, 2026-08). Sections from anywhere else in the terminal can be
+  pinned onto it and its own rows taken off — see its own section below. The
+  Live Wall left for Advanced Trading, Net Worth for Finances, Market News for
+  News, and Premium Features / Preferences / Settings for the Settings
+  workspace; every one of those keys still resolves, so in-app links and the
+  `howto` wording are unaffected. `DEFAULT_SCREEN.myportal` is **To Do**
+  (`td_trading`) — the one remaining row every account can reach. Plus one
+  personal roll-up section:
   - **Removed: Investment Holdings** (`my_holdings`). Owner decision, 2026-08 —
     the Investments workspace already tracks the portfolio, so a second screen
     saying the same thing was duplication rather than a roll-up. The screen, its
@@ -3861,6 +3877,91 @@ account" rather than hiding them, so the screen reads as the whole picture.
   `Sidebar.tsx`); clicking it opens Premium Features instead of the workspace.
   Keep that — discoverability is the point, and it is where a paid tier would
   surface later.
+
+### My Terminal is customizable (`theme/myTerminal.ts`)
+
+**Sections from anywhere else in the terminal can be pinned onto My Terminal, and
+its own rows taken off** (owner instruction, 2026-08 — "put Closed Trades &
+Metrics on it if you want it there, and take it off again"). Per user, stored on
+the account (`users.my_terminal_sections`, migration `0138`), so the personal
+board follows somebody between their phone and their desk.
+
+**THIS IS NOT A NAV ORDER OVERRIDE, and the stored shape is what makes that
+true.** AGENTS.md already records why the Developer Terminal's Sidebar Layout
+editor was removed and must not come back: it stored a complete ordering
+install-wide, so a code change to the nav silently lost to the stored one and
+looked like it had not deployed. Nothing here can do that:
+
+- `NAV` still decides the order of every workspace and of every section inside
+  one, My Terminal's own rows included.
+- **What is stored is only what the account CHANGED** — `{add:[…],hide:[…]}`,
+  a diff. `add` is section keys pinned from elsewhere, in the order they were
+  added (the only order the user themselves chose); `hide` is My Terminal's own
+  rows taken off.
+- **So a section added to `NAV` in a later deploy APPEARS**, for everybody,
+  customized or not, because nothing stored claims to be the whole list.
+- An empty diff is stored as **NULL**, so "never customized" and "customized
+  back to the default" are one row with one meaning.
+
+**A pin is a SECOND entry point, never a move.** The section keeps its home in
+its own workspace, so taking it off My Terminal can never make it unreachable —
+and that is why two navigation rules exist, neither of which is visible from the
+editor:
+
+- **`selectScreen` must not resolve the pinned key's owning workspace.** It
+  normally does, which is right for an in-app link; on My Terminal it would jump
+  the reader to Advanced Trading the moment they clicked the row they had
+  deliberately put on their own board.
+- **The effect that keeps workspace and screen consistent must accept a pinned
+  row.** It tests `nav.sections`, and a pinned key is not in My Terminal's, so
+  without the exception it bounces straight back off and the pin appears to do
+  nothing.
+
+Both read the same `myTerminalKeys` set Portal computes once, from the same
+function the Sidebar uses, so the three cannot disagree.
+
+**MY TERMINAL MAY NEVER BE EMPTIED** (`canApplyMyTerminal`). A workspace with no
+rows draws a heading over nothing, and the control that emptied it lives under
+that list. The rule is about the RESULT, so it holds however the two lists are
+edited.
+
+**The section filters MIRROR `Sidebar.tsx` exactly** — the Funded opt-in and the
+Trading Teams grant — which is the same rule `homeScreen.ts` follows for the home
+picker: a row hidden in the sidebar must not be offerable here, and a row pinned
+here must not be one the sidebar would refuse to draw. A pin whose section no
+longer exists is **dropped on read**, like the Market Data layout, so a nav
+change never strands a board.
+
+**EVERY FUNCTION TAKES THE NAV IT IS WORKING ON.** The private terminal passes
+`NAV`; the public terminal passes its own compile-time allowlist, which is a
+deliberately narrower list. One set of rules over two navs — a second copy for
+the public shell is how the two come to disagree about what "customized" means.
+`MyTerminalCustomizer` takes `nav` as a **required** prop for the same reason: a
+default would be the private array, and this component ships in the public
+bundle.
+
+**`theme/navGates.ts` EXISTS FOR THE BUNDLE, NOT FOR TIDINESS.**
+`FUNDED_ONLY_SECTIONS` and `TEAM_ONLY_SECTIONS` moved out of `nav.ts` because
+`myTerminal.ts` needs them and importing them from `nav.ts` pulls the **entire
+private `NAV` array** into the public bundle with them. That shipped: "Live
+Trades", "Funded Trades", "Strategy Sessions", "Alert Settings" and "Developer
+Terminal" were all readable in the public JavaScript while no public screen could
+reach any of them. `nav.ts` re-exports both, so every existing importer is
+unchanged, and `verify:public-imports` now denies those labels **as nav labels**
+(`label:"…"`) rather than as loose prose — "Market hours, strategy sessions and
+the Fed schedule stay on Eastern Time" is a real sentence on the Preferences
+screen, and a guard that fails on it is one people widen until it catches
+nothing.
+
+**The public side stores it too** (`public_preferences`, migration `0013`) — one
+jsonb blob per account holding the time zone, the leaderboard opt-out, the home
+screen and this. `PATCH /public/v1/preferences` **merges**, because the public
+terminal is a cached bundle and an older one saves the subset of settings it
+knows about; a key set to null is cleared rather than stored as a null. It rides
+`/auth/session` so the shell has it before it draws anything. That route is also
+what finally made **Preferences work publicly at all**: `Preferences.tsx` reads
+`updateProfile` off `useAuth()` and the public adapter did not provide one, so
+picking a time zone threw, silently, on the one screen whose job is changing it.
 
 ### The Live Wall — one centralized board (`live`)
 

@@ -367,6 +367,9 @@ export const api = {
     // page means going back to the default, which is both set to null.
     homeWorkspace?: string | null;
     homeScreen?: string | null;
+    // My Terminal's customization. Null clears it back to the default board —
+    // the server stores an empty diff as null too, so there is one "default".
+    myTerminalSections?: { add: string[]; hide: string[] } | null;
     hideFromLeaderboards?: boolean;
   }): Promise<{ user: User }> {
     return request('/api/auth/profile', {

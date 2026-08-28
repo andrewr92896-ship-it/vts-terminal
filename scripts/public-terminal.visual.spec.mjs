@@ -8,14 +8,15 @@ await mkdir(out, { recursive: true });
 // Every retained public page family, in sidebar order. The list is the whole
 // point of the run: a family missing from here is a family with no evidence.
 const routes = [
-  'live', 'data', 'td_trading', 'my_access', 'my_rules', 'my_prefs', 'my_settings',
-  'notes', 'desk', 'funded', 'deleted',
+  'td_trading', 'my_rules',
+  'live', 'data', 'desk', 'funded', 'deleted', 'notes',
   'fin_networth', 'fin_budget',
   'news', 'news_world', 'news_politics',
   'inv_overview', 'inv_accounts', 'inv_holdings', 'inv_allocation',
   'inv_performance', 'inv_dividends', 'inv_contributions', 'inv_projections',
   'st_decks', 'st_packages', 'st_game', 'st_cards', 'st_test', 'st_guides', 'st_progress',
   'hp_howto', 'hp_news', 'hp_notes', 'hp_bug', 'hp_suggest', 'hp_rules', 'hp_terms', 'hp_privacy',
+  'my_settings', 'my_prefs', 'my_access',
 ];
 
 // A screenshot is not evidence unless the page actually drew something. Asserting
@@ -88,6 +89,48 @@ test('the demo can add things, on the screens that used to hide the controls', a
     await expect(page.getByText(value).first(), `${screen} did not save`).toBeVisible();
   }
   expect(errors, 'a demo screen threw while saving').toEqual([]);
+});
+
+// My Terminal is the one customizable workspace, and the failure this drives at
+// is not "does the modal open" — it is whether the pinned row NAVIGATES. A pin
+// resolves its own workspace from the nav, so without the two rules that keep it
+// on My Terminal the click jumps to Advanced Trading and the pin looks broken;
+// and the effect that keeps workspace and screen consistent would bounce it
+// straight back off. Neither is visible from the modal.
+test('My Terminal can be customized, and a pinned section opens on it', async ({ page }) => {
+  const errors = [];
+  const record = (error) => errors.push(String(error));
+  page.on('pageerror', record);
+  try {
+    await page.goto('about:blank');
+    await page.goto(`${base}/?demo=1#td_trading`, { waitUntil: 'networkidle' });
+
+    const sidebar = page.locator('aside');
+    await expect(sidebar.getByRole('button', { name: 'Closed Trades & Metrics' })).toHaveCount(0);
+
+    await sidebar.getByRole('button', { name: 'Customize' }).click();
+    // Scoped to the dialog: the same section names are rows in the sidebar too,
+    // and clicking the sidebar's copy would pass this test while proving nothing.
+    await page.getByRole('dialog').getByRole('button', { name: /^Closed Trades & Metrics/ }).click();
+    await page.getByRole('dialog').getByRole('button', { name: 'Save', exact: true }).click();
+
+    const pinned = sidebar.getByRole('button', { name: 'Closed Trades & Metrics' });
+    await expect(pinned, 'the pinned section did not reach the sidebar').toBeVisible();
+
+    await pinned.click();
+    // Still on My Terminal — this is the assertion the whole feature turns on.
+    await expect(sidebar.getByRole('button', { name: 'To Do' })).toBeVisible();
+    await expect(page.locator('.vts-public-main')).toContainText(/Trade|Metrics/i);
+
+    // And taking a native row off removes it.
+    await sidebar.getByRole('button', { name: 'Customize' }).click();
+    await page.getByRole('dialog').getByRole('button', { name: /^Site Rules/ }).click();
+    await page.getByRole('dialog').getByRole('button', { name: 'Save', exact: true }).click();
+    await expect(sidebar.getByRole('button', { name: 'Site Rules' })).toHaveCount(0);
+  } finally {
+    page.off('pageerror', record);
+  }
+  expect(errors, 'customizing My Terminal threw').toEqual([]);
 });
 
 test('the demo reaches no service and leaves nothing behind', async ({ page, context }) => {

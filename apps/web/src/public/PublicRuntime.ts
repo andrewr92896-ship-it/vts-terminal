@@ -20,7 +20,10 @@ export const publicAuth={
   login(email:string,password:string){return publicRequest<PublicAuthResult>('/auth/login',{method:'POST',body:JSON.stringify({email,password})})},
   verify(challengeId:string,code:string,remember:boolean){return publicRequest<PublicAuthResult&{ok:true}>('/auth/two-factor/verify',{method:'POST',body:JSON.stringify({challengeId,code,remember})})},
   recover(email:string){return publicRequest<{message:string}>('/auth/recovery',{method:'POST',body:JSON.stringify({email})})},
-  session(){return publicRequest<{user:{id:string;email:string;displayName:string};passwordChangeRequired:boolean;privateGroupWarning:boolean}>('/auth/session')},
+  session(){return publicRequest<{user:{id:string;email:string;displayName:string};preferences?:PublicPreferences;passwordChangeRequired:boolean;privateGroupWarning:boolean}>('/auth/session')},
+  // A PATCH, and the server merges: this bundle is cached, so an older one saves
+  // the subset of settings it knows about and must never blank the rest.
+  savePreferences(patch:PublicPreferences){return publicRequest<{preferences:PublicPreferences}>('/preferences',{method:'PATCH',body:JSON.stringify(patch)})},
   changePassword(currentPassword:string,newPassword:string){return publicRequest<{ok:true;passwordChangeRequired:false}>('/auth/change-password',{method:'POST',body:JSON.stringify({currentPassword,newPassword})})},
   logout(){return publicRequest<{ok:true}>('/auth/logout',{method:'POST'})},
   earlyAccess(email:string,note:string){
@@ -29,12 +32,18 @@ export const publicAuth={
   },
 };
 
+// The account's own display settings, as the public API stores them. Kept loose
+// on purpose — the server treats this as an opaque blob and the CLIENT resolves
+// every value at render, exactly as the private terminal resolves its home
+// screen, because what an account can reach moves after a setting is written.
+export type PublicPreferences={displayTimezone?:string;hideFromLeaderboards?:boolean;homeWorkspace?:string|null;homeScreen?:string|null;myTerminalSections?:string|null};
 // WHO IS SIGNED IN IS A RUNTIME FACT, not a constant. The top bar carried the
 // literal "Andrew" — the owner's name — which every public visitor and every
 // demo visitor saw. The shell sets this once the session or the demo resolves;
 // the auth adapter reads it, so shared components see it through the same
-// useAuth() they always used.
-export type PublicIdentity={id:string;username:string;displayName:string;email?:string;isDemo?:boolean};
+// useAuth() they always used. The preferences above ride on it for the same
+// reason: one identity object, one place the screens read it from.
+export type PublicIdentity={id:string;username:string;displayName:string;email?:string;isDemo?:boolean;displayTimezone?:string;hideFromLeaderboards?:boolean;homeWorkspace?:string|null;homeScreen?:string|null;myTerminalSections?:string|null};
 let identity:PublicIdentity={id:'public-user',username:'public',displayName:'Public account'};
 const identityListeners=new Set<()=>void>();
 export function setPublicUser(next:PublicIdentity){identity=next;for(const listener of identityListeners)listener()}

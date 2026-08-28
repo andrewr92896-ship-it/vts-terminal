@@ -8,7 +8,14 @@ const ALLOWED_PORTAL_IMPORTS=[
   /^\.\.\/\.\.\/web\/src\/styles\/global\.css$/,
   /^\.\.\/\.\.\/web\/src\/public\/PublicApp$/,
   /^\.\.\/\.\.\/\.\.\/web\/src\/public\/PublicRuntime$/,
-  /^\.\.\/(components\/(Icon|Clock)|theme\/(tokens|themes)|workspaces\/trading\/(MarketData|CalendarTile|NewsTile|WatchlistTile|ChartTile|TvWidget)|api\/types)$/,
+  // MyTerminalCustomizer + theme/myTerminal are the customizable My Terminal
+  // workspace, shared with the private terminal deliberately: one set of rules
+  // over two navs (the public shell passes its own allowlist), because two
+  // copies is how the shells come to disagree about what "customized" means.
+  // Neither reaches a service or names a private capability — the customizer is
+  // a list editor, and myTerminal.ts is pure functions over whatever nav it is
+  // handed.
+  /^\.\.\/(components\/(Icon|Clock|MyTerminalCustomizer)|theme\/(tokens|themes|myTerminal)|workspaces\/trading\/(MarketData|CalendarTile|NewsTile|WatchlistTile|ChartTile|TvWidget)|api\/types)$/,
   /^\.\.\/(hooks\/useNowTick|lib\/timezone|workspaces\/trading\/(etClock|tvChart)|workspaces\/trading\/tiles\/TileFrame)$/,
   /^\.\/((Public(App|ClockTile|LiveWall|Login|Runtime|Sidebar|TopBar|Screens|AccountPages)|publicNav))$/,
   /^\.\.\/demo\/demo(Store|Seed)$/,
@@ -36,6 +43,20 @@ const PROHIBITED_BUNDLE=[
   new RegExp(`(oanda|kraken|tradestation)${SEP}(api${SEP})?(key|token|secret)`,'i'),
   new RegExp(`founder${SEP}trade`,'i'),
   new RegExp(`strategy${SEP}bias`,'i'),
+  // The PRIVATE NAV, by the labels only it carries. These leaked once, and they
+  // leaked the way this kind of thing always will: a module shared between the
+  // two terminals (theme/myTerminal.ts) imported one small thing out of
+  // theme/nav.ts and brought the entire array with it, so five private section
+  // names were readable in the public JavaScript while no public screen could
+  // reach any of them. The fix was theme/navGates.ts; this is what keeps it
+  // fixed. Each string appears in the private nav and nowhere a public screen
+  // would legitimately print it.
+  // Matched as a NAV LABEL rather than as loose prose: "Market hours, strategy
+  // sessions and the Fed schedule stay on Eastern Time" is a real sentence on
+  // the Preferences screen, and a guard that fails on it is one people widen
+  // until it catches nothing.
+  ...['Developer Terminal','Admin Terminal','Strategy Sessions','Live Trades','Funded Trades','Alert Settings']
+    .map((name)=>new RegExp(`label\\s*:\\s*["']${name}["']`,'i')),
 ];
 let failures=0;
 const fail=(message)=>{failures+=1;console.error(`FAIL ${message}`)};
