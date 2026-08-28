@@ -296,6 +296,25 @@ Updated: 2026-08-27.
   like an empty body, which is a different question and one the API's own tests
   already answer.
 
+- **The terminal is now driven as a REAL SIGNED-IN ACCOUNT in CI**, against the
+  real API and a real database
+  (`scripts/public-terminal.live.spec.mjs`, job `live-account`). The existing
+  visual job drives the DEMO, which answers out of module memory — so neither it
+  nor anything else could see whether the server's payloads actually satisfy what
+  the screens read. A field the server spells one way and a component reads
+  another renders as an empty list, never as an error. That exact fault shipped
+  once (`daysRecorded` where the screen reads `totalDays`) and was found by hand.
+- Each case asserts that **data that was seeded is on the screen**, not that the
+  page rendered: a blank page passes "the root is visible", and only the trade's
+  own instrument proves the payload arrived and was understood.
+- **Proved by renaming `trades` to `rows` in the trade-log payload** — the server
+  answered happily, and exactly one test failed. The first attempt at that proof
+  was worthless because the server had not actually restarted, which is worth
+  recording: a break that is not observed to break proves nothing.
+- `scripts/serve-public-stack.mjs` puts the terminal and the API behind one
+  origin, as production does; `scripts/seed-public-account.mjs` creates the
+  account, a session and one record per screen.
+
 ## Partially completed
 
 - `PRIVATE_DATABASE_URL` is supported, but the physical existing database has not been moved or renamed.
