@@ -147,10 +147,50 @@ Updated: 2026-08-27.
   intake conversation to draw a usable description out of a person; here the
   report is simply what was written.
 
-- Still demo-only BY DECISION and written down: the hand-kept trade log and the
-  funded book (`addTrade`, the funded account and trade writes). Both are
-  public-safe features — a record of trades somebody typed in, no broker behind
-  them — and both are storage that has not been built yet.
+- Gave the public terminal a tenth record family with real storage: THE
+  HAND-KEPT TRADE LOG, with Deleted Trades behind it. No broker is involved in
+  any of it — no credential stored, no order placed, no position read — which is
+  what makes it safe to have here at all. `source` is fixed server-side, because
+  claiming a row came from a broker fill is a claim about where a number came
+  from.
+- **The break-even band is fixed at exactly flat, and SAID SO in the payload.**
+  The private terminal scores against a band the desk sets; setting it is a
+  desk-settings surface and the public terminal has none, so there is nothing to
+  honour and nothing to diverge from. It matters that the payload states it: the
+  SCREEN recomputes the summary itself whenever a filter is on, so given the
+  same config the two halves cannot disagree about a win rate.
+- The tests are mostly about the difference between ZERO and UNKNOWN, because
+  getting it wrong does not error — it quietly scores a trade nobody scored. An
+  open trade's result is null however it arrives; a hand-kept open trade's
+  unrealized P/L is null because no live price stands behind it; slippage is
+  null when no plan was stated; and a log with nothing scored reports no total
+  rather than a flat zero.
+- Deleting is SOFT. A hand-typed trade exists nowhere else and no broker can
+  re-import it, so a hard delete would be the one act on that screen with no way
+  back. A row in the bin cannot be edited either — rewriting it there would mean
+  restoring something other than what was removed.
+
+- Gave the public terminal an eleventh record family with real storage: THE
+  FUNDED BOOK. VTS never places a funded trade and never will — the trader
+  places it at the firm and writes it down here — so there is no integration, no
+  credential, and nothing on that path reaches the firm.
+- The account's headline figures are DERIVED from its trades on every read
+  rather than stored beside them: stored, the balance and the trades that
+  produced it could disagree and there would be no way to say which was right.
+  With no starting balance stated there is NO balance, rather than a bare P/L
+  presented as one — that would be a figure the account never held.
+- A stop or target is null when none is KNOWN OF, which is deliberately not the
+  same as "there is none": a funded position with no protection on it is the
+  most important thing a row can say, so it must not be implied by an absence of
+  data. Commission is null when not stated and is never read as zero, since
+  nothing can look a prop firm's schedule up.
+- **`verify:demo-coverage` now reports ZERO demo-only calls.** Every reachable
+  api call on a public screen either works on a real account or is named as
+  deliberately unbuilt.
+- A test caught a routing bug worth recording: the guard for the bare
+  `/funded/trades` path matched `trades/<id>` too and swallowed every funded
+  trade delete — which then 404'd for the right-LOOKING reason, so the ownership
+  test beside it passed while proving nothing.
 
 - Gave the public terminal a sixth record family with real storage: STUDY GAMES
   — the decks, their questions, each learner's progress, and combining games.
@@ -203,6 +243,48 @@ Updated: 2026-08-27.
   reaching another's screen, plus an attestation and a review queue with no admin
   surface on the public side. That is a product decision, not a port.
 
+- **THE POSTGRES STORE NOW ACTUALLY RUNS, AGAINST A REAL DATABASE.** Every other
+  test drives the in-memory store, which is a faithful model of the contract and
+  executes none of the SQL — so twelve migrations and every query in
+  `postgresStore.ts` had never once been run. A wrong column name, a bad jsonb
+  cast or an inverted soft-delete predicate would have surfaced for the first
+  time when the public service was deployed, looking like the feature was broken
+  rather than like one wrong word.
+- `npm run verify:postgres` applies every migration to an empty schema and
+  drives one round trip through each of the eleven record families. It runs in
+  CI as its own job with a Postgres service — separate from `verify`, which
+  deliberately needs nothing at all.
+- It is NOT a second copy of the behavioural tests. Those belong with the memory
+  store, where they are fast and total. What is checked here is only what the
+  memory store cannot check: that the statements are valid, and that what goes
+  into the database comes back out as the same shape.
+- **Proved to catch two classes of fault**, not merely observed to pass: a wrong
+  column alias and an inverted soft-delete predicate. The first attempt did NOT
+  catch the alias — the assertions read a summary computed from prices, so an
+  `undefined` came back unnoticed — so the reads now assert every column rather
+  than the few a summary happens to use.
+- The last case is the one nothing else could see: deleting an account and then
+  checking that no table anywhere still holds rows for it. Every record family
+  cascades correctly.
+
+- **There is a migration RUNNER now**, which there was not: provisioning meant
+  feeding twelve files through psql by hand, in order, remembering which had
+  already been applied. `npm run db:migrate:public` does it once and repeatably,
+  is idempotent, and is on the public API's start command so every deploy
+  applies what is pending.
+- It **refuses to run against a database holding non-`public_*` tables** — that
+  is the private database's shape, and pointing this at it by mistake is the
+  worst thing the script could do. Proved by pointing it at a database holding
+  `users` and `broker_connections`.
+- `verify:migrations` read the first two migrations BY NAME, so every migration
+  added since was covered by none of its guards — including the one that stops a
+  public migration creating a private table. It reads all of them now, and also
+  checks the numbering is a sequence rather than assuming it.
+- `deploy/railway/public-api.json` did not exist; the other three services had
+  configs and the API had none.
+- `docs/implementation/public-launch-runbook.md` is the ordered list of what is
+  left, all of which needs a Railway account and a domain.
+
 ## Partially completed
 
 - `PRIVATE_DATABASE_URL` is supported, but the physical existing database has not been moved or renamed.
@@ -219,7 +301,7 @@ Updated: 2026-08-27.
 ## Blocked/manual
 
 - Provision separate Railway services.
-- Provision a public database and public API (the API exists and has auth, market data, layout, early access, budget, to-do, investments, net worth, trading notes, study games, flashcards, presentations and support; the remaining record families are still demo-only).
+- Provision a public database and public API (the API exists and has auth, market data, layout, early access, budget, to-do, investments, net worth, trading notes, study games, flashcards, presentations, support, the hand-kept trade log and the funded book; the remaining record families are still demo-only).
 - Configure separate public authentication.
 - Configure private MFA.
 - Populate `PRIVATE_ACCESS_USER_IDS`. Since 7.42 an entry may be an ID, a username or an email — a username survives the database changing, which an ID does not.

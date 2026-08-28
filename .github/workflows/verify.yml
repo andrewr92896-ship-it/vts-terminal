@@ -40,3 +40,50 @@ jobs:
       - run: npm ci
 
       - run: npm run verify
+
+  # The store that ACTUALLY RUNS, against a real database.
+  #
+  # Every other test drives the in-memory store, which is a faithful model of
+  # the contract and executes none of the SQL — so a wrong column name, a bad
+  # jsonb cast or an inverted soft-delete predicate would have surfaced for the
+  # first time when the public service was deployed, looking like the feature
+  # was broken rather than like one wrong word.
+  #
+  # Its own job rather than part of `verify`: this one needs a database, and the
+  # main check deliberately needs nothing at all.
+  postgres:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          # NOT `public`: that is a reserved role in Postgres — the implicit
+          # group every role belongs to — so the container refuses to create it
+          # and dies during initdb, which reads as the service being broken.
+          POSTGRES_PASSWORD: vts
+          POSTGRES_USER: vts
+          POSTGRES_DB: public_check
+        ports:
+          - 5432:5432
+        # Without this the steps start before the server accepts connections and
+        # the failure reads as a broken test rather than a race.
+        options: >-
+          --health-cmd "pg_isready -U vts"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - run: npm run verify:postgres
+        env:
+          PUBLIC_TEST_DATABASE_URL: postgres://vts:vts@127.0.0.1:5432/public_check

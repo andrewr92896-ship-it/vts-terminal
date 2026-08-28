@@ -11,9 +11,42 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 7.53';
+export const APP_VERSION = 'Beta V 7.57';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 7.57',
+    date: 'August 28, 2026',
+    notes: [
+      'Corrected the marketing page: it offered reading a trade off a screenshot, which the public terminal cannot do yet.',
+      'Setting up the public database is now one command rather than twelve files applied by hand.',
+    ],
+  },
+  {
+    version: 'Beta V 7.56',
+    date: 'August 28, 2026',
+    notes: [
+      'The public terminal\u2019s database code now runs against a real database in the build, rather than being checked only against a stand-in.',
+    ],
+  },
+  {
+    version: 'Beta V 7.55',
+    date: 'August 28, 2026',
+    notes: [
+      'Manual Trades now works on a real public account: add a funded account, log what the firm is holding, remove a trade.',
+      'An account with no starting balance stated shows no balance, rather than presenting its profit as one.',
+      'A position with no stop recorded says so, rather than implying there is not one.',
+    ],
+  },
+  {
+    version: 'Beta V 7.54',
+    date: 'August 28, 2026',
+    notes: [
+      'The trade log and Deleted Trades now work on a real public account: log a trade, edit it, delete it, put it back.',
+      'A trade that has not closed shows no result rather than a zero, so it cannot be counted as a flat trade.',
+      'Deleting a trade is reversible — it goes to Deleted Trades rather than being lost.',
+    ],
+  },
   {
     version: 'Beta V 7.53',
     date: 'August 28, 2026',
