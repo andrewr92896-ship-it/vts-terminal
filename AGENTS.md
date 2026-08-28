@@ -309,6 +309,13 @@ rather than observed to pass:**
   back, not the few a summary happens to use** — the first version missed a
   wrong alias because the win rate it checked was computed from prices.
 
+- **`verify:public-wiring`** reads the ~66 paths OUT OF the adapter and calls
+  each against a real server on a real database, because both halves are written
+  by hand and nothing else compares them: the adapter is not typechecked against
+  the routes, the demo never reaches them, and the API's own tests write the
+  paths a second time. Only a route-not-found counts — a 400 means the route is
+  there and disliked an empty body.
+
 **`npm run db:migrate:public` is the runner**, idempotent, on the API's start
 command so every deploy applies what is pending. It **refuses to run against a
 database holding non-`public_*` tables** — that is the private database's shape,
