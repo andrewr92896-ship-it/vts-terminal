@@ -6,6 +6,8 @@ import { PostgresPublicStore } from './postgresStore.js';
 import { HttpPublicMarketProvider, SmtpPublicMailer } from './adapters.js';
 import type { BudgetKind, PublicMarketProvider, PublicStore, TodoItemRow } from './types.js';
 import { buildSections, dailyDone, etTodayMs, nextEtMidnight } from './todo.js';
+import { INVESTMENT_ASSET_CLASSES, allocateBy, concentrationFlags, totalPortfolio, valueHolding,
+  type HoldingValue, type InvestmentAssetClass, type PricedHolding } from './investmentsMath.js';
 
 // A month is YYYY-MM and a day is YYYY-MM-DD, both EASTERN — the same rule the
 // private portal's budget follows, and for the same reason: a month boundary
@@ -25,6 +27,19 @@ const isDayKey=(v:string)=>{
 };
 // Money arrives as cents and must be a whole positive number. A float here is
 // the one thing the integer-cents rule exists to keep out.
+// Optional text, trimmed and bounded; empty becomes null rather than ''.
+const text=(v:unknown,max:number)=>typeof v==='string'&&v.trim()?v.trim().slice(0,max):null;
+// Optional number. Null stays null — for a price that means UNPRICED, which is
+// a real state and not the same as zero — but a value that is present must be a
+// real number rather than silently becoming one.
+const optionalNumber=(v:unknown,what:string)=>{
+  if(v==null)return null;
+  const n=Number(v);
+  if(!Number.isFinite(n))throw new AuthError(400,`${what} must be a number.`);
+  return n;
+};
+// Today's Eastern day as YYYY-MM-DD, for the one-per-day snapshot key.
+const etTodayMs2Date=()=>new Intl.DateTimeFormat('en-CA',{timeZone:ET,year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
 const isCents=(v:unknown):v is number=>typeof v==='number'&&Number.isInteger(v)&&v>0&&v<=2_147_483_647;
 
 export const PUBLIC_SESSION_COOKIE='vts_public_session_v1';
@@ -76,6 +91,57 @@ function readRestorable(body:Record<string,unknown>):TodoItemRow|undefined{
   const intervalDays=body.intervalDays==null?null:Number(body.intervalDays);
   if(intervalDays!==null&&(!Number.isInteger(intervalDays)||intervalDays<=0))return undefined;
   return {id,sectionId,text,position,hyphen:body.hyphen===true,done:body.done===true,dueAt,intervalDays};
+}
+
+// The portfolio, valued.
+//
+// THERE ARE NO LIVE QUOTES ON THE PUBLIC SIDE YET, and that is stated rather
+// than papered over. A holding is priced from the figure its owner typed, or it
+// is not priced at all — and an unpriced holding is worth an UNKNOWN amount,
+// never zero. `unpricedCount` on the totals is how the screen says how much of
+// the portfolio it could not see; treating unpriced as zero would silently
+// understate a portfolio, which is the most misleading thing a tracker can do.
+//
+// When a provider is wired, it lands here as the `live` branch and everything
+// downstream — the totals, the allocation, the day-move coverage — already
+// distinguishes the three sources.
+async function readPortfolio(store:PublicStore,accountId:string){
+  const [accounts,holdings]=await Promise.all([store.listInvestmentAccounts(accountId),store.listInvestmentHoldings(accountId)]);
+  const labels=new Map(accounts.map((a)=>[a.id,a.label]));
+  const valued:HoldingValue[]=holdings.map((h)=>{
+    const priced:PricedHolding={
+      id:h.id,accountId:h.investmentAccountId,symbol:h.symbol,name:h.name,
+      assetClass:h.assetClass as InvestmentAssetClass,quantity:h.quantity,costBasis:h.costBasis,
+      price:h.manualPrice,
+      priceSource:h.manualPrice!=null?'manual':'none',
+      // No quote means no previous close, so no day move is claimed for it.
+      previousClose:null,
+      sector:h.sector,region:h.region,
+    };
+    return valueHolding(priced);
+  });
+  // Only ACTIVE accounts' cash counts toward the total, matching how the
+  // private side treats a closed account.
+  const cash=accounts.filter((a)=>a.active).reduce((sum,a)=>sum+a.cashBalance,0);
+  const totals=totalPortfolio(valued,cash);
+  const byClass=allocateBy(valued,'assetClass',cash);
+  return {
+    accounts:accounts.map((a)=>{
+      const mine=valued.filter((h)=>h.accountId===a.id);
+      return {...a,
+        // Its own priced holdings plus its cash — an unpriced holding inside it
+        // is counted separately rather than folded in as nothing.
+        value:mine.reduce((sum,h)=>sum+(h.value??0),0)+a.cashBalance,
+        holdingsCount:mine.length,
+        unpricedCount:mine.filter((h)=>h.value==null).length};
+    }),
+    holdings:valued.map((h)=>({...h,accountLabel:labels.get(h.accountId)??'',
+      manualPrice:holdings.find((r)=>r.id===h.id)?.manualPrice??null,
+      manualPriceAt:holdings.find((r)=>r.id===h.id)?.manualPriceAt??null})),
+    totals,
+    allocation:{byClass,bySector:allocateBy(valued,'sector',0),byRegion:allocateBy(valued,'region',0)},
+    flags:concentrationFlags(valued,byClass,totals.value),
+  };
 }
 
 async function authenticatedAccount(req:IncomingMessage,service:PublicAuthService){
@@ -254,6 +320,124 @@ export async function handleRequest(req:IncomingMessage,res:ServerResponse,depen
       const restored=await dependencies.store.restoreTodoItem(id,item);
       if(!restored)throw new AuthError(404,'That task could not be put back.');
       return json(res,200,{sections:await readTodo(dependencies.store,id)});
+    }
+    // ---- investments ----------------------------------------------------------
+    if(path==='/public/v1/investments/portfolio'&&method==='GET'){
+      const id=await authenticatedAccount(req,authService);
+      const payload=await readPortfolio(dependencies.store,id);
+      // One reading per Eastern day, written forward. Never back-filled: nothing
+      // can price a fund as of last March, so an earlier curve would be one that
+      // never happened. Best effort — a portfolio must still render if the
+      // history write fails.
+      await dependencies.store.recordInvestmentSnapshot(id,etTodayMs2Date(),payload.totals.value,0).catch(()=>{});
+      return json(res,200,payload);
+    }
+    if(path==='/public/v1/investments/accounts'&&method==='POST'){
+      const id=await authenticatedAccount(req,authService); const body=await readBody(req);
+      const label=String(body.label||'').trim();
+      if(!label||label.length>80)throw new AuthError(400,'Give the account a name of 80 characters or fewer.');
+      const kind=String(body.kind||'').trim()||'brokerage';
+      const cashBalance=Number(body.cashBalance??0);
+      if(!Number.isFinite(cashBalance))throw new AuthError(400,'Cash must be a number.');
+      return json(res,201,await dependencies.store.createInvestmentAccount(id,{
+        label,kind,institution:text(body.institution,120),cashBalance,note:text(body.note,500),
+        active:body.active!==false,sortOrder:Number.isInteger(body.sortOrder)?Number(body.sortOrder):0}));
+    }
+    if(path.startsWith('/public/v1/investments/accounts/')&&(method==='PATCH'||method==='DELETE')){
+      const id=await authenticatedAccount(req,authService);
+      const target=decodeURIComponent(path.slice('/public/v1/investments/accounts/'.length));
+      if(method==='DELETE'){
+        if(!await dependencies.store.deleteInvestmentAccount(id,target))throw new AuthError(404,'No such account.');
+        return json(res,200,{ok:true});
+      }
+      const body=await readBody(req);
+      const patch:Record<string,unknown>={};
+      if('label' in body){const label=String(body.label||'').trim(); if(!label||label.length>80)throw new AuthError(400,'Give the account a name of 80 characters or fewer.'); patch.label=label}
+      if('kind' in body)patch.kind=String(body.kind||'').trim()||'brokerage';
+      if('institution' in body)patch.institution=text(body.institution,120);
+      if('note' in body)patch.note=text(body.note,500);
+      if('active' in body)patch.active=body.active===true;
+      if('cashBalance' in body){const cash=Number(body.cashBalance); if(!Number.isFinite(cash))throw new AuthError(400,'Cash must be a number.'); patch.cashBalance=cash}
+      if('sortOrder' in body&&Number.isInteger(body.sortOrder))patch.sortOrder=Number(body.sortOrder);
+      if(!await dependencies.store.updateInvestmentAccount(id,target,patch))throw new AuthError(404,'No such account.');
+      return json(res,200,{ok:true});
+    }
+    if(path==='/public/v1/investments/holdings'&&method==='POST'){
+      const id=await authenticatedAccount(req,authService); const body=await readBody(req);
+      const name=String(body.name||'').trim();
+      if(!name||name.length>120)throw new AuthError(400,'Give the holding a name of 120 characters or fewer.');
+      const assetClass=String(body.assetClass||'');
+      if(!(INVESTMENT_ASSET_CLASSES as readonly string[]).includes(assetClass))throw new AuthError(400,'That is not an asset class.');
+      const quantity=Number(body.quantity??0);
+      if(!Number.isFinite(quantity))throw new AuthError(400,'Quantity must be a number.');
+      const manualPrice=optionalNumber(body.manualPrice,'A price');
+      const holding=await dependencies.store.createInvestmentHolding(id,{
+        investmentAccountId:String(body.investmentAccountId||''),
+        // Nullable ON PURPOSE: a 401(k) menu is full of funds with a name and no
+        // ticker, and a tracker that cannot hold one cannot hold most
+        // retirement accounts.
+        symbol:text(body.symbol,20),name,assetClass,quantity,
+        costBasis:optionalNumber(body.costBasis,'A cost basis'),
+        manualPrice,manualPriceAt:manualPrice==null?null:Date.now(),
+        sector:text(body.sector,60),region:text(body.region,60),note:text(body.note,500)});
+      if(!holding)throw new AuthError(404,'No such account.');
+      return json(res,201,holding);
+    }
+    if(path.startsWith('/public/v1/investments/holdings/')&&(method==='PATCH'||method==='DELETE')){
+      const id=await authenticatedAccount(req,authService);
+      const target=decodeURIComponent(path.slice('/public/v1/investments/holdings/'.length));
+      if(method==='DELETE'){
+        if(!await dependencies.store.deleteInvestmentHolding(id,target))throw new AuthError(404,'No such holding.');
+        return json(res,200,{ok:true});
+      }
+      const body=await readBody(req);
+      const patch:Record<string,unknown>={};
+      if('name' in body){const name=String(body.name||'').trim(); if(!name||name.length>120)throw new AuthError(400,'Give the holding a name of 120 characters or fewer.'); patch.name=name}
+      if('assetClass' in body){const c=String(body.assetClass||''); if(!(INVESTMENT_ASSET_CLASSES as readonly string[]).includes(c))throw new AuthError(400,'That is not an asset class.'); patch.assetClass=c}
+      if('quantity' in body){const q=Number(body.quantity); if(!Number.isFinite(q))throw new AuthError(400,'Quantity must be a number.'); patch.quantity=q}
+      // Setting it to null CLEARS the price and makes the holding unpriced
+      // again, which is a real state and not the same as pricing it at zero.
+      if('manualPrice' in body)patch.manualPrice=optionalNumber(body.manualPrice,'A price');
+      if('costBasis' in body)patch.costBasis=optionalNumber(body.costBasis,'A cost basis');
+      for(const key of ['symbol','sector','region','note'] as const)if(key in body)patch[key]=text(body[key],key==='note'?500:60);
+      if(!await dependencies.store.updateInvestmentHolding(id,target,patch))throw new AuthError(404,'No such holding.');
+      return json(res,200,{ok:true});
+    }
+    if(path==='/public/v1/investments/transactions'&&method==='POST'){
+      const id=await authenticatedAccount(req,authService); const body=await readBody(req);
+      const amount=Number(body.amount);
+      if(!Number.isFinite(amount))throw new AuthError(400,'An amount is a number.');
+      const occurredAt=Number(body.occurredAt??Date.now());
+      if(!Number.isFinite(occurredAt))throw new AuthError(400,'That is not a date.');
+      const taxYear=body.taxYear==null?null:Number(body.taxYear);
+      if(taxYear!==null&&(!Number.isInteger(taxYear)||taxYear<1900||taxYear>2200))throw new AuthError(400,'That is not a tax year.');
+      const created=await dependencies.store.createInvestmentTransaction(id,{
+        investmentAccountId:String(body.investmentAccountId||''),holdingId:text(body.holdingId,64),
+        kind:String(body.kind||'').trim()||'contribution',amount,
+        quantity:optionalNumber(body.quantity,'A quantity'),occurredAt,taxYear,note:text(body.note,500)});
+      if(!created)throw new AuthError(404,'No such account.');
+      return json(res,201,created);
+    }
+    if(path.startsWith('/public/v1/investments/transactions/')&&method==='DELETE'){
+      const id=await authenticatedAccount(req,authService);
+      const target=decodeURIComponent(path.slice('/public/v1/investments/transactions/'.length));
+      if(!await dependencies.store.deleteInvestmentTransaction(id,target))throw new AuthError(404,'No such transaction.');
+      return json(res,200,{ok:true});
+    }
+    if(path==='/public/v1/investments/goals'&&method==='POST'){
+      const id=await authenticatedAccount(req,authService); const body=await readBody(req);
+      const label=String(body.label||'').trim();
+      if(!label||label.length>80)throw new AuthError(400,'Give the goal a name of 80 characters or fewer.');
+      const targetYear=body.targetYear==null?null:Number(body.targetYear);
+      if(targetYear!==null&&(!Number.isInteger(targetYear)||targetYear<1900||targetYear>2200))throw new AuthError(400,'That is not a year.');
+      return json(res,201,await dependencies.store.createInvestmentGoal(id,{
+        label,targetAmount:optionalNumber(body.targetAmount,'A target'),targetYear,note:text(body.note,500)}));
+    }
+    if(path.startsWith('/public/v1/investments/goals/')&&method==='DELETE'){
+      const id=await authenticatedAccount(req,authService);
+      const target=decodeURIComponent(path.slice('/public/v1/investments/goals/'.length));
+      if(!await dependencies.store.deleteInvestmentGoal(id,target))throw new AuthError(404,'No such goal.');
+      return json(res,200,{ok:true});
     }
     if(path.startsWith('/public/v1/ai/'))return json(res,501,{message:'Public AI is not available.'});
     return json(res,404,{message:'Public route not found.'});

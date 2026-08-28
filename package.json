@@ -31,6 +31,7 @@
     "db:check-password-reset": "npm --workspace @vts/api run db:check-password-reset",
     "verify:market-macro": "npm --workspace @vts/api run verify:market-macro",
     "verify:rollover": "npm --workspace @vts/api run verify:rollover",
+    "verify:investments-mirror": "npx tsx scripts/verify-investments-mirror.mjs",
     "verify:investments": "npm --workspace @vts/api run verify:investments",
     "verify:migrations": "npm --workspace @vts/api run verify:migrations",
     "verify:config": "npm --workspace @vts/api run verify:config",

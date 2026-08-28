@@ -12,6 +12,7 @@ const STEPS = [
   ['AI provider seam', 'verify:ai-provider'],
   ['market data macro', 'verify:market-macro'],
   ['investments math', 'verify:investments'],
+  ['investments math mirror (private ↔ public)', 'verify:investments-mirror'],
   ['position sizing (web ↔ server)', 'verify:sizing'],
   ['trade movement (pips and points)', 'verify:movement'],
   ['Desk right now responsive layout', 'verify:desk-layout'],

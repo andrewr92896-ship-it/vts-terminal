@@ -49,6 +49,18 @@ Updated: 2026-08-27.
   ways. Seeding is idempotent by CONSTRAINT rather than by an in-process guard,
   which the private side uses and which cannot hold across instances.
 
+- Gave the public terminal a third record family with real storage:
+  Investments — accounts, holdings, transactions, goals and a forward-only
+  daily history. The valuation math is a VERBATIM MIRROR of the private one,
+  because the public API may not import private code; `verify:investments-mirror`
+  compares the two files byte for byte below their headers AND runs both through
+  the same fixtures, so drift fails in CI rather than as two screens quietly
+  disagreeing about what a portfolio is worth.
+- No live quotes on the public side yet, stated rather than papered over: a
+  holding is priced from what its owner typed or it is unpriced, and an unpriced
+  holding is excluded from every total and COUNTED. The three price sources are
+  already distinguished, so wiring a provider is a branch rather than a rewrite.
+
 ## Partially completed
 
 - `PRIVATE_DATABASE_URL` is supported, but the physical existing database has not been moved or renamed.
@@ -65,7 +77,7 @@ Updated: 2026-08-27.
 ## Blocked/manual
 
 - Provision separate Railway services.
-- Provision a public database and public API (the API exists and has auth, market data, layout, early access, budget and to-do; the remaining record families are still demo-only).
+- Provision a public database and public API (the API exists and has auth, market data, layout, early access, budget, to-do and investments; the remaining record families are still demo-only).
 - Configure separate public authentication.
 - Configure private MFA.
 - Populate `PRIVATE_ACCESS_USER_IDS`. Since 7.42 an entry may be an ID, a username or an email — a username survives the database changing, which an ID does not.

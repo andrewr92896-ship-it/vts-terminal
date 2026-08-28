@@ -22,6 +22,15 @@ export type TodoMarker='check'|'dash'|'dot';
 export type TodoSectionType='one'|'note'|'daily'|'routine';
 export type TodoItemRow={id:string;sectionId:string;text:string;position:number;hyphen:boolean;done:boolean;dueAt:number|null;intervalDays:number|null};
 export type TodoSectionRow={id:string;n:number;icon:string;title:string;type:TodoSectionType;intervalDays:number|null};
+// ---- investments ------------------------------------------------------------
+//
+// The stored shapes. Valuation lives in investmentsMath.ts, which is a verified
+// mirror of the private one — nothing here recomputes a total.
+export type InvestmentAccount = { id:string; label:string; kind:string; institution:string|null; source:string; cashBalance:number; note:string|null; active:boolean; sortOrder:number };
+export type InvestmentHolding = { id:string; investmentAccountId:string; symbol:string|null; name:string; assetClass:string; quantity:number; costBasis:number|null; manualPrice:number|null; manualPriceAt:number|null; sector:string|null; region:string|null; note:string|null };
+export type InvestmentTransaction = { id:string; investmentAccountId:string; holdingId:string|null; kind:string; amount:number; quantity:number|null; occurredAt:number; taxYear:number|null; note:string|null; source:string };
+export type InvestmentGoal = { id:string; label:string; targetAmount:number|null; targetYear:number|null; note:string|null };
+export type InvestmentSnapshot = { onDate:string; value:number; contributions:number };
 export type NewBudgetEntry = { categoryId:string; amountCents:number; note:string|null; occurredOn:string };
 
 export interface PublicStore {
@@ -63,6 +72,25 @@ export interface PublicStore {
   setTodoItemState(accountId:string,id:string,done:boolean,dueAt:number|null):Promise<boolean>;
   deleteTodoItem(accountId:string,id:string):Promise<boolean>;
   restoreTodoItem(accountId:string,item:TodoItemRow):Promise<boolean>;
+  // Investments. Reads are whole-portfolio because every screen in the
+  // workspace is a different view of the same set of holdings.
+  listInvestmentAccounts(accountId:string):Promise<InvestmentAccount[]>;
+  listInvestmentHoldings(accountId:string):Promise<InvestmentHolding[]>;
+  listInvestmentTransactions(accountId:string):Promise<InvestmentTransaction[]>;
+  listInvestmentGoals(accountId:string):Promise<InvestmentGoal[]>;
+  listInvestmentSnapshots(accountId:string):Promise<InvestmentSnapshot[]>;
+  createInvestmentAccount(accountId:string,value:Omit<InvestmentAccount,'id'|'source'>):Promise<InvestmentAccount>;
+  updateInvestmentAccount(accountId:string,id:string,patch:Partial<Omit<InvestmentAccount,'id'|'source'>>):Promise<boolean>;
+  deleteInvestmentAccount(accountId:string,id:string):Promise<boolean>;
+  createInvestmentHolding(accountId:string,value:Omit<InvestmentHolding,'id'>):Promise<InvestmentHolding|undefined>;
+  updateInvestmentHolding(accountId:string,id:string,patch:Partial<Omit<InvestmentHolding,'id'|'investmentAccountId'>>):Promise<boolean>;
+  deleteInvestmentHolding(accountId:string,id:string):Promise<boolean>;
+  createInvestmentTransaction(accountId:string,value:Omit<InvestmentTransaction,'id'|'source'>):Promise<InvestmentTransaction|undefined>;
+  deleteInvestmentTransaction(accountId:string,id:string):Promise<boolean>;
+  createInvestmentGoal(accountId:string,value:Omit<InvestmentGoal,'id'>):Promise<InvestmentGoal>;
+  deleteInvestmentGoal(accountId:string,id:string):Promise<boolean>;
+  // Written forward, one per Eastern day, never back-filled.
+  recordInvestmentSnapshot(accountId:string,onDate:string,value:number,contributions:number):Promise<void>;
   audit(event:string,accountId:string|undefined,metadata:Record<string,unknown>):Promise<void>;
 }
 

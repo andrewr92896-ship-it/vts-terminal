@@ -1,4 +1,4 @@
-import type { BudgetCategory, BudgetEntry, Challenge, NewBudgetCategory, NewBudgetEntry, PublicAccount, PublicStore, RateLimitResult, Session, TodoItemRow, TodoSectionRow, TrustedDevice } from './types.js';
+import type { InvestmentAccount, InvestmentGoal, InvestmentHolding, InvestmentSnapshot, InvestmentTransaction, BudgetCategory, BudgetEntry, Challenge, NewBudgetCategory, NewBudgetEntry, PublicAccount, PublicStore, RateLimitResult, Session, TodoItemRow, TodoSectionRow, TrustedDevice } from './types.js';
 import { STARTER_SECTIONS } from './todo.js';
 
 export class MemoryPublicStore implements PublicStore {
@@ -125,6 +125,91 @@ export class MemoryPublicStore implements PublicStore {
     // there now, which for an undo button pressed twice is the item itself.
     if(this.todoItems.has(item.id))return false;
     this.todoItems.set(item.id,{...item,accountId}); return true;
+  }
+  // ---- investments ----------------------------------------------------------
+  //
+  // Mirrors the Postgres store's RULES: rows are keyed by account, a child can
+  // only be created under a parent the same account owns, `source` is
+  // server-owned, deleting an investment account cascades, and a manual price
+  // is stamped when it is set and cleared when it is removed.
+  invAccounts=new Map<string,InvestmentAccount&{accountId:string}>();
+  invHoldings=new Map<string,InvestmentHolding&{accountId:string}>();
+  invTransactions=new Map<string,InvestmentTransaction&{accountId:string}>();
+  invGoals=new Map<string,InvestmentGoal&{accountId:string}>();
+  invSnapshots=new Map<string,InvestmentSnapshot&{accountId:string}>();
+  private strip<T extends {accountId:string}>(v:T){const {accountId:_,...rest}=v; return rest}
+  private mine<T extends {accountId:string}>(map:Map<string,T>,accountId:string){
+    return [...map.values()].filter((v)=>v.accountId===accountId);
+  }
+  async listInvestmentAccounts(accountId:string){
+    return this.mine(this.invAccounts,accountId).sort((a,b)=>a.sortOrder-b.sortOrder||a.label.localeCompare(b.label)).map((v)=>this.strip(v)) as InvestmentAccount[];
+  }
+  async listInvestmentHoldings(accountId:string){
+    return this.mine(this.invHoldings,accountId).sort((a,b)=>a.name.localeCompare(b.name)).map((v)=>this.strip(v)) as InvestmentHolding[];
+  }
+  async listInvestmentTransactions(accountId:string){
+    return this.mine(this.invTransactions,accountId).sort((a,b)=>b.occurredAt-a.occurredAt).map((v)=>this.strip(v)) as InvestmentTransaction[];
+  }
+  async listInvestmentGoals(accountId:string){
+    return this.mine(this.invGoals,accountId).map((v)=>this.strip(v)) as InvestmentGoal[];
+  }
+  async listInvestmentSnapshots(accountId:string){
+    return this.mine(this.invSnapshots,accountId).sort((a,b)=>a.onDate.localeCompare(b.onDate)).map((v)=>this.strip(v)) as InvestmentSnapshot[];
+  }
+  async createInvestmentAccount(accountId:string,v:Omit<InvestmentAccount,'id'|'source'>){
+    const row={...v,id:this.id(),accountId,source:'manual'};
+    this.invAccounts.set(row.id,row); return this.strip(row) as InvestmentAccount;
+  }
+  async updateInvestmentAccount(accountId:string,id:string,patch:Partial<Omit<InvestmentAccount,'id'|'source'>>){
+    const row=this.invAccounts.get(id); if(!row||row.accountId!==accountId)return false;
+    this.invAccounts.set(id,{...row,...patch}); return true;
+  }
+  async deleteInvestmentAccount(accountId:string,id:string){
+    const row=this.invAccounts.get(id); if(!row||row.accountId!==accountId)return false;
+    this.invAccounts.delete(id);
+    // The database cascades; here it is done by hand or the portfolio keeps
+    // holdings that belong to an account that no longer exists.
+    for(const [k,h] of this.invHoldings)if(h.investmentAccountId===id)this.invHoldings.delete(k);
+    for(const [k,t] of this.invTransactions)if(t.investmentAccountId===id)this.invTransactions.delete(k);
+    return true;
+  }
+  async createInvestmentHolding(accountId:string,v:Omit<InvestmentHolding,'id'>){
+    const parent=this.invAccounts.get(v.investmentAccountId);
+    if(!parent||parent.accountId!==accountId)return undefined;
+    const row={...v,id:this.id(),accountId};
+    this.invHoldings.set(row.id,row); return this.strip(row) as InvestmentHolding;
+  }
+  async updateInvestmentHolding(accountId:string,id:string,patch:Partial<Omit<InvestmentHolding,'id'|'investmentAccountId'>>){
+    const row=this.invHoldings.get(id); if(!row||row.accountId!==accountId)return false;
+    const next={...row,...patch};
+    if('manualPrice' in patch)next.manualPriceAt=patch.manualPrice==null?null:Date.now();
+    this.invHoldings.set(id,next); return true;
+  }
+  async deleteInvestmentHolding(accountId:string,id:string){
+    const row=this.invHoldings.get(id); if(!row||row.accountId!==accountId)return false;
+    this.invHoldings.delete(id); return true;
+  }
+  async createInvestmentTransaction(accountId:string,v:Omit<InvestmentTransaction,'id'|'source'>){
+    const parent=this.invAccounts.get(v.investmentAccountId);
+    if(!parent||parent.accountId!==accountId)return undefined;
+    const row={...v,id:this.id(),accountId,source:'manual'};
+    this.invTransactions.set(row.id,row); return this.strip(row) as InvestmentTransaction;
+  }
+  async deleteInvestmentTransaction(accountId:string,id:string){
+    const row=this.invTransactions.get(id); if(!row||row.accountId!==accountId)return false;
+    this.invTransactions.delete(id); return true;
+  }
+  async createInvestmentGoal(accountId:string,v:Omit<InvestmentGoal,'id'>){
+    const row={...v,id:this.id(),accountId};
+    this.invGoals.set(row.id,row); return this.strip(row) as InvestmentGoal;
+  }
+  async deleteInvestmentGoal(accountId:string,id:string){
+    const row=this.invGoals.get(id); if(!row||row.accountId!==accountId)return false;
+    this.invGoals.delete(id); return true;
+  }
+  async recordInvestmentSnapshot(accountId:string,onDate:string,value:number,contributions:number){
+    // Last reading of the day stands, keyed by (account, day).
+    this.invSnapshots.set(`${accountId}:${onDate}`,{accountId,onDate,value,contributions});
   }
   async audit(event:string,accountId:string|undefined,metadata:Record<string,unknown>){this.audits.push({event,accountId,metadata})}
 }
