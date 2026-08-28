@@ -201,6 +201,26 @@ test('the compliance disclaimers are actually on the screens that must carry the
   expect(notes).toEqual([]);
 });
 
+test('a visitor with no account can ask for early access', async ({ browser }) => {
+  // The only thing an unauthenticated visitor does, the one route with no
+  // session behind it, and the top of the funnel for the whole product — the
+  // marketing site's two buttons both land here. Its own browser context, with
+  // NO cookie, because "works while signed in" says nothing about it.
+  const context = await browser.newContext({ ignoreHTTPSErrors: true });
+  const page = await context.newPage();
+  const errors = [];
+  page.on('pageerror', (error) => errors.push(String(error)));
+
+  await page.goto(`${base}/?screen=early-access`, { waitUntil: 'networkidle' });
+  await page.getByPlaceholder('you@example.com').fill(`visitor-${Date.now()}@example.com`);
+  await page.getByRole('button', { name: 'Send request' }).click();
+
+  // Told something, rather than left looking at a form that did nothing.
+  await expect(page.getByText(/Request received/i)).toBeVisible();
+  expect(errors).toEqual([]);
+  await context.close();
+});
+
 test('every remaining screen renders without throwing', async ({ page }) => {
   // The ones with nothing seeded. Nothing is asserted about their content —
   // there is none — but a thrown render leaves the root dead for every later
