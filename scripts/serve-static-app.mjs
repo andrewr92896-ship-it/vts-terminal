@@ -52,7 +52,28 @@ createServer((request, response) => {
     'X-Content-Type-Options': 'nosniff',
     'Referrer-Policy': 'strict-origin-when-cross-origin',
     'Permissions-Policy': 'camera=(), microphone=(), geolocation=()',
-    'Content-Security-Policy': "default-src 'self'; style-src 'self'; img-src 'self' data:; base-uri 'none'; frame-ancestors 'none'; form-action 'self'",
+    // TradingView is allowed BY NAME, and nothing else is.
+    //
+    // The Live Wall's chart, watchlist and ticker tape are TradingView's public
+    // embed widgets — the same ones the private portal uses. They take no
+    // credential and carry no account data, so there is no boundary reason to
+    // replace them, and replacing them with a drawing is what made the demo
+    // look like a different product. A widget is a <script> from
+    // s3.tradingview.com that renders an iframe from tradingview.com, so both
+    // need naming; `default-src 'self'` alone silently blocks both and the tile
+    // renders empty with no error anybody sees.
+    'Content-Security-Policy': [
+      "default-src 'self'",
+      "script-src 'self' https://s3.tradingview.com https://www.tradingview.com",
+      "frame-src https://www.tradingview.com https://s.tradingview.com",
+      "connect-src 'self' https://*.tradingview.com",
+      "style-src 'self' 'unsafe-inline'",
+      "img-src 'self' data: https://*.tradingview.com",
+      "font-src 'self' data:",
+      "base-uri 'none'",
+      "frame-ancestors 'none'",
+      "form-action 'self'",
+    ].join('; '),
   });
   createReadStream(candidate).pipe(response);
 }).listen(port, '0.0.0.0', () => {

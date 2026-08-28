@@ -87,6 +87,11 @@ const ACCEPTED = {
 // Answered by the demo but NOT wired for a real account. Each of these works in
 // the showcase and 404s for a customer, so each needs a reason to still be here.
 const DEMO_ONLY = {
+  // The chart tile's price alert. A real one needs a server-side watch and a
+  // delivery channel (push or Pushover), and the public terminal has neither —
+  // so it is answered in the demo, where the tile behaves as it does in the
+  // portal, and is not wired for a real account.
+  alerts: ['createPriceAlert'],
   // The hand-kept trade log and the funded book. Both are real public-safe
   // features — a record of trades somebody typed in, with no broker behind them
   // — and both are storage that has not been built yet. Until it is, these three
