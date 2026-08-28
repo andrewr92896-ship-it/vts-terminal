@@ -1,7 +1,7 @@
-import type { NewTrade, BugReport, BugRole, Suggestion, FlashcardSetDetail, FlashcardSetPatch, FlashcardSetRow, NewFlashcardSet, NewStudyGuide, StudyGuideDetail, StudyGuidePatch, StudyGuideRow, NewStudyDeck, StudyDeckDetail, StudyDeckPatch, StudyDeckRow, NewTradingNote, TradingNotePatch, NetWorthItem, NetWorthSnapshot, InvestmentAccount, InvestmentGoal, InvestmentHolding, InvestmentSnapshot, InvestmentTransaction, BudgetCategory, BudgetEntry, Challenge, NewBudgetCategory, NewBudgetEntry, PublicAccount, PublicStore, RateLimitResult, Session, TodoItemRow, TodoSectionRow, TrustedDevice } from './types.js';
+import type { NewFundedAccount, NewFundedTrade, NewTrade, BugReport, BugRole, Suggestion, FlashcardSetDetail, FlashcardSetPatch, FlashcardSetRow, NewFlashcardSet, NewStudyGuide, StudyGuideDetail, StudyGuidePatch, StudyGuideRow, NewStudyDeck, StudyDeckDetail, StudyDeckPatch, StudyDeckRow, NewTradingNote, TradingNotePatch, NetWorthItem, NetWorthSnapshot, InvestmentAccount, InvestmentGoal, InvestmentHolding, InvestmentSnapshot, InvestmentTransaction, BudgetCategory, BudgetEntry, Challenge, NewBudgetCategory, NewBudgetEntry, PublicAccount, PublicStore, RateLimitResult, Session, TodoItemRow, TodoSectionRow, TrustedDevice } from './types.js';
 import { STARTER_SECTIONS } from './todo.js';
 import type { NoteRow } from './notes.js';
-import type { TradeRow } from './trades.js';
+import type { FundedAccountRow, TradeRow } from './trades.js';
 
 
 export class MemoryPublicStore implements PublicStore {
@@ -454,6 +454,41 @@ export class MemoryPublicStore implements PublicStore {
   async restoreTrade(accountId:string,id:string){
     const row=this.trades.get(id); if(!row||row.accountId!==accountId||row.deletedAt==null)return false;
     row.deletedAt=null; return true;
+  }
+  // ---- the funded book ------------------------------------------------------
+  fundedAccounts=new Map<string,FundedAccountRow&{accountId:string}>();
+  async listFundedAccounts(accountId:string){
+    return this.mine(this.fundedAccounts,accountId).sort((a,b)=>a.createdAt-b.createdAt)
+      .map((a)=>structuredClone(this.strip(a))) as FundedAccountRow[];
+  }
+  async createFundedAccount(accountId:string,v:NewFundedAccount){
+    const now=this.now();
+    const row={accountId,id:crypto.randomUUID(),...v,trades:[],createdAt:now,updatedAt:now};
+    this.fundedAccounts.set(row.id,row);
+    return structuredClone(this.strip(row)) as FundedAccountRow;
+  }
+  async updateFundedAccount(accountId:string,id:string,v:NewFundedAccount){
+    const row=this.fundedAccounts.get(id); if(!row||row.accountId!==accountId)return false;
+    this.fundedAccounts.set(id,{...row,...v,updatedAt:this.now()});
+    return true;
+  }
+  async deleteFundedAccount(accountId:string,id:string){
+    const row=this.fundedAccounts.get(id); if(!row||row.accountId!==accountId)return false;
+    this.fundedAccounts.delete(id); return true;
+  }
+  async addFundedTrade(accountId:string,bookId:string,v:NewFundedTrade){
+    const row=this.fundedAccounts.get(bookId); if(!row||row.accountId!==accountId)return false;
+    row.trades.unshift({...v,id:crypto.randomUUID()});
+    row.updatedAt=this.now();
+    return true;
+  }
+  async deleteFundedTrade(accountId:string,id:string){
+    for(const row of this.mine(this.fundedAccounts,accountId)){
+      const live=this.fundedAccounts.get(row.id)!;
+      const index=live.trades.findIndex((t)=>t.id===id);
+      if(index>=0){live.trades.splice(index,1);live.updatedAt=this.now();return true}
+    }
+    return false;
   }
   async audit(event:string,accountId:string|undefined,metadata:Record<string,unknown>){this.audits.push({event,accountId,metadata})}
 }

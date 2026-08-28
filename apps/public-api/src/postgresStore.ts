@@ -1,9 +1,9 @@
 import pg from 'pg';
-import type { NewTrade, BugReport, BugRole, Suggestion, FlashcardSetDetail, FlashcardSetPatch, FlashcardSetRow, NewFlashcardSet, NewStudyGuide, StudyGuideDetail, StudyGuidePatch, StudyGuideRow, NewStudyDeck, StudyDeckDetail, StudyDeckPatch, StudyDeckRow, NewTradingNote, TradingNotePatch, NetWorthItem, NetWorthSnapshot, InvestmentAccount, InvestmentGoal, InvestmentHolding, InvestmentSnapshot, InvestmentTransaction, BudgetCategory, BudgetEntry, Challenge, NewBudgetCategory, NewBudgetEntry, PublicAccount, PublicStore, RateLimitResult, Session, TodoItemRow, TodoSectionRow, TrustedDevice } from './types.js';
+import type { NewFundedAccount, NewFundedTrade, NewTrade, BugReport, BugRole, Suggestion, FlashcardSetDetail, FlashcardSetPatch, FlashcardSetRow, NewFlashcardSet, NewStudyGuide, StudyGuideDetail, StudyGuidePatch, StudyGuideRow, NewStudyDeck, StudyDeckDetail, StudyDeckPatch, StudyDeckRow, NewTradingNote, TradingNotePatch, NetWorthItem, NetWorthSnapshot, InvestmentAccount, InvestmentGoal, InvestmentHolding, InvestmentSnapshot, InvestmentTransaction, BudgetCategory, BudgetEntry, Challenge, NewBudgetCategory, NewBudgetEntry, PublicAccount, PublicStore, RateLimitResult, Session, TodoItemRow, TodoSectionRow, TrustedDevice } from './types.js';
 import { STARTER_SECTIONS } from './todo.js';
 import type { NoteRow } from './notes.js';
 import type { DeckQuestion, Flashcard, GuideSlide } from './studies.js';
-import type { TradeRow } from './trades.js';
+import type { FundedAccountRow, FundedTradeRow, TradeRow } from './trades.js';
 const {Pool}=pg;
 
 export class PostgresPublicStore implements PublicStore {
@@ -742,6 +742,86 @@ export class PostgresPublicStore implements PublicStore {
   }
   async restoreTrade(accountId:string,id:string):Promise<boolean>{
     const r=await this.pool.query('update public_trades set deleted_at=null where account_id=$1 and id=$2 and deleted_at is not null',[accountId,id]);
+    return (r.rowCount??0)>0;
+  }
+  // ---- the funded book ------------------------------------------------------
+  //
+  // Read WHOLE: an account without its trades cannot report its own balance,
+  // because the figures are derived from them rather than stored beside them.
+  async listFundedAccounts(accountId:string):Promise<FundedAccountRow[]>{
+    const ms=(x:unknown):number|null=>x==null?null:new Date(x as string).getTime();
+    const num=(x:unknown):number|null=>x==null?null:Number(x);
+    const accounts=await this.pool.query(
+      `select id,platform,label,currency,starting_balance as "startingBalance",
+              commission_per_lot as "commissionPerLot",notes,
+              created_at as "createdAt",updated_at as "updatedAt"
+         from public_funded_accounts where account_id=$1 order by created_at`,[accountId]);
+    if(accounts.rowCount===0)return [];
+    const ids=accounts.rows.map((v)=>String(v.id));
+    const trades=await this.pool.query(
+      `select id,funded_account_id as "bookId",instrument,side,units,entry_price as "entryPrice",
+              exit_price as "exitPrice",stop_loss as "stopLoss",take_profit as "takeProfit",
+              realized_pl as "realizedPl",status,opened_at as "openedAt",closed_at as "closedAt",
+              notes,created_at as "createdAt"
+         from public_funded_trades where funded_account_id = any($1::uuid[])
+        order by opened_at desc nulls last, created_at desc`,[ids]);
+    const byBook=new Map<string,FundedTradeRow[]>();
+    for(const row of trades.rows){
+      const list=byBook.get(String(row.bookId))??[];
+      list.push({id:String(row.id),instrument:String(row.instrument),side:row.side,
+        units:num(row.units),entryPrice:num(row.entryPrice),exitPrice:num(row.exitPrice),
+        stopLoss:num(row.stopLoss),takeProfit:num(row.takeProfit),realizedPl:num(row.realizedPl),
+        status:row.status,openedAt:ms(row.openedAt),closedAt:ms(row.closedAt),
+        notes:row.notes??null,createdAt:ms(row.createdAt)??0});
+      byBook.set(String(row.bookId),list);
+    }
+    return accounts.rows.map((v)=>({id:String(v.id),platform:String(v.platform),label:String(v.label),
+      currency:String(v.currency),startingBalance:num(v.startingBalance),commissionPerLot:num(v.commissionPerLot),
+      notes:v.notes??null,createdAt:ms(v.createdAt)??0,updatedAt:ms(v.updatedAt)??0,
+      trades:byBook.get(String(v.id))??[]}));
+  }
+  async createFundedAccount(accountId:string,v:NewFundedAccount):Promise<FundedAccountRow>{
+    const r=await this.pool.query(
+      `insert into public_funded_accounts(account_id,platform,label,currency,starting_balance,commission_per_lot,notes)
+       values($1,$2,$3,$4,$5,$6,$7) returning id,created_at as "createdAt",updated_at as "updatedAt"`,
+      [accountId,v.platform,v.label,v.currency,v.startingBalance,v.commissionPerLot,v.notes]);
+    const row=r.rows[0];
+    return {...v,id:String(row.id),trades:[],
+      createdAt:new Date(String(row.createdAt)).getTime(),updatedAt:new Date(String(row.updatedAt)).getTime()};
+  }
+  async updateFundedAccount(accountId:string,id:string,v:NewFundedAccount):Promise<boolean>{
+    const r=await this.pool.query(
+      `update public_funded_accounts set platform=$3,label=$4,currency=$5,starting_balance=$6,
+         commission_per_lot=$7,notes=$8,updated_at=now() where account_id=$1 and id=$2`,
+      [accountId,id,v.platform,v.label,v.currency,v.startingBalance,v.commissionPerLot,v.notes]);
+    return (r.rowCount??0)>0;
+  }
+  async deleteFundedAccount(accountId:string,id:string):Promise<boolean>{
+    const r=await this.pool.query('delete from public_funded_accounts where account_id=$1 and id=$2',[accountId,id]);
+    return (r.rowCount??0)>0;
+  }
+  async addFundedTrade(accountId:string,bookId:string,v:NewFundedTrade):Promise<boolean>{
+    const at=(ms:number|null)=>ms==null?null:new Date(ms).toISOString();
+    // The book is matched on the CALLER as well as its id, so a trade cannot be
+    // filed against somebody else's account by naming it.
+    const owned=await this.pool.query('select 1 from public_funded_accounts where account_id=$1 and id=$2',[accountId,bookId]);
+    if((owned.rowCount??0)===0)return false;
+    await this.pool.query(
+      `insert into public_funded_trades(funded_account_id,instrument,side,units,entry_price,exit_price,
+         stop_loss,take_profit,realized_pl,status,opened_at,closed_at,notes)
+       values($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)`,
+      [bookId,v.instrument,v.side,v.units,v.entryPrice,v.exitPrice,v.stopLoss,v.takeProfit,
+        v.realizedPl,v.status,at(v.openedAt),at(v.closedAt),v.notes]);
+    await this.pool.query('update public_funded_accounts set updated_at=now() where id=$1',[bookId]);
+    return true;
+  }
+  async deleteFundedTrade(accountId:string,id:string):Promise<boolean>{
+    // Joined to the account so a trade id alone cannot reach another book. The
+    // private side had exactly this as a bug: deleting with the owner in the
+    // WHERE clause matched nothing on a teammate's row and answered 200.
+    const r=await this.pool.query(
+      `delete from public_funded_trades t using public_funded_accounts a
+        where t.funded_account_id=a.id and a.account_id=$1 and t.id=$2`,[accountId,id]);
     return (r.rowCount??0)>0;
   }
   async audit(event:string,accountId:string|undefined,metadata:Record<string,unknown>){await this.pool.query('insert into public_audit_events(event,account_id,metadata) values($1,$2,$3)',[event,accountId??null,metadata])}

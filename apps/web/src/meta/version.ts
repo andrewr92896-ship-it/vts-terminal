@@ -11,9 +11,18 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 7.54';
+export const APP_VERSION = 'Beta V 7.55';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 7.55',
+    date: 'August 28, 2026',
+    notes: [
+      'Manual Trades now works on a real public account: add a funded account, log what the firm is holding, remove a trade.',
+      'An account with no starting balance stated shows no balance, rather than presenting its profit as one.',
+      'A position with no stop recorded says so, rather than implying there is not one.',
+    ],
+  },
   {
     version: 'Beta V 7.54',
     date: 'August 28, 2026',

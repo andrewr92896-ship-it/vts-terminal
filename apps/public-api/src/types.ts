@@ -1,6 +1,6 @@
 import type { NoteDirection, NoteKind, NoteRow } from './notes.js';
 import type { DeckQuestion, Flashcard, GuideSlide } from './studies.js';
-import type { TradeRow } from './trades.js';
+import type { FundedAccountRow, FundedTradeRow, TradeRow } from './trades.js';
 
 export type PublicAccount = { id:string; email:string; passwordHash:string; displayName:string; forcePasswordChange:boolean; temporaryPasswordExpiresAt?:number; privateGroupWarning:boolean; disabled:boolean };
 export type Challenge = { accountId:string; codeHash:string; expiresAt:number; attempts:number; consumedAt?:number };
@@ -97,6 +97,8 @@ export type Suggestion={id:string;author:string;body:string;status:string;create
 // No broker behind any of it. Deleting is SOFT, because a hand-typed trade
 // exists nowhere else and no broker can re-import it.
 export type NewTrade=Omit<TradeRow,'id'>;
+export type NewFundedAccount=Omit<FundedAccountRow,'id'|'createdAt'|'updatedAt'|'trades'>;
+export type NewFundedTrade=Omit<FundedTradeRow,'id'>;
 
 export interface PublicStore {
   findAccountByEmail(email:string):Promise<PublicAccount|undefined>;
@@ -210,6 +212,14 @@ export interface PublicStore {
   updateTrade(accountId:string,id:string,value:NewTrade):Promise<TradeRow|undefined>;
   softDeleteTrade(accountId:string,id:string):Promise<boolean>;
   restoreTrade(accountId:string,id:string):Promise<boolean>;
+  // The funded book. Read whole — an account without its trades cannot report
+  // its own balance, since the figures are derived from them.
+  listFundedAccounts(accountId:string):Promise<FundedAccountRow[]>;
+  createFundedAccount(accountId:string,value:NewFundedAccount):Promise<FundedAccountRow>;
+  updateFundedAccount(accountId:string,id:string,value:NewFundedAccount):Promise<boolean>;
+  deleteFundedAccount(accountId:string,id:string):Promise<boolean>;
+  addFundedTrade(accountId:string,bookId:string,value:NewFundedTrade):Promise<boolean>;
+  deleteFundedTrade(accountId:string,id:string):Promise<boolean>;
   audit(event:string,accountId:string|undefined,metadata:Record<string,unknown>):Promise<void>;
 }
 

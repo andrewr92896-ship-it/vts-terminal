@@ -163,3 +163,90 @@ export function summarize(trades:TradeRow[]):TradeSummary{
     avgSlippage:slipCount>0?Number((slipSum/slipCount).toFixed(8)):null,
   };
 }
+
+// ---- The funded book --------------------------------------------------------
+//
+// A record of what a prop firm is holding, typed in by hand. VTS NEVER PLACES A
+// FUNDED TRADE and never will — the trader places it at the firm and writes it
+// down here — so there is no integration, no credential, and nothing here
+// reaches the firm.
+
+export type FundedTradeRow={
+  id:string;instrument:string;side:TradeSide;units:number|null;
+  entryPrice:number|null;exitPrice:number|null;stopLoss:number|null;takeProfit:number|null;
+  realizedPl:number|null;status:TradeStatus;openedAt:number|null;closedAt:number|null;
+  notes:string|null;createdAt:number;
+};
+export type FundedAccountRow={
+  id:string;platform:string;label:string;currency:string;
+  startingBalance:number|null;commissionPerLot:number|null;notes:string|null;
+  createdAt:number;updatedAt:number;trades:FundedTradeRow[];
+};
+
+export const MAX_FUNDED_ACCOUNTS=12;
+export const MAX_FUNDED_TRADES=5000;
+
+export function readFundedAccount(body:Record<string,unknown>,existing?:FundedAccountRow){
+  const label=clean(body.label,MAX_INSTRUMENT_NAME*2)??existing?.label??null;
+  if(!label)throw new TradeError('Give the account a name.');
+  return {
+    platform:clean(body.platform,MAX_STRATEGY)??existing?.platform??'Hand-kept',
+    label,
+    currency:(clean(body.currency,8)??existing?.currency??'USD').toUpperCase(),
+    startingBalance:body.startingBalance===undefined?(existing?.startingBalance??null):finite(body.startingBalance,'The starting balance'),
+    // NULL IS "NOT STATED" AND IS NEVER READ AS ZERO. Nothing can look a prop
+    // firm's commission schedule up, so a zero would make trading the account
+    // look free.
+    commissionPerLot:body.commissionPerLot===undefined?(existing?.commissionPerLot??null):finite(body.commissionPerLot,'The commission'),
+    notes:body.notes===undefined?(existing?.notes??null):clean(body.notes,MAX_NOTES),
+  };
+}
+
+export function readFundedTrade(body:Record<string,unknown>){
+  const instrument=clean(body.instrument,MAX_INSTRUMENT_NAME);
+  if(!instrument)throw new TradeError('Say which instrument it was.');
+  const exitPrice=finite(body.exitPrice,'The exit price');
+  const status:TradeStatus=body.status==='closed'||exitPrice!=null||body.realizedPl!=null?'closed':'open';
+  const openedAt=finite(body.openedAt,'The open time');
+  const closedAt=status==='closed'?(finite(body.closedAt,'The close time')??Date.now()):null;
+  if(openedAt!=null&&closedAt!=null&&closedAt<openedAt)throw new TradeError('A trade cannot close before it opened.');
+  const units=finite(body.units,'The size');
+  if(units!=null&&units<0)throw new TradeError('A size is not negative — the side is what says long or short.');
+  return {
+    instrument,
+    side:body.side==='short'?'short' as const:'long' as const,
+    units,
+    entryPrice:finite(body.entryPrice,'The entry price'),
+    exitPrice,
+    // Null means none is KNOWN OF. A funded position with no protection on it is
+    // the most important thing a row here can say, so it must not be implied by
+    // an absence of data.
+    stopLoss:finite(body.stopLoss,'The stop loss'),
+    takeProfit:finite(body.takeProfit,'The take profit'),
+    // Null until it is known, never zero — the same rule the trade log follows.
+    realizedPl:status==='open'?null:finite(body.realizedPl,'The result'),
+    status,openedAt,closedAt,
+    notes:clean(body.notes,MAX_NOTES),
+    createdAt:Date.now(),
+  };
+}
+
+// An account's headline figures, DERIVED from its trades rather than stored
+// beside them. Stored, the balance and the trades that produced it could
+// disagree and there would be no way to say which was right.
+export function fundedFigures(account:FundedAccountRow,now=Date.now()){
+  const closed=account.trades.filter((t)=>t.status==='closed'&&t.realizedPl!=null);
+  const sum=(since:number)=>Number(closed
+    .filter((t)=>(t.closedAt??t.openedAt??0)>=since)
+    .reduce((total,t)=>total+(t.realizedPl??0),0).toFixed(2));
+  const realizedPl=Number(closed.reduce((total,t)=>total+(t.realizedPl??0),0).toFixed(2));
+  return {
+    realizedPl,
+    tradeCount:account.trades.length,
+    // Null starting balance means nothing was stated, so there is no balance to
+    // report either — a bare P/L presented as a balance would be a figure the
+    // account never held.
+    balance:account.startingBalance==null?null:Number((account.startingBalance+realizedPl).toFixed(2)),
+    pnl:{daily:sum(now-86_400_000),weekly:sum(now-7*86_400_000),monthly:sum(now-30*86_400_000)},
+  };
+}

@@ -81,12 +81,6 @@ const DEMO_ONLY = {
   // — and both are storage that has not been built yet. Until it is, these three
   // nav rows are demo-only, which is why they are written down rather than
   // discovered by a customer.
-  // The funded book. A record of what a prop firm is holding, typed in by
-  // hand — public-safe, and storage that is not built yet.
-  fundedBook: [
-    'addFundedAccount', 'updateFundedAccount', 'removeFundedAccount',
-    'addFundedTrade', 'removeFundedTrade',
-  ],
 };
 const accepted = new Map();
 for (const [reason, names] of Object.entries(ACCEPTED)) for (const name of names) accepted.set(name, reason);

@@ -170,9 +170,27 @@ Updated: 2026-08-27.
   back. A row in the bin cannot be edited either — rewriting it there would mean
   restoring something other than what was removed.
 
-- Still demo-only BY DECISION and written down: the funded book (the funded
-  account and trade writes). Public-safe — a record of what a prop firm is
-  holding, typed in by hand — and storage that is not built yet.
+- Gave the public terminal an eleventh record family with real storage: THE
+  FUNDED BOOK. VTS never places a funded trade and never will — the trader
+  places it at the firm and writes it down here — so there is no integration, no
+  credential, and nothing on that path reaches the firm.
+- The account's headline figures are DERIVED from its trades on every read
+  rather than stored beside them: stored, the balance and the trades that
+  produced it could disagree and there would be no way to say which was right.
+  With no starting balance stated there is NO balance, rather than a bare P/L
+  presented as one — that would be a figure the account never held.
+- A stop or target is null when none is KNOWN OF, which is deliberately not the
+  same as "there is none": a funded position with no protection on it is the
+  most important thing a row can say, so it must not be implied by an absence of
+  data. Commission is null when not stated and is never read as zero, since
+  nothing can look a prop firm's schedule up.
+- **`verify:demo-coverage` now reports ZERO demo-only calls.** Every reachable
+  api call on a public screen either works on a real account or is named as
+  deliberately unbuilt.
+- A test caught a routing bug worth recording: the guard for the bare
+  `/funded/trades` path matched `trades/<id>` too and swallowed every funded
+  trade delete — which then 404'd for the right-LOOKING reason, so the ownership
+  test beside it passed while proving nothing.
 
 - Gave the public terminal a sixth record family with real storage: STUDY GAMES
   — the decks, their questions, each learner's progress, and combining games.
@@ -241,7 +259,7 @@ Updated: 2026-08-27.
 ## Blocked/manual
 
 - Provision separate Railway services.
-- Provision a public database and public API (the API exists and has auth, market data, layout, early access, budget, to-do, investments, net worth, trading notes, study games, flashcards, presentations, support and the hand-kept trade log; the remaining record families are still demo-only).
+- Provision a public database and public API (the API exists and has auth, market data, layout, early access, budget, to-do, investments, net worth, trading notes, study games, flashcards, presentations, support, the hand-kept trade log and the funded book; the remaining record families are still demo-only).
 - Configure separate public authentication.
 - Configure private MFA.
 - Populate `PRIVATE_ACCESS_USER_IDS`. Since 7.42 an entry may be an ID, a username or an email — a username survives the database changing, which an ID does not.

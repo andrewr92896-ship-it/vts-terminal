@@ -11,7 +11,9 @@ import { buildSections, dailyDone, etTodayMs, nextEtMidnight } from './todo.js';
 import { MAX_DECKS, MAX_DESCRIPTION, MAX_NAME, StudyError, normalizeState, readCards, readCategories,
   readCategoryWeights, readQuestions, readSlides, slidesForRead, statsFromState,
   type DeckQuestion } from './studies.js';
-import { MAX_TRADES, TradeError, readTrade, summarize, type TradeRow } from './trades.js';
+import { MAX_FUNDED_ACCOUNTS, MAX_FUNDED_TRADES, MAX_TRADES, TradeError, fundedFigures,
+  readFundedAccount, readFundedTrade, readTrade, summarize,
+  type FundedAccountRow, type TradeRow } from './trades.js';
 import { CONFIDENCE_STATED, MAX_BODY, MAX_INSTRUMENT, MAX_PER_WEEK, MAX_REFLECTION, MAX_TITLE,
   computeStats, defaultWindow, etWeekKey, isLocked, isWeekKey, shiftWeekKey, toView, weekRange,
   type NoteDirection, type NoteKind, type NoteOutcome, type NoteRow } from './notes.js';
@@ -427,6 +429,25 @@ const deletedView=(trade:TradeRow)=>({
   entryPrice:trade.entryPrice,exitPrice:trade.exitPrice,realizedPl:trade.realizedPl,
   openedAt:trade.openedAt,closedAt:trade.closedAt,deletedAt:trade.deletedAt??0,
 });
+
+// The funded book as the portal's own screen reads it.
+//
+// The headline figures are DERIVED from the trades on every read rather than
+// stored beside them: stored, the balance and the trades that produced it could
+// disagree and there would be no way to say which was right.
+const fundedView=(book:FundedAccountRow)=>({
+  ...book,...fundedFigures(book),
+  ownerId:'you',owner:'you',isMine:true,
+});
+async function fundedBook(store:PublicStore,accountId:string){
+  return {
+    accounts:(await store.listFundedAccounts(accountId)).map(fundedView),
+    // Every position on this screen is funded, so it is one colour for the
+    // screen rather than one per row. Null keeps the appearance a funded tile
+    // has always had.
+    fundedTileColor:null,
+  };
+}
 
 async function tradeLog(store:PublicStore,accountId:string){
   const trades=await store.listTrades(accountId,false);
@@ -1246,6 +1267,62 @@ export async function handleRequest(req:IncomingMessage,res:ServerResponse,depen
         // The removed row goes back with the log so the screen can offer an undo
         // that puts back what was taken rather than something rebuilt from it.
         return json(res,200,{...await tradeLog(dependencies.store,id),removed:removedView(existing)});
+      }
+      throw new AuthError(404,'Public route not found.');
+    }
+    // ---- the funded book ------------------------------------------------------
+    //
+    // VTS NEVER PLACES A FUNDED TRADE and never will. The trader places it at
+    // the firm and writes it down here, so there is no integration, no
+    // credential, and nothing on this path reaches the firm.
+    if(path==='/public/v1/funded'&&method==='GET'){
+      const id=await authenticatedAccount(req,authService);
+      return json(res,200,await fundedBook(dependencies.store,id));
+    }
+    if(path==='/public/v1/funded'&&method==='POST'){
+      const id=await authenticatedAccount(req,authService);
+      if((await dependencies.store.listFundedAccounts(id)).length>=MAX_FUNDED_ACCOUNTS){
+        throw new AuthError(400,`That is ${MAX_FUNDED_ACCOUNTS} accounts already.`);
+      }
+      await dependencies.store.createFundedAccount(id,readFundedAccount(await readBody(req)));
+      return json(res,201,await fundedBook(dependencies.store,id));
+    }
+    if(path.startsWith('/public/v1/funded/')){
+      const id=await authenticatedAccount(req,authService);
+      const rest=decodeURIComponent(path.slice('/public/v1/funded/'.length));
+      const slash=rest.indexOf('/');
+      const target=slash>0?rest.slice(0,slash):rest;
+      const action=slash>0?rest.slice(slash+1):'';
+
+      // A trade is addressed on its own, because the screen removes one without
+      // knowing which book it came from. `rest`, not `target`: a `target` test
+      // matches 'trades/<id>' as well and swallows every delete — which then
+      // 404s for the RIGHT-LOOKING reason, so an ownership test passes while
+      // proving nothing.
+      if(rest==='trades'&&method==='DELETE')throw new AuthError(404,'Name the trade to remove.');
+      if(rest.startsWith('trades/')&&method==='DELETE'){
+        const tradeId=rest.slice('trades/'.length);
+        if(!await dependencies.store.deleteFundedTrade(id,tradeId))throw new AuthError(404,'No such trade.');
+        return json(res,200,await fundedBook(dependencies.store,id));
+      }
+
+      const books=await dependencies.store.listFundedAccounts(id);
+      const book=books.find((b)=>b.id===target);
+      // 404 rather than 403, as everywhere else here.
+      if(!book)throw new AuthError(404,'No such account.');
+
+      if(action==='trades'&&method==='POST'){
+        if(book.trades.length>=MAX_FUNDED_TRADES)throw new AuthError(400,'That account has too many trades already.');
+        await dependencies.store.addFundedTrade(id,book.id,readFundedTrade(await readBody(req)));
+        return json(res,201,await fundedBook(dependencies.store,id));
+      }
+      if(action===''&&method==='PATCH'){
+        await dependencies.store.updateFundedAccount(id,book.id,readFundedAccount(await readBody(req),book));
+        return json(res,200,await fundedBook(dependencies.store,id));
+      }
+      if(action===''&&method==='DELETE'){
+        await dependencies.store.deleteFundedAccount(id,book.id);
+        return json(res,200,await fundedBook(dependencies.store,id));
       }
       throw new AuthError(404,'Public route not found.');
     }

@@ -158,6 +158,15 @@ const liveRecords:Record<string,(...args:any[])=>Promise<unknown>>={
   // trade that was removed and not a copy of it.
   restoreTrade:(trade:{id:string})=>publicRequest(`/trades/${encodeURIComponent(trade.id)}/restore`,{method:'POST'})
     .then(()=>publicRequest('/trades')),
+
+  // The funded book. VTS never places a funded trade — the trader places it at
+  // the firm and writes it down here.
+  funded:()=>publicRequest('/funded'),
+  addFundedAccount:(input:unknown)=>publicRequest('/funded',{method:'POST',body:JSON.stringify(input)}),
+  updateFundedAccount:(id:string,patch:unknown)=>publicRequest(`/funded/${encodeURIComponent(id)}`,{method:'PATCH',body:JSON.stringify(patch)}),
+  removeFundedAccount:(id:string)=>publicRequest(`/funded/${encodeURIComponent(id)}`,{method:'DELETE'}),
+  addFundedTrade:(accountId:string,input:unknown)=>publicRequest(`/funded/${encodeURIComponent(accountId)}/trades`,{method:'POST',body:JSON.stringify(input)}),
+  removeFundedTrade:(id:string)=>publicRequest(`/funded/trades/${encodeURIComponent(id)}`,{method:'DELETE'}),
 };
 
 
