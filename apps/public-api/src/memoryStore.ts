@@ -1,4 +1,4 @@
-import type { NewTradingNote, TradingNotePatch, NetWorthItem, NetWorthSnapshot, InvestmentAccount, InvestmentGoal, InvestmentHolding, InvestmentSnapshot, InvestmentTransaction, BudgetCategory, BudgetEntry, Challenge, NewBudgetCategory, NewBudgetEntry, PublicAccount, PublicStore, RateLimitResult, Session, TodoItemRow, TodoSectionRow, TrustedDevice } from './types.js';
+import type { NewStudyDeck, StudyDeckDetail, StudyDeckPatch, StudyDeckRow, NewTradingNote, TradingNotePatch, NetWorthItem, NetWorthSnapshot, InvestmentAccount, InvestmentGoal, InvestmentHolding, InvestmentSnapshot, InvestmentTransaction, BudgetCategory, BudgetEntry, Challenge, NewBudgetCategory, NewBudgetEntry, PublicAccount, PublicStore, RateLimitResult, Session, TodoItemRow, TodoSectionRow, TrustedDevice } from './types.js';
 import { STARTER_SECTIONS } from './todo.js';
 import type { NoteRow } from './notes.js';
 
@@ -274,6 +274,49 @@ export class MemoryPublicStore implements PublicStore {
   async deleteTradingNote(accountId:string,id:string){
     const row=this.tradingNotes.get(id); if(!row||row.accountId!==accountId)return false;
     this.tradingNotes.delete(id); return true;
+  }
+  // ---- study games ----------------------------------------------------------
+  studyDecks=new Map<string,StudyDeckDetail&{accountId:string}>();
+  deckGames=new Map<string,string>();
+  deckRuns:Array<{accountId:string;deckId:string;attempted:number;correct:number;bestStep:number}>=[];
+  private deckView(row:StudyDeckDetail):StudyDeckRow{
+    const {questions,...rest}=row; void questions; return rest;
+  }
+  async listStudyDecks(accountId:string){
+    return this.mine(this.studyDecks,accountId).sort((a,b)=>b.createdAt-a.createdAt).map((d)=>this.deckView(this.strip(d) as StudyDeckDetail));
+  }
+  async getStudyDeck(accountId:string,id:string){
+    const row=this.studyDecks.get(id);
+    if(!row||row.accountId!==accountId)return undefined;
+    return structuredClone(this.strip(row)) as StudyDeckDetail;
+  }
+  async createStudyDeck(accountId:string,v:NewStudyDeck){
+    const row={accountId,id:crypto.randomUUID(),name:v.name,description:v.description,source:v.source,
+      categories:v.categories,categoryWeights:v.categoryWeights,questions:v.questions,
+      questionCount:v.questions.length,createdAt:this.now()};
+    this.studyDecks.set(row.id,row);
+    return structuredClone(this.strip(row)) as StudyDeckDetail;
+  }
+  async updateStudyDeck(accountId:string,id:string,patch:StudyDeckPatch){
+    const row=this.studyDecks.get(id); if(!row||row.accountId!==accountId)return undefined;
+    const next={...row,...patch};
+    if(patch.questions)next.questionCount=patch.questions.length;
+    this.studyDecks.set(id,next);
+    return structuredClone(this.strip(next)) as StudyDeckDetail;
+  }
+  async deleteStudyDeck(accountId:string,id:string){
+    const row=this.studyDecks.get(id); if(!row||row.accountId!==accountId)return false;
+    this.studyDecks.delete(id);
+    // The learner's own progress and banked runs go with the deck they were
+    // against — there is nothing left for them to be progress THROUGH.
+    this.deckGames.delete(`${accountId}:${id}`);
+    this.deckRuns=this.deckRuns.filter((r)=>r.deckId!==id);
+    return true;
+  }
+  async getStudyDeckGame(accountId:string,deckId:string){return this.deckGames.get(`${accountId}:${deckId}`)??null}
+  async saveStudyDeckGame(accountId:string,deckId:string,state:string){this.deckGames.set(`${accountId}:${deckId}`,state)}
+  async recordStudyDeckRun(accountId:string,deckId:string,attempted:number,correct:number,bestStep:number){
+    this.deckRuns.push({accountId,deckId,attempted,correct,bestStep});
   }
   async audit(event:string,accountId:string|undefined,metadata:Record<string,unknown>){this.audits.push({event,accountId,metadata})}
 }

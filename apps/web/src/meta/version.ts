@@ -11,9 +11,19 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 7.48';
+export const APP_VERSION = 'Beta V 7.49';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 7.49',
+    date: 'August 28, 2026',
+    notes: [
+      'Study games now save for real on the public terminal: the games, their questions, and your progress through them.',
+      'Study Game, Practice Tests and Progress all work on a real account, and games can be combined.',
+      'A broken question is refused with the question named, rather than saved and then rendered as one nobody can answer.',
+      'Fixed: progress on a game with many categories could grow past the size the server would accept, and quietly stop saving.',
+    ],
+  },
   {
     version: 'Beta V 7.48',
     date: 'August 28, 2026',

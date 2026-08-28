@@ -1,4 +1,5 @@
 import type { NoteDirection, NoteKind, NoteRow } from './notes.js';
+import type { DeckQuestion } from './studies.js';
 
 export type PublicAccount = { id:string; email:string; passwordHash:string; displayName:string; forcePasswordChange:boolean; temporaryPasswordExpiresAt?:number; privateGroupWarning:boolean; disabled:boolean };
 export type Challenge = { accountId:string; codeHash:string; expiresAt:number; attempts:number; consumedAt?:number };
@@ -56,6 +57,16 @@ export type NetWorthSnapshot={onDate:string;assets:number;liabilities:number;net
 // guard somebody has to remember.
 export type NewTradingNote={kind:NoteKind;title:string;body:string|null;instrument:string|null;direction:NoteDirection|null;targetPrice:number|null;confidence:number|null;weekKey:string;windowOpensAt:number|null;deadlineAt:number|null;lockedAt:number|null};
 export type TradingNotePatch=Partial<Pick<NoteRow,'title'|'body'|'instrument'|'direction'|'targetPrice'|'confidence'|'windowOpensAt'|'deadlineAt'|'outcome'|'settledAt'|'settledBy'|'settleNote'|'reflection'|'reflectedAt'>>;
+
+// ---- study games ------------------------------------------------------------
+//
+// A deck belongs to ONE account. There is no scope column, no team dimension and
+// no leaderboard — see studies.ts for why the board is absent rather than
+// disabled.
+export type StudyDeckRow={id:string;name:string;description:string|null;source:string;categories:string[];categoryWeights:Record<string,number>|null;questionCount:number;createdAt:number};
+export type StudyDeckDetail=StudyDeckRow&{questions:DeckQuestion[]};
+export type NewStudyDeck={name:string;description:string|null;source:string;categories:string[];categoryWeights:Record<string,number>|null;questions:DeckQuestion[]};
+export type StudyDeckPatch={name?:string;description?:string|null;categories?:string[];categoryWeights?:Record<string,number>|null;questions?:DeckQuestion[]};
 
 export interface PublicStore {
   findAccountByEmail(email:string):Promise<PublicAccount|undefined>;
@@ -132,6 +143,16 @@ export interface PublicStore {
   createTradingNote(accountId:string,value:NewTradingNote):Promise<NoteRow>;
   updateTradingNote(accountId:string,id:string,patch:TradingNotePatch):Promise<boolean>;
   deleteTradingNote(accountId:string,id:string):Promise<boolean>;
+  // Study games. Every method filters on the account; a deck id the caller does
+  // not own resolves to nothing rather than to a refusal that names it.
+  listStudyDecks(accountId:string):Promise<StudyDeckRow[]>;
+  getStudyDeck(accountId:string,id:string):Promise<StudyDeckDetail|undefined>;
+  createStudyDeck(accountId:string,value:NewStudyDeck):Promise<StudyDeckDetail>;
+  updateStudyDeck(accountId:string,id:string,patch:StudyDeckPatch):Promise<StudyDeckDetail|undefined>;
+  deleteStudyDeck(accountId:string,id:string):Promise<boolean>;
+  getStudyDeckGame(accountId:string,deckId:string):Promise<string|null>;
+  saveStudyDeckGame(accountId:string,deckId:string,state:string):Promise<void>;
+  recordStudyDeckRun(accountId:string,deckId:string,attempted:number,correct:number,bestStep:number):Promise<void>;
   audit(event:string,accountId:string|undefined,metadata:Record<string,unknown>):Promise<void>;
 }
 
