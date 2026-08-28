@@ -52,7 +52,7 @@ Variables, all required unless marked:
 | `PUBLIC_COOKIE_DOMAIN` | *(optional)* |
 | `PUBLIC_MAIL_FROM` | The address sign-in codes come from |
 | `PUBLIC_SMTP_URL` | `smtps://…` for those codes |
-| `PUBLIC_MARKET_PROVIDER_URL` | *(optional)* where market data is read from |
+| `PUBLIC_MARKET_PROVIDER_URL` | where market data is read from — see below, it is only *optional* to the process starting |
 | `PUBLIC_MARKET_PROVIDER_TOKEN` | *(optional)* its token |
 
 Generate each key separately:
@@ -123,6 +123,22 @@ an account that can never sign in, and all three answer with the same generic
 
 The early-access list the marketing site writes to is where the addresses come
 from. Reading it is a query today — there is no admin screen on the public side.
+
+## Before announcing: Market Data and News need a provider
+
+`PUBLIC_MARKET_PROVIDER_URL` is optional to the service *starting* and is not
+optional to the product. Without it both `/market-data` and `/market-news`
+answer **503**, so the Market Data board and the news feed show an error — on
+every account, including the demo — while the marketing site's front page
+advertises both by name ("Rates, prints and prices on one board", "Headlines
+from the wires").
+
+Every screen is proved to survive that state (the live-account suite runs
+against exactly it), so nothing breaks. But a visitor who arrives from the
+marketing copy and opens the board finds the one thing that was advertised
+unavailable, which is a worse first impression than not advertising it. Either
+wire the provider before announcing, or take those two cards off the front page
+until it is wired.
 
 ## What is deliberately still unbuilt
 
