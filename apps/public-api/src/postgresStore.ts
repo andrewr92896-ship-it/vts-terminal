@@ -1,6 +1,7 @@
 import pg from 'pg';
-import type { NetWorthItem, NetWorthSnapshot, InvestmentAccount, InvestmentGoal, InvestmentHolding, InvestmentSnapshot, InvestmentTransaction, BudgetCategory, BudgetEntry, Challenge, NewBudgetCategory, NewBudgetEntry, PublicAccount, PublicStore, RateLimitResult, Session, TodoItemRow, TodoSectionRow, TrustedDevice } from './types.js';
+import type { NewTradingNote, TradingNotePatch, NetWorthItem, NetWorthSnapshot, InvestmentAccount, InvestmentGoal, InvestmentHolding, InvestmentSnapshot, InvestmentTransaction, BudgetCategory, BudgetEntry, Challenge, NewBudgetCategory, NewBudgetEntry, PublicAccount, PublicStore, RateLimitResult, Session, TodoItemRow, TodoSectionRow, TrustedDevice } from './types.js';
 import { STARTER_SECTIONS } from './todo.js';
+import type { NoteRow } from './notes.js';
 const {Pool}=pg;
 
 export class PostgresPublicStore implements PublicStore {
@@ -297,6 +298,71 @@ export class PostgresPublicStore implements PublicStore {
       `insert into public_net_worth_snapshots(account_id,on_date,assets,liabilities,net_worth) values($1,$2::date,$3,$4,$5)
        on conflict (account_id,on_date) do update set assets=excluded.assets,liabilities=excluded.liabilities,net_worth=excluded.net_worth`,
       [accountId,onDate,assets,liabilities,netWorth]);
+  }
+  // ---- trading notes --------------------------------------------------------
+  //
+  // Every statement carries `account_id=$1`, so there is no read here that could
+  // reach another account's calls and no column that could publish one.
+  //
+  // Timestamps come back as epoch ms rather than Date objects because that is
+  // what the payload carries and what the lock and deadline comparisons are
+  // written against — converting once on the way out means nothing downstream
+  // has to know which of the two it is holding.
+  private noteColumns=`id,kind,title,body,instrument,direction,target_price as "targetPrice",confidence,
+       week_key as "weekKey",window_opens_at as "windowOpensAt",deadline_at as "deadlineAt",open_price as "openPrice",
+       locked_at as "lockedAt",outcome,settled_at as "settledAt",settled_by as "settledBy",
+       settle_price as "settlePrice",settle_note as "settleNote",reflection,reflected_at as "reflectedAt",
+       created_at as "createdAt",updated_at as "updatedAt"`;
+  private toNoteRow(v:Record<string,unknown>):NoteRow{
+    const ms=(x:unknown):number|null=>x==null?null:new Date(x as string).getTime();
+    const num=(x:unknown):number|null=>x==null?null:Number(x);
+    return {...v,
+      targetPrice:num(v.targetPrice),confidence:num(v.confidence),settlePrice:num(v.settlePrice),openPrice:num(v.openPrice),
+      windowOpensAt:ms(v.windowOpensAt),deadlineAt:ms(v.deadlineAt),lockedAt:ms(v.lockedAt),
+      settledAt:ms(v.settledAt),reflectedAt:ms(v.reflectedAt),
+      createdAt:ms(v.createdAt)??0,updatedAt:ms(v.updatedAt)??0} as NoteRow;
+  }
+  async listTradingNotes(accountId:string,weekKey?:string):Promise<NoteRow[]>{
+    const r=weekKey==null
+      ? await this.pool.query(`select ${this.noteColumns} from public_trading_notes where account_id=$1 order by created_at desc`,[accountId])
+      : await this.pool.query(`select ${this.noteColumns} from public_trading_notes where account_id=$1 and week_key=$2 order by created_at desc`,[accountId,weekKey]);
+    return r.rows.map((v)=>this.toNoteRow(v));
+  }
+  async countTradingNotesInWeek(accountId:string,weekKey:string):Promise<number>{
+    const r=await this.pool.query('select count(*)::int as n from public_trading_notes where account_id=$1 and week_key=$2',[accountId,weekKey]);
+    return Number(r.rows[0]?.n??0);
+  }
+  async getTradingNote(accountId:string,id:string):Promise<NoteRow|undefined>{
+    const r=await this.pool.query(`select ${this.noteColumns} from public_trading_notes where account_id=$1 and id=$2`,[accountId,id]);
+    const row=r.rows[0];
+    return row?this.toNoteRow(row):undefined;
+  }
+  async createTradingNote(accountId:string,v:NewTradingNote):Promise<NoteRow>{
+    const at=(ms:number|null)=>ms==null?null:new Date(ms).toISOString();
+    const r=await this.pool.query(
+      `insert into public_trading_notes(account_id,kind,title,body,instrument,direction,target_price,confidence,week_key,window_opens_at,deadline_at,locked_at)
+       values($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
+       returning ${this.noteColumns}`,
+      [accountId,v.kind,v.title,v.body,v.instrument,v.direction,v.targetPrice,v.confidence,v.weekKey,at(v.windowOpensAt),at(v.deadlineAt),at(v.lockedAt)]);
+    return this.toNoteRow(r.rows[0]);
+  }
+  async updateTradingNote(accountId:string,id:string,patch:TradingNotePatch):Promise<boolean>{
+    const columns:Record<string,string>={title:'title',body:'body',instrument:'instrument',direction:'direction',targetPrice:'target_price',confidence:'confidence',windowOpensAt:'window_opens_at',deadlineAt:'deadline_at',outcome:'outcome',settledAt:'settled_at',settledBy:'settled_by',settleNote:'settle_note',reflection:'reflection',reflectedAt:'reflected_at'};
+    const stamps=new Set(['windowOpensAt','deadlineAt','settledAt','reflectedAt']);
+    const sets:string[]=[]; const params:unknown[]=[accountId,id];
+    for(const [key,column] of Object.entries(columns)){
+      if(!(key in patch))continue;
+      const raw=(patch as Record<string,unknown>)[key];
+      params.push(stamps.has(key)&&raw!=null?new Date(Number(raw)).toISOString():raw??null);
+      sets.push(`${column}=$${params.length}`);
+    }
+    if(!sets.length)return ((await this.pool.query('select 1 from public_trading_notes where account_id=$1 and id=$2',[accountId,id])).rowCount??0)>0;
+    const r=await this.pool.query(`update public_trading_notes set ${sets.join(',')},updated_at=now() where account_id=$1 and id=$2`,params);
+    return (r.rowCount??0)>0;
+  }
+  async deleteTradingNote(accountId:string,id:string):Promise<boolean>{
+    const r=await this.pool.query('delete from public_trading_notes where account_id=$1 and id=$2',[accountId,id]);
+    return (r.rowCount??0)>0;
   }
   async audit(event:string,accountId:string|undefined,metadata:Record<string,unknown>){await this.pool.query('insert into public_audit_events(event,account_id,metadata) values($1,$2,$3)',[event,accountId??null,metadata])}
 }

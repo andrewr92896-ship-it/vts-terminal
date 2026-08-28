@@ -1,5 +1,6 @@
-import type { NetWorthItem, NetWorthSnapshot, InvestmentAccount, InvestmentGoal, InvestmentHolding, InvestmentSnapshot, InvestmentTransaction, BudgetCategory, BudgetEntry, Challenge, NewBudgetCategory, NewBudgetEntry, PublicAccount, PublicStore, RateLimitResult, Session, TodoItemRow, TodoSectionRow, TrustedDevice } from './types.js';
+import type { NewTradingNote, TradingNotePatch, NetWorthItem, NetWorthSnapshot, InvestmentAccount, InvestmentGoal, InvestmentHolding, InvestmentSnapshot, InvestmentTransaction, BudgetCategory, BudgetEntry, Challenge, NewBudgetCategory, NewBudgetEntry, PublicAccount, PublicStore, RateLimitResult, Session, TodoItemRow, TodoSectionRow, TrustedDevice } from './types.js';
 import { STARTER_SECTIONS } from './todo.js';
+import type { NoteRow } from './notes.js';
 
 export class MemoryPublicStore implements PublicStore {
   accounts=new Map<string,PublicAccount>(); challenges=new Map<string,Challenge>(); sessions=new Map<string,Session>(); trusted=new Map<string,TrustedDevice>();
@@ -237,6 +238,42 @@ export class MemoryPublicStore implements PublicStore {
   }
   async recordNetWorthSnapshot(accountId:string,onDate:string,assets:number,liabilities:number,netWorth:number){
     this.netWorthSnapshots.set(`${accountId}:${onDate}`,{accountId,onDate,assets,liabilities,netWorth});
+  }
+  // ---- trading notes --------------------------------------------------------
+  //
+  // Every method filters on the account. There is no `visibility` field on the
+  // row and no method that could set one — a note is the author's own.
+  tradingNotes=new Map<string,NoteRow&{accountId:string}>();
+  async listTradingNotes(accountId:string,weekKey?:string){
+    return this.mine(this.tradingNotes,accountId)
+      .filter((r)=>weekKey==null||r.weekKey===weekKey)
+      .sort((a,b)=>b.createdAt-a.createdAt)
+      .map((r)=>this.strip(r)) as NoteRow[];
+  }
+  async countTradingNotesInWeek(accountId:string,weekKey:string){
+    return this.mine(this.tradingNotes,accountId).filter((r)=>r.weekKey===weekKey).length;
+  }
+  async getTradingNote(accountId:string,id:string){
+    const row=this.tradingNotes.get(id);
+    // Undefined rather than a refusal, so a caller cannot tell an id it does not
+    // own from one that does not exist.
+    if(!row||row.accountId!==accountId)return undefined;
+    return this.strip(row) as NoteRow;
+  }
+  async createTradingNote(accountId:string,v:NewTradingNote){
+    const now=this.now();
+    const row={accountId,id:crypto.randomUUID(),...v,openPrice:null,outcome:null,settledAt:null,settledBy:null,settlePrice:null,settleNote:null,reflection:null,reflectedAt:null,createdAt:now,updatedAt:now};
+    this.tradingNotes.set(row.id,row);
+    return this.strip(row) as NoteRow;
+  }
+  async updateTradingNote(accountId:string,id:string,patch:TradingNotePatch){
+    const row=this.tradingNotes.get(id); if(!row||row.accountId!==accountId)return false;
+    this.tradingNotes.set(id,{...row,...patch,updatedAt:this.now()});
+    return true;
+  }
+  async deleteTradingNote(accountId:string,id:string){
+    const row=this.tradingNotes.get(id); if(!row||row.accountId!==accountId)return false;
+    this.tradingNotes.delete(id); return true;
   }
   async audit(event:string,accountId:string|undefined,metadata:Record<string,unknown>){this.audits.push({event,accountId,metadata})}
 }
