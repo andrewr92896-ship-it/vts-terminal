@@ -136,11 +136,23 @@ test('the investments screens render the rows the account actually has', async (
   expect(performance).toEqual([]);
 });
 
+test('the to-do list and the deleted trades show what is in them', async ({ page }) => {
+  // Both are lists, and an empty list is exactly what a payload the screen
+  // could not read also renders. The seeded row is what separates the two.
+  const todo = await open(page, 'td_trading');
+  await expect(page.getByText('Review the session plan').first()).toBeVisible();
+  expect(todo).toEqual([]);
+
+  const deleted = await open(page, 'deleted');
+  await expect(page.getByText('GBP/JPY').first()).toBeVisible();
+  expect(deleted).toEqual([]);
+});
+
 test('every remaining screen renders without throwing', async ({ page }) => {
   // The ones with nothing seeded. Nothing is asserted about their content —
   // there is none — but a thrown render leaves the root dead for every later
   // hash navigation, so one broken screen would blank the rest.
-  const screens = ['deleted', 'td_trading', 'my_access', 'my_prefs', 'my_settings',
+  const screens = ['my_access', 'my_prefs', 'my_settings',
     'inv_overview', 'inv_accounts', 'inv_allocation', 'inv_projections', 'st_decks', 'st_test', 'st_progress',
     'hp_howto', 'hp_rules', 'hp_terms', 'hp_privacy'];
   const broken = [];

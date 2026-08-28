@@ -376,6 +376,13 @@ if (!url) {
 
     // To do: a delete that is a soft delete, and the restore that undoes it.
     const todo = await ok('GET', '/public/v1/todo');
+    // EVERY section carries the tag the screen filters on. The To Do screen
+    // renders only `tag === 'trading'` sections and adds new items to the first
+    // one carrying it, so a null tag is a screen that shows nothing whatever is
+    // in it and cannot be added to either — which is what it did, while the
+    // demo (which sets the tag) worked perfectly.
+    assert.ok(todo.sections.length > 0);
+    assert.deepEqual([...new Set(todo.sections.map((s: any) => s.tag))], ['trading']);
     const section = todo.sections[0].id;
     const item = (await ok('POST', '/public/v1/todo/items', { sectionId: section, text: 'Removable' })).sections
       .flatMap((s: any) => s.items).find((i: any) => i.text === 'Removable');

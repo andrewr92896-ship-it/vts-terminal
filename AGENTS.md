@@ -314,6 +314,15 @@ account that actually held an investment account.** It rendered perfectly while
 empty, which is why nothing but a real account with rows in it could find it.
 `apps/web/src/api/types.ts` is the authority on that shape for both services.
 
+**THE TO-DO PAYLOAD'S `tag` IS LOAD-BEARING AND MUST BE `'trading'`.** The
+screen renders only sections carrying it and adds new items to the first one
+that does, so a null tag is a To Do list that shows nothing whatever is in it
+and cannot be added to either. Privately the tag marks the desk's own list among
+several; publicly there is one To Do screen and one list, so every section
+belongs on it. The demo already set it, so this worked in the showcase and was
+dead for a real account — the same shape as the Investments screens above, and
+the reason the live-account suite exists.
+
 **Two adapter files carry the seam and they are not the same job.**
 `apps/public-terminal/src/adapters/publicApi.ts` maps a portal `api.*` call to a
 public route; `apps/public-terminal/src/demo/demoStore.ts` answers the same names

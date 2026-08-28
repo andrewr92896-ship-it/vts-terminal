@@ -76,9 +76,17 @@ export function buildSections(sections: TodoSectionRow[], items: TodoItemRow[], 
       const decorated = mine.map((i) => decorate(i, s.type, todayMs));
       return {
         id: s.id, n: s.n, icon: s.icon, title: s.title, type: s.type,
-        // `tag` and `life` are private-desk concepts with no public meaning; the
-        // component reads them, so they are stated rather than left undefined.
-        tag: null, life: false,
+        // `tag` is NOT a concept without a public meaning — the To Do screen
+        // filters on `tag === 'trading'` and adds new items to the first
+        // section carrying it, so a null tag is a screen that shows nothing
+        // whatever is in it and cannot be added to either. Privately the tag
+        // marks the desk's own list among several; publicly there is one To Do
+        // screen and one list, so every section belongs on it.
+        //
+        // `life` stays false: it is a private-desk grouping with no public
+        // counterpart, and the component reads it, so it is stated rather than
+        // left undefined.
+        tag: 'trading', life: false,
         // What is left to do, not how many lines there are — a checked task and
         // a reference dash both stop counting toward "still to do".
         count: decorated.filter((i) => i.checkable && !i.done).length,

@@ -36,9 +36,9 @@ const token = signToken(session, key);
 // — silently, because a refusal still answers.
 const origin = (process.env.PUBLIC_ALLOWED_ORIGINS ?? '').split(',')[0].trim();
 
-const post = async (path, body) => {
-  const req = Readable.from([JSON.stringify(body)]);
-  req.method = 'POST';
+const send = async (method, path, body) => {
+  const req = Readable.from(body === undefined ? [] : [JSON.stringify(body)]);
+  req.method = method;
   req.url = `/public/v1${path}`;
   req.headers = {
     origin, 'x-vts-public-csrf': '1',
@@ -52,9 +52,12 @@ const post = async (path, body) => {
   const parsed = JSON.parse(payload || '{}');
   // Loudly, so a seed that produced nothing cannot be mistaken for a screen
   // that rendered nothing.
-  if (status >= 400) throw new Error(`seed ${path} → ${status} ${JSON.stringify(parsed)}`);
+  if (status >= 400) throw new Error(`seed ${method} ${path} → ${status} ${JSON.stringify(parsed)}`);
   return parsed;
 };
+const get = (path) => send('GET', path);
+const post = (path, body) => send('POST', path, body ?? {});
+const del = (path) => send('DELETE', path);
 
 const now = Date.now();
 await post('/trades', {
@@ -100,6 +103,20 @@ const taxYear = Number(new Intl.DateTimeFormat('en-CA', { timeZone: 'America/New
 await post('/investments/transactions', { investmentAccountId: invest.id, kind: 'contribution', amount: 4_200, taxYear });
 await post('/investments/transactions', { investmentAccountId: invest.id, holdingId: fund.id, kind: 'dividend', amount: 63.18 });
 await post('/investments/goals', { label: 'Retirement', targetAmount: 1_000_000, targetYear: 2055 });
+
+// A to-do item and a deleted trade, so the two screens that show them have
+// something to show. Both are soft-delete surfaces: "nothing here" and "the
+// screen could not read its answer" look identical when a list is empty, which
+// is the confusion this whole file exists to remove.
+const todo = await get('/todo');
+const section = todo.sections?.[0]?.id;
+if (section) await post('/todo/items', { sectionId: section, text: 'Review the session plan' });
+
+const removable = await post('/trades', {
+  instrument: 'GBP/JPY', side: 'long', status: 'closed', entryPrice: 191.2, exitPrice: 190.8,
+  units: 5_000, realizedPl: -140, openedAt: now - 5 * 86_400_000, closedAt: now - 5 * 86_400_000 + 1_800_000,
+});
+await del(`/trades/${removable.trades.find((t) => t.instrument === 'GBP/JPY').id}`);
 
 await store.close();
 
