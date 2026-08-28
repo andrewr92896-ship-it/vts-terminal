@@ -86,6 +86,21 @@ await post('/studies/flashcards', { name: 'Basics', cards: [{ term: 'Bid', def: 
 await post('/studies/guides', { name: 'Spreads', slides: [{ title: 'What a spread is', body: 'The gap between bid and ask.' }] });
 await post('/support/bugs', { body: 'The chart tile does not resize below 400px.' });
 
+// Investments. Seeded LAST because the three screens that read it — Contributions,
+// Dividends and Performance — read routes of their own rather than the portfolio
+// payload, and every one of them rendered empty for a real account until they
+// existed. A blank screen is what this whole file is here to tell apart from a
+// screen that could not read its answer.
+const invest = await post('/investments/accounts', { label: 'Roth IRA', kind: 'roth_ira', cashBalance: 0 });
+const fund = await post('/investments/holdings', {
+  investmentAccountId: invest.id, symbol: 'VOO', name: 'S&P 500 ETF',
+  assetClass: 'us_stock', quantity: 12, manualPrice: 512.40,
+});
+const taxYear = Number(new Intl.DateTimeFormat('en-CA', { timeZone: 'America/New_York', year: 'numeric' }).format(new Date()));
+await post('/investments/transactions', { investmentAccountId: invest.id, kind: 'contribution', amount: 4_200, taxYear });
+await post('/investments/transactions', { investmentAccountId: invest.id, holdingId: fund.id, kind: 'dividend', amount: 63.18 });
+await post('/investments/goals', { label: 'Retirement', targetAmount: 1_000_000, targetYear: 2055 });
+
 await store.close();
 
 const jar = `${PUBLIC_SESSION_COOKIE}=${encodeURIComponent(token)}`;

@@ -125,8 +125,18 @@ test('observations describe the portfolio and never advise', async () => {
   await call(store, 'POST', '/public/v1/investments/holdings', me.token, aHolding(account.body.id, { quantity: 100 }));
   await call(store, 'POST', '/public/v1/investments/holdings', me.token, aHolding(account.body.id, { name: 'Small', quantity: 1, manualPrice: 5 }));
   const portfolio = await call(store, 'GET', '/public/v1/investments/portfolio', me.token);
-  for (const flag of portfolio.body.flags) {
-    assert.match(flag.text, /^[^]*$/);
+  // `flags` lives INSIDE `allocation`, which is what the screens read. This
+  // read `portfolio.body.flags` — a key that happened to exist and no screen
+  // used — so it iterated the wrong array and would have passed just as
+  // happily over nothing at all.
+  const flags = portfolio.body.allocation.flags;
+  // A book that is almost entirely one holding must actually RAISE one, or the
+  // wording check below is asserting nothing.
+  assert.ok(flags.length > 0, 'a portfolio concentrated in one holding raised no observation');
+  for (const flag of flags) {
+    assert.ok(flag.text.length > 0);
+    // It states what is true and never what to do about it — the line between a
+    // tracker and advice, and the reason there is no target allocation here.
     assert.doesNotMatch(flag.text, /should|consider|recommend|ought|trim|rebalance|buy|sell/i, flag.text);
   }
 });

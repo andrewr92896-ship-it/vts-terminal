@@ -546,6 +546,18 @@ if (!url) {
     assert.ok(book.totals.value > 0);
     assert.ok(Math.abs(dividends.trailingYieldPct - (42 / book.totals.value) * 100) < 1e-9);
 
+    // The portfolio's SHAPE, not just its figures. `flags` sits INSIDE
+    // `allocation` and this payload had it as a sibling, so the Overview screen
+    // — the workspace's landing page — threw on any account that actually held
+    // an investment account. It rendered perfectly while empty, which is why
+    // nothing short of a real account with rows in it could see it.
+    assert.deepEqual(Object.keys(book.allocation).sort(), ['byClass', 'byRegion', 'bySector', 'flags']);
+    assert.ok(Array.isArray(book.allocation.flags));
+    // No public quote provider — every price is one the account typed — so this
+    // is stated as false rather than left absent, which would read as a feed.
+    assert.equal(book.livePricesConfigured, false);
+    assert.ok(typeof book.asOf === 'number');
+
     // A snapshot is written forward by reading the portfolio, one per Eastern
     // day, and the curve is built from those — never back-filled.
     const performance = await ok('GET', '/public/v1/investments/performance?days=365');

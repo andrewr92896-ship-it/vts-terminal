@@ -269,8 +269,19 @@ async function readPortfolio(store:PublicStore,accountId:string){
       manualPrice:holdings.find((r)=>r.id===h.id)?.manualPrice??null,
       manualPriceAt:holdings.find((r)=>r.id===h.id)?.manualPriceAt??null})),
     totals,
-    allocation:{byClass,bySector:allocateBy(valued,'sector',0),byRegion:allocateBy(valued,'region',0)},
-    flags:concentrationFlags(valued,byClass,totals.value),
+    // `flags` belongs INSIDE `allocation`, and `livePricesConfigured`/`asOf`
+    // are not optional: the screens read `portfolio.allocation.flags.length`
+    // and this payload had flags as a sibling, so the Overview — the
+    // workspace's landing page — threw on any account that actually held an
+    // investment account. It rendered fine while empty, which is exactly why
+    // only a real account with rows in it could find this.
+    allocation:{byClass,bySector:allocateBy(valued,'sector',0),byRegion:allocateBy(valued,'region',0),
+      flags:concentrationFlags(valued,byClass,totals.value)},
+    // No live quote provider publicly — every price is one the account typed —
+    // so this is false rather than absent, and the screens say so instead of
+    // implying a feed.
+    livePricesConfigured:false,
+    asOf:Date.now(),
   };
 }
 

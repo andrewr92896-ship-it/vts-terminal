@@ -305,6 +305,15 @@ contribution and never added into it, and the performance window's contribution
 figure taken as the difference between the running totals at each end so it
 reconciles with the line above it.
 
+**THE PORTFOLIO PAYLOAD'S SHAPE IS THE CONTRACT, NOT JUST ITS FIGURES.**
+`flags` sits **inside** `allocation` (beside `byClass`/`bySector`/`byRegion`),
+and `livePricesConfigured` and `asOf` are required. The public payload had
+`flags` as a sibling, so `portfolio.allocation.flags.length` threw and the
+**Investments Overview — the workspace's landing page — was blank for any
+account that actually held an investment account.** It rendered perfectly while
+empty, which is why nothing but a real account with rows in it could find it.
+`apps/web/src/api/types.ts` is the authority on that shape for both services.
+
 **Two adapter files carry the seam and they are not the same job.**
 `apps/public-terminal/src/adapters/publicApi.ts` maps a portal `api.*` call to a
 public route; `apps/public-terminal/src/demo/demoStore.ts` answers the same names
@@ -362,6 +371,16 @@ rather than observed to pass:**
   a helper the store calls on itself is recorded too, and the list is checked
   for STALE entries as well as missing ones — an excuse that is no longer true
   hides the next real gap.
+
+- **The live-account browser suite** (`scripts/public-terminal.live.spec.mjs`,
+  its own CI job) drives the public terminal as a REAL SIGNED-IN ACCOUNT against
+  a real server and a real database. Every case asserts that data which was
+  seeded is ON THE SCREEN — a blank page passes "the root is visible", and only
+  the trade's own instrument proves the payload arrived and was understood.
+  **Its `pageerror` listener is removed again after each screen**: left
+  attached, an error thrown late lands in whichever arrays are still listening
+  and gets reported against a screen that did not cause it, which sent one chase
+  after the wrong file.
 
 - **`verify:limits-mirror`** compares the IRS contribution limits in
   `apps/api/src/investments/limits.ts` against the copy in

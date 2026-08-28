@@ -29,11 +29,24 @@ test.beforeEach(async ({ context }) => {
 // A page is only reached once the shell has decided the session is good. Before
 // that it renders nothing at all, so waiting on the sidebar is what separates
 // "signed in and empty" from "still checking".
+// The listener is REMOVED again, which is not tidiness: left attached, every
+// screen's handler stays live for the rest of the run, so an error thrown late
+// — after a navigation, by a request that had not resolved yet — is pushed into
+// whichever arrays are still listening and gets reported against a screen that
+// did not cause it. That sent one chase after the wrong file.
 async function open(page, screen) {
   const errors = [];
-  page.on('pageerror', (error) => errors.push(String(error)));
-  await page.goto(`${base}/#${screen}`, { waitUntil: 'networkidle' });
-  await expect(page.locator('#root')).toBeVisible();
+  const record = (error) => errors.push(`${screen}: ${error.stack ?? String(error)}`);
+  page.on('pageerror', record);
+  try {
+    await page.goto(`${base}/#${screen}`, { waitUntil: 'networkidle' });
+    await expect(page.locator('#root')).toBeVisible();
+    // A render that throws asynchronously does so after the network settles, so
+    // the error arrives a tick later than the assertion above.
+    await page.waitForTimeout(250);
+  } finally {
+    page.off('pageerror', record);
+  }
   return errors;
 }
 
@@ -101,17 +114,39 @@ test('reporting a bug renders the report that was filed', async ({ page }) => {
   expect(errors).toEqual([]);
 });
 
+test('the investments screens render the rows the account actually has', async ({ page }) => {
+  // These three read routes of their own rather than the portfolio payload, and
+  // every one of them rendered permanently EMPTY for a real account while the
+  // demo showed them full — the worst way round, since the showcase then proves
+  // a screen the first customer finds blank. Nothing but a real account against
+  // a real server can tell those two apart.
+  const holdings = await open(page, 'inv_holdings');
+  await expect(page.getByText('S&P 500 ETF').first()).toBeVisible();
+  expect(holdings).toEqual([]);
+
+  const contributions = await open(page, 'inv_contributions');
+  await expect(page.getByText('Roth IRA').first()).toBeVisible();
+  expect(contributions).toEqual([]);
+
+  const dividends = await open(page, 'inv_dividends');
+  await expect(page.getByText('VOO').first()).toBeVisible();
+  expect(dividends).toEqual([]);
+
+  const performance = await open(page, 'inv_performance');
+  expect(performance).toEqual([]);
+});
+
 test('every remaining screen renders without throwing', async ({ page }) => {
   // The ones with nothing seeded. Nothing is asserted about their content —
   // there is none — but a thrown render leaves the root dead for every later
   // hash navigation, so one broken screen would blank the rest.
   const screens = ['deleted', 'td_trading', 'my_access', 'my_prefs', 'my_settings',
-    'inv_overview', 'inv_accounts', 'inv_holdings', 'st_decks', 'st_test', 'st_progress',
+    'inv_overview', 'inv_accounts', 'inv_allocation', 'inv_projections', 'st_decks', 'st_test', 'st_progress',
     'hp_howto', 'hp_rules', 'hp_terms', 'hp_privacy'];
   const broken = [];
   for (const screen of screens) {
     const errors = await open(page, screen);
-    if (errors.length > 0) broken.push(`${screen}: ${errors[0]}`);
+    if (errors.length > 0) broken.push(errors[0]);
   }
   expect(broken, 'screens that threw on a real account').toEqual([]);
 });
