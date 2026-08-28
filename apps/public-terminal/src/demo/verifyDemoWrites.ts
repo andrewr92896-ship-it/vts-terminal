@@ -88,4 +88,37 @@ assert.ok(back.sections[0].items.some((item: any) => item.id === target.id), 'un
 const again = call('restoreTodoItem', [{ ...target, position: 0 }]);
 assert.equal(again.sections[0].items.filter((item: any) => item.id === target.id).length, 1);
 
+// ---- The hand-kept funded book ----------------------------------------------
+
+const book = call('funded').accounts[0];
+const opened = call('addFundedTrade', [book.id, { instrument: 'GBP/USD', side: 'long', units: 10_000, entryPrice: 1.31 }]);
+const added = opened.accounts[0].trades.find((t: any) => t.instrument === 'GBP/USD');
+assert.ok(added, 'the trade appears on the account it was logged against');
+// An OPEN trade has made and lost nothing yet, so its realized P/L is null and
+// never zero — a zero scores as a break-even in every figure that reads it.
+assert.equal(added.realizedPl, null);
+assert.equal(opened.accounts[0].balance, book.balance, 'and an open trade does not move the balance');
+
+const closed = call('addFundedTrade', [book.id, { instrument: 'USD/JPY', side: 'short', units: 10_000, entryPrice: 150, exitPrice: 149.5, realizedPl: 120 }]);
+assert.equal(closed.accounts[0].balance, book.balance + 120, 'a closed one does');
+
+call('removeFundedTrade', [added.id]);
+const secondBook = call('addFundedAccount', [{ label: 'Second book', startingBalance: 5_000 }]);
+assert.equal(secondBook.accounts.length, 2);
+assert.equal(secondBook.accounts[1].balance, 5_000, 'a new book starts on what was paid into it');
+call('removeFundedAccount', [secondBook.accounts[1].id]);
+assert.equal(call('funded').accounts.length, 1);
+
+// ---- Reporting a bug --------------------------------------------------------
+
+// Free on every account, and the thing somebody evaluating the product is most
+// likely to press. The screen prepends `r.report` straight into the list it
+// renders, so an answer without one puts `undefined` in front of a render.
+const filed = call('createBugReport', ['The chart tile does not resize']);
+assert.ok(filed.report?.id, 'createBugReport must answer with a report');
+assert.equal(call('myBugReports').reports.length, 1, 'and it is in the list it was added to');
+const replied = call('replyBugReport', [filed.report.id, 'It happens at 390px too']);
+assert.equal(replied.report.messages.length, 2);
+assert.ok(call('sendSuggestion', ['A dark-mode print view']).suggestion?.id);
+
 console.log('demo writes: every path drove to the act it exists for');

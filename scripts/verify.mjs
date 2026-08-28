@@ -18,6 +18,10 @@ const STEPS = [
   // The demo is the showcase, and its writes are the half a screenshot cannot
   // see: a capture asserts a page rendered, not that pressing "add" on it did
   // anything.
+  // Every api call a public screen can reach must be answered by something —
+  // and every write must drive to the act it exists for. Neither is visible to
+  // a typecheck or to a screenshot.
+  ['demo coverage', 'verify:demo-coverage'],
   ['demo writes', 'verify:demo-writes'],
   ['Desk right now responsive layout', 'verify:desk-layout'],
   ['rollover alerts and re-entry math', 'verify:rollover'],

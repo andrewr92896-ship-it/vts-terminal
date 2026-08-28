@@ -11,9 +11,18 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 7.51';
+export const APP_VERSION = 'Beta V 7.52';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 7.52',
+    date: 'August 28, 2026',
+    notes: [
+      'Fixed: in the public demo, reporting a bug broke the page after you submitted it.',
+      'Manual Trades now works in the demo — adding a book or logging a trade moves the balance above it.',
+      'Added a check that every button on a public screen reaches something, so this class of fault fails the build instead of a visitor finding it.',
+    ],
+  },
   {
     version: 'Beta V 7.51',
     date: 'August 28, 2026',

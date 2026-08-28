@@ -113,6 +113,20 @@ Updated: 2026-08-27.
   for, asserting on the field the SCREEN destructures. It is in `verify`, so CI
   runs it. This is the half a screenshot test cannot see: a capture asserts a
   page rendered, not that pressing "add" on it did anything.
+- **`npm run verify:demo-coverage` closes the whole class.** It walks the public
+  screen tree, collects every `api.*` call reachable from it, and requires each
+  to be answered — served live, served by the demo, refused as AI, or NAMED in
+  the script with the reason it is deliberately unbuilt. The named list is the
+  point: a gap somebody decided to leave is fine, a gap nobody knows about is
+  not. Proved to fail by removing a handler, not merely observed to pass.
+- Auditing that way found the rest of the class and fixed it: the hand-kept
+  funded book's writes (Manual Trades is a retained nav row), and reporting a
+  bug — which is free on every account, is what somebody evaluating the product
+  is most likely to press, and put `undefined` straight into the list the screen
+  renders.
+- It also found a SECOND AI route slipping the guard by name, after
+  `flashcardsFromGame`: `closeFundedTrade` reads the result off a screenshot.
+  Both are now refused by name rather than falling through to "route not found".
 
 - Gave the public terminal a sixth record family with real storage: STUDY GAMES
   — the decks, their questions, each learner's progress, and combining games.

@@ -176,6 +176,12 @@ const DEMO_DIVIDENDS = [0, 3, 6, 9].flatMap((quarter, index) => ([
 const DEMO_CONTRIBUTIONS: any[] = [];
 const DEMO_GOALS: any[] = [];
 
+// A bug report a demo visitor files is kept for the session, like every other
+// demo write. `myBugReports` is a fixture-only name otherwise, so the report
+// would be accepted and then not be in the list it was just added to.
+const DEMO_BUG_REPORTS: any[] = [];
+const DEMO_SUGGESTIONS: any[] = [];
+
 // ---- Writes -----------------------------------------------------------------
 //
 // Each one mutates module state and returns the same payload its read returns,
@@ -377,6 +383,85 @@ const writes: Record<string, (args: any[]) => unknown> = {
     }
     return todo();
   },
+  // ---- The hand-kept funded book ---------------------------------------------
+  //
+  // Manual Trades is a retained nav row, so a visitor can reach it and press
+  // Add. Every write returns the same payload the read returns, and the
+  // account's headline figures are derived from its trades — log one and the
+  // balance above it moves.
+  addFundedAccount: ([input]) => {
+    DEMO_FUNDED_ACCOUNTS.push({
+      id: nextId('demo-fa'), ownerId: 'demo-user', owner: 'demo', isMine: true,
+      platform: String(input?.platform ?? 'Hand-kept'), label: String(input?.label ?? 'New book'),
+      currency: String(input?.currency ?? 'USD'), startingBalance: num(input?.startingBalance),
+      balance: num(input?.startingBalance), commissionPerLot: input?.commissionPerLot ?? null,
+      notes: input?.notes ?? null, realizedPl: 0, tradeCount: 0,
+      pnl: { daily: 0, weekly: 0, monthly: 0 }, trades: [],
+      createdAt: Date.now(), updatedAt: Date.now(),
+    });
+    return funded();
+  },
+  updateFundedAccount: ([id, patch]) => {
+    const row = DEMO_FUNDED_ACCOUNTS.find((a) => a.id === id);
+    if (row) Object.assign(row, patch, { updatedAt: Date.now() });
+    return funded();
+  },
+  removeFundedAccount: ([id]) => {
+    const index = DEMO_FUNDED_ACCOUNTS.findIndex((a) => a.id === id);
+    if (index >= 0) DEMO_FUNDED_ACCOUNTS.splice(index, 1);
+    return funded();
+  },
+  addFundedTrade: ([accountId, input]) => {
+    const account = DEMO_FUNDED_ACCOUNTS.find((a) => a.id === accountId) ?? DEMO_FUNDED_ACCOUNTS[0];
+    if (account) {
+      account.trades.unshift({
+        id: nextId('demo-ft'), instrument: String(input?.instrument ?? 'EUR/USD'),
+        side: input?.side === 'short' ? 'short' : 'long', units: num(input?.units),
+        entryPrice: num(input?.entryPrice), exitPrice: input?.exitPrice == null ? null : num(input.exitPrice),
+        stopLoss: input?.stopLoss ?? null, takeProfit: input?.takeProfit ?? null,
+        // Null realized P/L on an OPEN trade, never zero: a position that has
+        // not closed has not made or lost anything yet, and a zero would score
+        // as a break-even in every figure that reads it.
+        realizedPl: input?.exitPrice == null ? null : num(input?.realizedPl),
+        openedAt: Date.now(), closedAt: input?.exitPrice == null ? null : Date.now(),
+      });
+    }
+    return funded();
+  },
+  removeFundedTrade: ([id]) => {
+    for (const account of DEMO_FUNDED_ACCOUNTS) {
+      const index = account.trades.findIndex((t: any) => t.id === id);
+      if (index >= 0) { account.trades.splice(index, 1); break; }
+    }
+    return funded();
+  },
+  // ---- Reporting a bug, and sending a suggestion ------------------------------
+  //
+  // Reporting a bug is free on every account and is the one thing a visitor
+  // evaluating the product is most likely to try. Unhandled, `createBugReport`
+  // answered without a `report`, and the screen prepends that `undefined`
+  // straight into the list it renders.
+  createBugReport: ([body]) => {
+    const now = Date.now();
+    const report = { id: nextId('demo-bug'), author: 'Demo Trader', status: 'open',
+      summary: String(body ?? '').slice(0, 120), createdAt: now, updatedAt: now,
+      messages: [{ id: nextId('demo-msg'), author: 'Demo Trader', body: String(body ?? ''), createdAt: now, fromStaff: false }] };
+    DEMO_BUG_REPORTS.unshift(report);
+    return { report: clone(report) };
+  },
+  replyBugReport: ([id, body]) => {
+    const report = DEMO_BUG_REPORTS.find((r) => r.id === id);
+    if (report) {
+      report.messages.push({ id: nextId('demo-msg'), author: 'Demo Trader', body: String(body ?? ''), createdAt: Date.now(), fromStaff: false });
+      report.updatedAt = Date.now();
+    }
+    return { report: clone(report ?? { id, author: 'Demo Trader', status: 'open', summary: '', createdAt: Date.now(), updatedAt: Date.now(), messages: [] }) };
+  },
+  sendSuggestion: ([body]) => {
+    const suggestion = { id: nextId('demo-sug'), body: String(body ?? ''), author: 'Demo Trader', status: 'new', createdAt: Date.now() };
+    DEMO_SUGGESTIONS.unshift(suggestion);
+    return { suggestion: clone(suggestion) };
+  },
   createNote: ([input]) => {
     demoState.notes.unshift({
       id: nextId('demo-note'), ownerId: 'demo-user', owner: 'demo', ownerName: 'Demo Trader', isMine: true,
@@ -435,7 +520,7 @@ const fundedTrade = (id: string, instrument: string, side: 'long'|'short', units
 
 // A hand-kept book with trades in it, so the screen shows what it is for rather
 // than an empty state.
-const DEMO_FUNDED = {
+const DEMO_FUNDED_ACCOUNTS: any[] = [{
   id: 'demo-funded-1', ownerId: 'demo-user', owner: 'demo', isMine: true,
   platform: 'Hand-kept', label: 'Practice book', currency: 'USD',
   balance: 12_480, startingBalance: 12_000, commissionPerLot: null, notes: null,
@@ -446,12 +531,26 @@ const DEMO_FUNDED = {
     fundedTrade('demo-ft-3', 'XAU/USD', 'long', 3, 4_598.2, null, null, 1),
   ],
   createdAt: demoAgo(60), updatedAt: demoAgo(1),
-};
+}];
+
+// The account's headline figures are DERIVED from its trades, so logging one
+// moves the balance above it rather than leaving the two to disagree.
+function fundedAccounts() {
+  return DEMO_FUNDED_ACCOUNTS.map((account) => {
+    const closed = account.trades.filter((t: any) => t.exitPrice != null);
+    const realizedPl = closed.reduce((sum: number, t: any) => sum + num(t.realizedPl), 0);
+    return { ...account, realizedPl, tradeCount: account.trades.length,
+      balance: num(account.startingBalance) + realizedPl,
+      pnl: { ...account.pnl, monthly: realizedPl } };
+  });
+}
+const funded = () => ({ accounts: clone(fundedAccounts()), fundedTileColor: null });
 
 const capitalTotal = (value: number) => ({ value, mode: 'manual' as const, stated: 1, unstated: 0, mixedCurrency: false });
 
 const reads: Record<string, () => unknown> = {
-  funded: () => ({ accounts: [clone(DEMO_FUNDED)], fundedTileColor: null }),
+  funded,
+  myBugReports: () => ({ reports: clone(DEMO_BUG_REPORTS) }),
   studyDecks: () => ({ decks: clone(DEMO_DECKS) }),
   studyGames: () => ({ decks: clone(DEMO_DECKS) }),
   studyFlashcardSets: () => ({ sets: clone(DEMO_SETS) }),
