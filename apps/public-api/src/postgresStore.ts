@@ -1,5 +1,6 @@
 import pg from 'pg';
-import type { BudgetCategory, BudgetEntry, Challenge, NewBudgetCategory, NewBudgetEntry, PublicAccount, PublicStore, RateLimitResult, Session, TrustedDevice } from './types.js';
+import type { BudgetCategory, BudgetEntry, Challenge, NewBudgetCategory, NewBudgetEntry, PublicAccount, PublicStore, RateLimitResult, Session, TodoItemRow, TodoSectionRow, TrustedDevice } from './types.js';
+import { STARTER_SECTIONS } from './todo.js';
 const {Pool}=pg;
 
 export class PostgresPublicStore implements PublicStore {
@@ -75,6 +76,63 @@ export class PostgresPublicStore implements PublicStore {
   }
   async deleteBudgetEntry(accountId:string,id:string):Promise<boolean>{
     const r=await this.pool.query('delete from public_budget_entries where account_id=$1 and id=$2',[accountId,id]);
+    return (r.rowCount??0)>0;
+  }
+  // ---- to do ----------------------------------------------------------------
+  //
+  // Seeding is idempotent by CONSTRAINT — `on conflict do nothing` against the
+  // unique (account_id, n). Two concurrent first loads on two containers both
+  // run it and the second inserts nothing, which an in-process guard could not
+  // promise.
+  async ensureTodoSections(accountId:string){
+    const params:unknown[]=[accountId];
+    for(const s of STARTER_SECTIONS)params.push(s.n,s.icon,s.title,s.type,s.intervalDays);
+    // Five placeholders per section after $1, which every row shares.
+    const placeholders=STARTER_SECTIONS.map((_,i)=>`($1,$${i*5+2},$${i*5+3},$${i*5+4},$${i*5+5},$${i*5+6})`).join(',');
+    await this.pool.query(`insert into public_todo_sections(account_id,n,icon,title,type,interval_days) values${placeholders} on conflict (account_id,n) do nothing`,params);
+  }
+  async listTodoSections(accountId:string):Promise<TodoSectionRow[]>{
+    const r=await this.pool.query('select id,n,icon,title,type,interval_days as "intervalDays" from public_todo_sections where account_id=$1 order by n',[accountId]);
+    return r.rows.map((v)=>({...v,n:Number(v.n),intervalDays:v.intervalDays===null?null:Number(v.intervalDays)})) as TodoSectionRow[];
+  }
+  async listTodoItems(accountId:string):Promise<TodoItemRow[]>{
+    const r=await this.pool.query('select id,section_id as "sectionId",text,position,hyphen,done,due_at as "dueAt",interval_days as "intervalDays" from public_todo_items where account_id=$1 order by position,created_at',[accountId]);
+    return r.rows.map((v)=>({...v,position:Number(v.position),dueAt:v.dueAt?new Date(v.dueAt).getTime():null,intervalDays:v.intervalDays===null?null:Number(v.intervalDays)})) as TodoItemRow[];
+  }
+  // The section is matched on the account too, so an item can never be filed
+  // into somebody else's list. No match inserts nothing and returns undefined.
+  async addTodoItem(accountId:string,sectionId:string,text:string):Promise<TodoItemRow|undefined>{
+    const r=await this.pool.query(
+      `insert into public_todo_items(account_id,section_id,text,position)
+       select $1,$2,$3,coalesce((select max(position)+1 from public_todo_items where account_id=$1 and section_id=$2),0)
+        where exists (select 1 from public_todo_sections where id=$2 and account_id=$1)
+       returning id,section_id as "sectionId",text,position,hyphen,done,due_at as "dueAt",interval_days as "intervalDays"`,
+      [accountId,sectionId,text]);
+    const v=r.rows[0];
+    return v?{...v,position:Number(v.position),dueAt:v.dueAt?new Date(v.dueAt).getTime():null,intervalDays:v.intervalDays===null?null:Number(v.intervalDays)} as TodoItemRow:undefined;
+  }
+  async getTodoItem(accountId:string,id:string):Promise<TodoItemRow|undefined>{
+    const r=await this.pool.query('select id,section_id as "sectionId",text,position,hyphen,done,due_at as "dueAt",interval_days as "intervalDays" from public_todo_items where account_id=$1 and id=$2',[accountId,id]);
+    const v=r.rows[0];
+    return v?{...v,position:Number(v.position),dueAt:v.dueAt?new Date(v.dueAt).getTime():null,intervalDays:v.intervalDays===null?null:Number(v.intervalDays)} as TodoItemRow:undefined;
+  }
+  async setTodoItemState(accountId:string,id:string,done:boolean,dueAt:number|null){
+    const r=await this.pool.query('update public_todo_items set done=$3,due_at=case when $4::double precision is null then null else to_timestamp($4/1000.0) end where account_id=$1 and id=$2',[accountId,id,done,dueAt]);
+    return (r.rowCount??0)>0;
+  }
+  async deleteTodoItem(accountId:string,id:string){
+    const r=await this.pool.query('delete from public_todo_items where account_id=$1 and id=$2',[accountId,id]);
+    return (r.rowCount??0)>0;
+  }
+  // Restore puts the item back with the id and position it held, so an undo
+  // returns the list to what it was rather than appending a copy at the end.
+  async restoreTodoItem(accountId:string,item:TodoItemRow){
+    const r=await this.pool.query(
+      `insert into public_todo_items(id,account_id,section_id,text,position,hyphen,done,due_at,interval_days)
+       select $2,$1,$3,$4,$5,$6,$7,case when $8::double precision is null then null else to_timestamp($8/1000.0) end,$9
+        where exists (select 1 from public_todo_sections where id=$3 and account_id=$1)
+       on conflict (id) do nothing`,
+      [accountId,item.id,item.sectionId,item.text,item.position,item.hyphen,item.done,item.dueAt,item.intervalDays]);
     return (r.rowCount??0)>0;
   }
   async audit(event:string,accountId:string|undefined,metadata:Record<string,unknown>){await this.pool.query('insert into public_audit_events(event,account_id,metadata) values($1,$2,$3)',[event,accountId??null,metadata])}

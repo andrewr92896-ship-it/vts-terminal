@@ -43,6 +43,12 @@ Updated: 2026-08-27.
   positive amounts with `kind` carrying the sign, Eastern months, archive keeps
   history and delete removes it, `source` server-owned as the aggregator seam).
 
+- Gave the public terminal a second record family with real storage: personal
+  To Do, with the private side's display rules (Eastern daily reset, recurring
+  timers, markers) shared as pure functions so one component cannot behave two
+  ways. Seeding is idempotent by CONSTRAINT rather than by an in-process guard,
+  which the private side uses and which cannot hold across instances.
+
 ## Partially completed
 
 - `PRIVATE_DATABASE_URL` is supported, but the physical existing database has not been moved or renamed.
@@ -59,7 +65,7 @@ Updated: 2026-08-27.
 ## Blocked/manual
 
 - Provision separate Railway services.
-- Provision a public database and public API (the API exists and has auth, market data, layout, early access and budget; the remaining record families are still demo-only).
+- Provision a public database and public API (the API exists and has auth, market data, layout, early access, budget and to-do; the remaining record families are still demo-only).
 - Configure separate public authentication.
 - Configure private MFA.
 - Populate `PRIVATE_ACCESS_USER_IDS`. Since 7.42 an entry may be an ID, a username or an email — a username survives the database changing, which an ID does not.

@@ -11,9 +11,16 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 7.43';
+export const APP_VERSION = 'Beta V 7.44';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 7.44',
+    date: 'August 28, 2026',
+    notes: [
+      'The public terminal keeps your to-do list now, alongside the budget. A new account starts with categories and no tasks, a daily item unchecks itself the next day, and removing one offers an undo that puts it back where it was.',
+    ],
+  },
   {
     version: 'Beta V 7.43',
     date: 'August 27, 2026',

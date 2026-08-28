@@ -13,6 +13,15 @@ export type BudgetKind = 'income'|'expense';
 export type BudgetCategory = { id:string; name:string; kind:BudgetKind; monthlyLimit:number|null; icon:string|null; sortOrder:number; archived:boolean };
 export type BudgetEntry = { id:string; categoryId:string; amountCents:number; note:string|null; occurredOn:string; source:string };
 export type NewBudgetCategory = { name:string; kind:BudgetKind; monthlyLimit:number|null; icon:string|null };
+// ---- to do ------------------------------------------------------------------
+//
+// The shapes the portal's To Do component already reads. `code` is unused by
+// that component and kept so the payload matches; markers and timers are
+// computed on read from `done`, `dueAt` and the section type.
+export type TodoMarker='check'|'dash'|'dot';
+export type TodoSectionType='one'|'note'|'daily'|'routine';
+export type TodoItemRow={id:string;sectionId:string;text:string;position:number;hyphen:boolean;done:boolean;dueAt:number|null;intervalDays:number|null};
+export type TodoSectionRow={id:string;n:number;icon:string;title:string;type:TodoSectionType;intervalDays:number|null};
 export type NewBudgetEntry = { categoryId:string; amountCents:number; note:string|null; occurredOn:string };
 
 export interface PublicStore {
@@ -44,6 +53,16 @@ export interface PublicStore {
   listBudgetEntries(accountId:string,month:string):Promise<BudgetEntry[]>;
   addBudgetEntry(accountId:string,value:NewBudgetEntry):Promise<BudgetEntry|undefined>;
   deleteBudgetEntry(accountId:string,id:string):Promise<boolean>;
+  // To do. `ensureTodoSections` is idempotent by constraint rather than by a
+  // guard the caller has to remember.
+  ensureTodoSections(accountId:string):Promise<void>;
+  listTodoSections(accountId:string):Promise<TodoSectionRow[]>;
+  listTodoItems(accountId:string):Promise<TodoItemRow[]>;
+  addTodoItem(accountId:string,sectionId:string,text:string):Promise<TodoItemRow|undefined>;
+  getTodoItem(accountId:string,id:string):Promise<TodoItemRow|undefined>;
+  setTodoItemState(accountId:string,id:string,done:boolean,dueAt:number|null):Promise<boolean>;
+  deleteTodoItem(accountId:string,id:string):Promise<boolean>;
+  restoreTodoItem(accountId:string,item:TodoItemRow):Promise<boolean>;
   audit(event:string,accountId:string|undefined,metadata:Record<string,unknown>):Promise<void>;
 }
 

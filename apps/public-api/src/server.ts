@@ -4,7 +4,8 @@ import { loadPublicConfig } from './config.js';
 import { PublicAuthService, AuthError } from './auth.js';
 import { PostgresPublicStore } from './postgresStore.js';
 import { HttpPublicMarketProvider, SmtpPublicMailer } from './adapters.js';
-import type { BudgetKind, PublicMarketProvider, PublicStore } from './types.js';
+import type { BudgetKind, PublicMarketProvider, PublicStore, TodoItemRow } from './types.js';
+import { buildSections, dailyDone, etTodayMs, nextEtMidnight } from './todo.js';
 
 // A month is YYYY-MM and a day is YYYY-MM-DD, both EASTERN — the same rule the
 // private portal's budget follows, and for the same reason: a month boundary
@@ -52,6 +53,30 @@ const sessionCookie=(req:IncomingMessage)=>cookies(req)[PUBLIC_SESSION_COOKIE];
 // authenticated half of this API untestable — the routes that most need a check
 // are exactly the ones that could not have one.
 export type PublicDependencies={store:PublicStore;market:PublicMarketProvider;auth?:PublicAuthService};
+
+// The whole decorated list, built from the two reads. Sections are ensured on
+// every read rather than at sign-up: an account created before this shipped
+// would otherwise have no list at all, and the insert is a no-op once they do.
+async function readTodo(store:PublicStore,accountId:string){
+  await store.ensureTodoSections(accountId);
+  const [sections,items]=await Promise.all([store.listTodoSections(accountId),store.listTodoItems(accountId)]);
+  return buildSections(sections,items,etTodayMs());
+}
+
+// A restore payload is rebuilt field by field rather than trusted as sent: it
+// arrives from a client and names a row id, so anything not stated here — an
+// account id above all — cannot be smuggled in through it.
+function readRestorable(body:Record<string,unknown>):TodoItemRow|undefined{
+  const id=String(body.id||''); const sectionId=String(body.sectionId||''); const text=String(body.text||'');
+  if(!id||!sectionId||!text||text.length>500)return undefined;
+  const position=Number(body.position);
+  if(!Number.isInteger(position)||position<0)return undefined;
+  const dueAt=body.dueAt==null?null:Number(body.dueAt);
+  if(dueAt!==null&&!Number.isFinite(dueAt))return undefined;
+  const intervalDays=body.intervalDays==null?null:Number(body.intervalDays);
+  if(intervalDays!==null&&(!Number.isInteger(intervalDays)||intervalDays<=0))return undefined;
+  return {id,sectionId,text,position,hyphen:body.hyphen===true,done:body.done===true,dueAt,intervalDays};
+}
 
 async function authenticatedAccount(req:IncomingMessage,service:PublicAuthService){
   const current=await service.session(sessionCookie(req));
@@ -170,6 +195,65 @@ export async function handleRequest(req:IncomingMessage,res:ServerResponse,depen
       const gone=await dependencies.store.deleteBudgetEntry(id,entryId);
       if(!gone)throw new AuthError(404,'No such entry.');
       return json(res,200,{ok:true});
+    }
+    // ---- to do ---------------------------------------------------------------
+    //
+    // Every route resolves the account from the SESSION. The whole list is
+    // returned after each write, which is what the component expects and what
+    // keeps an optimistic client from having to guess how a toggle rippled.
+    if(path==='/public/v1/todo'&&method==='GET'){
+      const id=await authenticatedAccount(req,authService);
+      return json(res,200,{sections:await readTodo(dependencies.store,id)});
+    }
+    if(path==='/public/v1/todo/items'&&method==='POST'){
+      const id=await authenticatedAccount(req,authService); const body=await readBody(req);
+      const text=String(body.text||'').trim();
+      if(!text||text.length>500)throw new AuthError(400,'Give the task some text, up to 500 characters.');
+      const added=await dependencies.store.addTodoItem(id,String(body.sectionId||''),text);
+      if(!added)throw new AuthError(404,'No such section.');
+      return json(res,201,{sections:await readTodo(dependencies.store,id)});
+    }
+    if(/^\/public\/v1\/todo\/items\/[^/]+\/toggle$/.test(path)&&method==='PATCH'){
+      const id=await authenticatedAccount(req,authService);
+      const itemId=decodeURIComponent(path.split('/')[5]!);
+      const item=await dependencies.store.getTodoItem(id,itemId);
+      if(!item)throw new AuthError(404,'No such task.');
+      const sections=await dependencies.store.listTodoSections(id);
+      const section=sections.find((s)=>s.id===item.sectionId);
+      const today=etTodayMs();
+      // The PRIOR state goes back with the answer so the client can offer an
+      // undo. A daily item's stored `done` is not what was on screen — it is
+      // only true for the day it was checked — so the state reported is the one
+      // the reader actually saw.
+      const wasDone=section?.type==='daily'?dailyDone(item,today):item.done;
+      const previous={id:item.id,done:wasDone,dueAt:item.dueAt};
+      // Checking a daily item makes it done until the next ET midnight; that is
+      // the same column, because "when is this next due" and "how long does this
+      // check last" are one question for a repeating task.
+      const nextDone=!wasDone;
+      const nextDue=section?.type==='daily'?(nextDone?nextEtMidnight(today):null):item.dueAt;
+      await dependencies.store.setTodoItemState(id,itemId,nextDone,nextDue);
+      return json(res,200,{sections:await readTodo(dependencies.store,id),previous});
+    }
+    if(path.startsWith('/public/v1/todo/items/')&&method==='DELETE'){
+      const id=await authenticatedAccount(req,authService);
+      const itemId=decodeURIComponent(path.slice('/public/v1/todo/items/'.length));
+      // Read it BEFORE deleting: what comes back is what an undo needs, and
+      // after the delete there is nothing left to describe.
+      const removed=await dependencies.store.getTodoItem(id,itemId);
+      if(!removed)throw new AuthError(404,'No such task.');
+      await dependencies.store.deleteTodoItem(id,itemId);
+      return json(res,200,{sections:await readTodo(dependencies.store,id),removed});
+    }
+    if(path==='/public/v1/todo/items/restore'&&method==='POST'){
+      const id=await authenticatedAccount(req,authService); const body=await readBody(req);
+      const item=readRestorable(body);
+      if(!item)throw new AuthError(400,'That is not a task this can put back.');
+      // A restore that finds the id already present changes nothing, so pressing
+      // undo twice cannot overwrite the item it just put back.
+      const restored=await dependencies.store.restoreTodoItem(id,item);
+      if(!restored)throw new AuthError(404,'That task could not be put back.');
+      return json(res,200,{sections:await readTodo(dependencies.store,id)});
     }
     if(path.startsWith('/public/v1/ai/'))return json(res,501,{message:'Public AI is not available.'});
     return json(res,404,{message:'Public route not found.'});

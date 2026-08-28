@@ -1,4 +1,5 @@
-import type { BudgetCategory, BudgetEntry, Challenge, NewBudgetCategory, NewBudgetEntry, PublicAccount, PublicStore, RateLimitResult, Session, TrustedDevice } from './types.js';
+import type { BudgetCategory, BudgetEntry, Challenge, NewBudgetCategory, NewBudgetEntry, PublicAccount, PublicStore, RateLimitResult, Session, TodoItemRow, TodoSectionRow, TrustedDevice } from './types.js';
+import { STARTER_SECTIONS } from './todo.js';
 
 export class MemoryPublicStore implements PublicStore {
   accounts=new Map<string,PublicAccount>(); challenges=new Map<string,Challenge>(); sessions=new Map<string,Session>(); trusted=new Map<string,TrustedDevice>();
@@ -70,6 +71,60 @@ export class MemoryPublicStore implements PublicStore {
   async deleteBudgetEntry(accountId:string,id:string){
     const e=this.budgetEntries.get(id); if(!e||e.accountId!==accountId)return false;
     this.budgetEntries.delete(id); return true;
+  }
+  // ---- to do ----------------------------------------------------------------
+  //
+  // Mirrors the Postgres store's RULES, not only its shape: seeding twice adds
+  // nothing, an item cannot be filed into a section another account owns, and a
+  // restore keeps the item's own id and position rather than appending a copy.
+  todoSections=new Map<string,TodoSectionRow&{accountId:string}>();
+  todoItems=new Map<string,TodoItemRow&{accountId:string}>();
+  async ensureTodoSections(accountId:string){
+    // Idempotent the way the unique index makes it idempotent in Postgres: a
+    // section number this account already has is skipped, not duplicated.
+    const have=new Set([...this.todoSections.values()].filter((s)=>s.accountId===accountId).map((s)=>s.n));
+    for(const s of STARTER_SECTIONS){
+      if(have.has(s.n))continue;
+      const row={id:this.id(),accountId,n:s.n,icon:s.icon,title:s.title,type:s.type,intervalDays:s.intervalDays};
+      this.todoSections.set(row.id,row);
+    }
+  }
+  async listTodoSections(accountId:string){
+    return [...this.todoSections.values()].filter((s)=>s.accountId===accountId).sort((a,b)=>a.n-b.n)
+      .map(({accountId:_,...s})=>s);
+  }
+  async listTodoItems(accountId:string){
+    return [...this.todoItems.values()].filter((i)=>i.accountId===accountId).sort((a,b)=>a.position-b.position)
+      .map(({accountId:_,...i})=>i);
+  }
+  async addTodoItem(accountId:string,sectionId:string,text:string){
+    const section=this.todoSections.get(sectionId);
+    if(!section||section.accountId!==accountId)return undefined;
+    const mine=[...this.todoItems.values()].filter((i)=>i.accountId===accountId&&i.sectionId===sectionId);
+    const row={id:this.id(),accountId,sectionId,text,position:mine.length?Math.max(...mine.map((i)=>i.position))+1:0,
+      hyphen:false,done:false,dueAt:null,intervalDays:null};
+    this.todoItems.set(row.id,row);
+    const {accountId:_,...out}=row; return out;
+  }
+  async getTodoItem(accountId:string,id:string){
+    const i=this.todoItems.get(id); if(!i||i.accountId!==accountId)return undefined;
+    const {accountId:_,...out}=i; return out;
+  }
+  async setTodoItemState(accountId:string,id:string,done:boolean,dueAt:number|null){
+    const i=this.todoItems.get(id); if(!i||i.accountId!==accountId)return false;
+    this.todoItems.set(id,{...i,done,dueAt}); return true;
+  }
+  async deleteTodoItem(accountId:string,id:string){
+    const i=this.todoItems.get(id); if(!i||i.accountId!==accountId)return false;
+    this.todoItems.delete(id); return true;
+  }
+  async restoreTodoItem(accountId:string,item:TodoItemRow){
+    const section=this.todoSections.get(item.sectionId);
+    if(!section||section.accountId!==accountId)return false;
+    // `do nothing` on a live id: restoring twice must not overwrite whatever is
+    // there now, which for an undo button pressed twice is the item itself.
+    if(this.todoItems.has(item.id))return false;
+    this.todoItems.set(item.id,{...item,accountId}); return true;
   }
   async audit(event:string,accountId:string|undefined,metadata:Record<string,unknown>){this.audits.push({event,accountId,metadata})}
 }
