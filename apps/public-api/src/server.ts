@@ -17,8 +17,11 @@ import { MAX_FUNDED_ACCOUNTS, MAX_FUNDED_TRADES, MAX_TRADES, TradeError, fundedF
 import { CONFIDENCE_STATED, MAX_BODY, MAX_INSTRUMENT, MAX_PER_WEEK, MAX_REFLECTION, MAX_TITLE,
   computeStats, defaultWindow, etWeekKey, isLocked, isWeekKey, shiftWeekKey, toView, weekRange,
   type NoteDirection, type NoteKind, type NoteOutcome, type NoteRow } from './notes.js';
-import { INVESTMENT_ASSET_CLASSES, allocateBy, concentrationFlags, totalPortfolio, valueHolding,
-  type HoldingValue, type InvestmentAssetClass, type PricedHolding } from './investmentsMath.js';
+import { INVESTMENT_ASSET_CLASSES, allocateBy, concentrationFlags, last12MonthKeys, summarizePerformance,
+  totalPortfolio, valueHolding, type HoldingValue, type InvestmentAssetClass, type PricedHolding,
+  type SnapshotPoint } from './investmentsMath.js';
+import { LATEST_LIMIT_YEAR, LIMIT_GROUP_LABELS, contributionLimit, hasLimitsFor, limitGroupFor,
+  type InvestmentAccountKind, type LimitGroup } from './investmentLimits.js';
 
 // A month is YYYY-MM and a day is YYYY-MM-DD, both EASTERN — the same rule the
 // private portal's budget follows, and for the same reason: a month boundary
@@ -266,8 +269,19 @@ async function readPortfolio(store:PublicStore,accountId:string){
       manualPrice:holdings.find((r)=>r.id===h.id)?.manualPrice??null,
       manualPriceAt:holdings.find((r)=>r.id===h.id)?.manualPriceAt??null})),
     totals,
-    allocation:{byClass,bySector:allocateBy(valued,'sector',0),byRegion:allocateBy(valued,'region',0)},
-    flags:concentrationFlags(valued,byClass,totals.value),
+    // `flags` belongs INSIDE `allocation`, and `livePricesConfigured`/`asOf`
+    // are not optional: the screens read `portfolio.allocation.flags.length`
+    // and this payload had flags as a sibling, so the Overview — the
+    // workspace's landing page — threw on any account that actually held an
+    // investment account. It rendered fine while empty, which is exactly why
+    // only a real account with rows in it could find this.
+    allocation:{byClass,bySector:allocateBy(valued,'sector',0),byRegion:allocateBy(valued,'region',0),
+      flags:concentrationFlags(valued,byClass,totals.value)},
+    // No live quote provider publicly — every price is one the account typed —
+    // so this is false rather than absent, and the screens say so instead of
+    // implying a feed.
+    livePricesConfigured:false,
+    asOf:Date.now(),
   };
 }
 
@@ -778,6 +792,109 @@ export async function handleRequest(req:IncomingMessage,res:ServerResponse,depen
       const target=decodeURIComponent(path.slice('/public/v1/investments/transactions/'.length));
       if(!await dependencies.store.deleteInvestmentTransaction(id,target))throw new AuthError(404,'No such transaction.');
       return json(res,200,{ok:true});
+    }
+    // Three reads the screens were built against and nothing served, so on a
+    // real account Contributions, Dividends and Performance each rendered
+    // permanently empty while the demo showed them full. The rows were being
+    // written the whole time; nothing could read them back.
+    if(path==='/public/v1/investments/performance'&&method==='GET'){
+      const id=await authenticatedAccount(req,authService);
+      const asked=Number(new URL(req.url||'/','http://x').searchParams.get('days')??365);
+      const rangeDays=Number.isFinite(asked)&&asked>0?Math.min(asked,3650):365;
+      const all=await dependencies.store.listInvestmentSnapshots(id);
+      const cutoff=new Intl.DateTimeFormat('en-CA',{timeZone:ET,year:'numeric',month:'2-digit',day:'2-digit'})
+        .format(new Date(Date.now()-rangeDays*86_400_000));
+      const inRange=all.filter((s)=>s.onDate>=cutoff);
+      const points:SnapshotPoint[]=inRange.map((s)=>({onDate:s.onDate,value:s.value,contributedToDate:s.contributions}));
+      // What was ADDED inside the window, taken as the difference between the
+      // running contributed-to-date at each end rather than by re-summing the
+      // transactions — so the split always reconciles with the line above it.
+      const first=points[0]; const last=points[points.length-1];
+      const contributedInWindow=first&&last&&first.contributedToDate!=null&&last.contributedToDate!=null
+        ? last.contributedToDate-first.contributedToDate : 0;
+      return json(res,200,{points,summary:summarizePerformance(points,contributedInWindow),totalDays:all.length,rangeDays});
+    }
+    if(path==='/public/v1/investments/dividends'&&method==='GET'){
+      const id=await authenticatedAccount(req,authService);
+      const [rows,portfolio,holdings]=await Promise.all([
+        dependencies.store.listInvestmentTransactions(id),
+        readPortfolio(dependencies.store,id),
+        dependencies.store.listInvestmentHoldings(id)]);
+      const entries=rows.filter((r)=>r.kind==='dividend'||r.kind==='interest');
+      const symbolOf=new Map(holdings.map((h)=>[h.id,h.symbol??h.name]));
+      // Both sides are ET month keys, or a payment lands in no bucket at all.
+      const months=last12MonthKeys(etToday()).map((month)=>({month,amount:0}));
+      const monthIndex=new Map(months.map((m,i)=>[m.month,i]));
+      let totalLast12=0; let totalAllTime=0;
+      const bySymbol=new Map<string,number>();
+      for(const e of entries){
+        totalAllTime+=e.amount;
+        const key=new Intl.DateTimeFormat('en-CA',{timeZone:ET,year:'numeric',month:'2-digit'})
+          .format(new Date(e.occurredAt)).slice(0,7);
+        const at=monthIndex.get(key);
+        if(at!==undefined){months[at]!.amount+=e.amount;totalLast12+=e.amount}
+        const symbol=(e.holdingId?symbolOf.get(e.holdingId):null)??'Unattributed';
+        bySymbol.set(symbol,(bySymbol.get(symbol)??0)+e.amount);
+      }
+      return json(res,200,{entries,monthly:months,totalLast12,totalAllTime,
+        // TRAILING, never forward: a forward yield needs each holding's declared
+        // dividend rate, which nothing available here provides. What was
+        // received is a fact; projecting it forward would not be.
+        trailingYieldPct:portfolio.totals.value>0?(totalLast12/portfolio.totals.value)*100:null,
+        bySymbol:[...bySymbol.entries()].map(([symbol,amount])=>({symbol,amount})).sort((a,b)=>b.amount-a.amount)});
+    }
+    if(path==='/public/v1/investments/contributions'&&method==='GET'){
+      const id=await authenticatedAccount(req,authService);
+      const asked=Number(new URL(req.url||'/','http://x').searchParams.get('taxYear')??Number(etToday().slice(0,4)));
+      const taxYear=Number.isInteger(asked)&&asked>=1900&&asked<=2200?asked:Number(etToday().slice(0,4));
+      const [accounts,rows,goals,portfolio]=await Promise.all([
+        dependencies.store.listInvestmentAccounts(id),
+        dependencies.store.listInvestmentTransactions(id),
+        dependencies.store.listInvestmentGoals(id),
+        readPortfolio(dependencies.store,id)]);
+
+      const kindOf=new Map(accounts.map((a)=>[a.id,a.kind as InvestmentAccountKind]));
+      const byGroup=new Map<LimitGroup,{contributed:number;employerMatch:number}>();
+      let uncappedContributed=0;
+      for(const r of rows){
+        if(r.kind!=='contribution'&&r.kind!=='employer_match')continue;
+        if((r.taxYear??0)!==taxYear)continue;
+        const kind=kindOf.get(r.investmentAccountId);
+        if(!kind)continue;
+        const group=limitGroupFor(kind);
+        if(!group){uncappedContributed+=r.amount;continue}
+        const current=byGroup.get(group)??{contributed:0,employerMatch:0};
+        if(r.kind==='employer_match')current.employerMatch+=r.amount; else current.contributed+=r.amount;
+        byGroup.set(group,current);
+      }
+
+      // Every group the account actually HOLDS is listed, even at zero: the
+      // point of the screen is the headroom, which is invisible if a row only
+      // appears once something has been paid into it.
+      const relevant=new Set<LimitGroup>();
+      for(const a of accounts){if(!a.active)continue;const g=limitGroupFor(a.kind as InvestmentAccountKind);if(g)relevant.add(g)}
+      for(const g of byGroup.keys())relevant.add(g);
+
+      const groups=[...relevant].map((group)=>{
+        const totals=byGroup.get(group)??{contributed:0,employerMatch:0};
+        const limit=contributionLimit(group,taxYear);
+        // An employer match does not count against the employee's own limit, so
+        // it is reported BESIDE the figure and never added into it.
+        return {group,label:LIMIT_GROUP_LABELS[group],contributed:totals.contributed,employerMatch:totals.employerMatch,
+          limit:limit?.limit??null,catchUp:limit?.catchUp??null,catchUpFromAge:limit?.catchUpFromAge??null,
+          catchUp60to63:limit?.catchUp60to63??null,limitNote:limit?.note,
+          remaining:limit?Math.max(0,limit.limit-totals.contributed):null,
+          pct:limit&&limit.limit>0?Math.min(100,(totals.contributed/limit.limit)*100):null};
+      }).sort((a,b)=>a.label.localeCompare(b.label));
+
+      return json(res,200,{taxYear,
+        // A year not in the catalog reports NO limit rather than the nearest
+        // year's — somebody could over-contribute on the strength of a stale one.
+        limitsKnown:hasLimitsFor(taxYear),latestLimitYear:LATEST_LIMIT_YEAR,groups,uncappedContributed,
+        goals:goals.map((g)=>({id:g.id,accountId:null,accountLabel:null,kind:'custom',label:g.label,
+          targetAmount:g.targetAmount,targetDate:g.targetYear==null?null:`${g.targetYear}-12-31`,note:g.note,
+          current:portfolio.totals.value,
+          pct:g.targetAmount&&g.targetAmount>0?Math.min(100,(portfolio.totals.value/g.targetAmount)*100):0}))});
     }
     if(path==='/public/v1/investments/goals'&&method==='POST'){
       const id=await authenticatedAccount(req,authService); const body=await readBody(req);

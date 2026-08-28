@@ -11,9 +11,23 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 7.59';
+export const APP_VERSION = 'Beta V 7.60';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 7.60',
+    date: '2026-08-28',
+    notes: [
+      'Public terminal: there is now a supported way to let somebody in. Admitting an account by hand could produce one that could never sign in, in three different ways that all looked like a wrong password.',
+      'Fixed: every rate-limited route on the public API — sign in, the emailed code, password recovery and the early-access form — failed outright against a real database. Nobody could have signed in.',
+      'Fixed: on a real public account, Contributions, Dividends and Performance were permanently empty. The rows were being saved the whole time and nothing could read them back.',
+      'Every statement in the public API now runs in testing before it ships. Twenty-nine of them never had, including every edit and every delete.',
+      'Fixed: on a real public account, the Investments overview was blank as soon as you added an account. It worked while empty, which is why it took a real account to find.',
+      'Fixed: on a real public account, the To Do list showed nothing and could not be added to, whatever was in it.',
+      'The public predictions screen now carries the same "informational only, not investment advice" line every other screen of its kind does.',
+      'You can sign out of the public terminal. There was no control for it anywhere, so an account signed in on a shared computer stayed signed in.',
+    ],
+  },
   {
     version: 'Beta V 7.59',
     date: 'August 28, 2026',

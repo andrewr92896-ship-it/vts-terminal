@@ -1,5 +1,5 @@
 import { useSyncExternalStore } from 'react';
-import { readPublicUser, watchPublicUser } from '../../../web/src/public/PublicRuntime';
+import { isDemo, publicAuth, readPublicUser, watchPublicUser } from '../../../web/src/public/PublicRuntime';
 
 // Public replacement for the private terminal's auth context.
 //
@@ -27,7 +27,20 @@ let cached:any={...base,...readPublicUser()};
 let cachedFrom=readPublicUser();
 const snapshot=()=>{const current=readPublicUser();if(current!==cachedFrom){cachedFrom=current;cached={...base,...current,access:base.access}}return cached};
 
+// Signing out was a no-op stub, and nothing in the public terminal called it
+// anyway — so an account, once in, could not get out. On a shared or borrowed
+// computer that is the whole of the problem: the session cookie lasts twelve
+// hours. The route and the client method both existed the entire time; only
+// this stub and a control were missing.
+async function signOut(){
+  // The demo reaches no service by design, so leaving it is dropping the flag —
+  // which a load of the bare URL does, since the demo is entered from `?demo=1`
+  // or the sign-in card. Everything it held was module state and goes with it.
+  if(!isDemo())await publicAuth.logout().catch(()=>{});
+  window.location.assign(window.location.pathname);
+}
+
 export function useAuth(){
   const current=useSyncExternalStore(watchPublicUser,snapshot,snapshot);
-  return {user:current,loading:false,refreshUser:async()=>current,logout:async()=>{}};
+  return {user:current,loading:false,refreshUser:async()=>current,logout:signOut};
 }

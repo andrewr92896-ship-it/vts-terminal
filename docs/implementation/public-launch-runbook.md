@@ -52,7 +52,7 @@ Variables, all required unless marked:
 | `PUBLIC_COOKIE_DOMAIN` | *(optional)* |
 | `PUBLIC_MAIL_FROM` | The address sign-in codes come from |
 | `PUBLIC_SMTP_URL` | `smtps://…` for those codes |
-| `PUBLIC_MARKET_PROVIDER_URL` | *(optional)* where market data is read from |
+| `PUBLIC_MARKET_PROVIDER_URL` | where market data is read from — see below, it is only *optional* to the process starting |
 | `PUBLIC_MARKET_PROVIDER_TOKEN` | *(optional)* its token |
 
 Generate each key separately:
@@ -84,16 +84,61 @@ Point both hostnames at their services and let Railway issue certificates.
 `PUBLIC_COOKIE_SECURE` is `true`, so nothing works over plain HTTP — which is
 the point, not an obstacle.
 
-## 5. The first account
+## 5. Mail has to work before anybody can sign in
 
-There is no public sign-up. An account is created directly:
+Not a nicety, and worth doing before the first account rather than after it.
+**Every** public sign-in is gated on a six-digit code sent by email, and unlike
+the employee portal the public mailer has **no fallback that logs the code** —
+so on an install where `PUBLIC_SMTP_URL` points at nothing, a correct password
+reaches the second factor and stops there, for everyone, permanently.
 
-```sql
-insert into public_accounts(email, password_hash, display_name)
-values ('you@example.com', '<argon2id hash>', 'Your name');
+Send yourself one before going further:
+
+```
+PUBLIC_DATABASE_URL=… npm --workspace @vts/public-api run admit -- \
+  --email you@example.com --name "Your name"
 ```
 
-Or reach the early-access list, which the marketing site already writes to.
+then sign in and confirm the code arrives.
+
+## 6. The first account
+
+There is no public sign-up: a visitor asks through the early-access form and an
+operator lets them in. That is the command above, and it is the **only**
+supported way — it prints the password once and never again, because the
+password is stored only as a scrypt digest.
+
+**Do not write the row by hand.** Three separate things make a hand-written row
+an account that can never sign in, and all three answer with the same generic
+401 that a wrong password does, so none of them is diagnosable from the outside:
+
+- `password_hash` is `scrypt$<salt>$<digest>`, not a password;
+- `force_password_change` without an unexpired `temporary_password_expires_at`
+  is refused outright — the setting that sounds like the safe one locks the
+  account instead, and the window it needs is only fifteen minutes, which is
+  wrong for an invitation somebody reads the next morning;
+- a password below the terminal's own rule signs in and can then never be
+  changed, because changing one validates the new password against a rule the
+  old one never had to meet.
+
+The early-access list the marketing site writes to is where the addresses come
+from. Reading it is a query today — there is no admin screen on the public side.
+
+## Before announcing: Market Data and News need a provider
+
+`PUBLIC_MARKET_PROVIDER_URL` is optional to the service *starting* and is not
+optional to the product. Without it both `/market-data` and `/market-news`
+answer **503**, so the Market Data board and the news feed show an error — on
+every account, including the demo — while the marketing site's front page
+advertises both by name ("Rates, prints and prices on one board", "Headlines
+from the wires").
+
+Every screen is proved to survive that state (the live-account suite runs
+against exactly it), so nothing breaks. But a visitor who arrives from the
+marketing copy and opens the board finds the one thing that was advertised
+unavailable, which is a worse first impression than not advertising it. Either
+wire the provider before announcing, or take those two cards off the front page
+until it is wired.
 
 ## What is deliberately still unbuilt
 

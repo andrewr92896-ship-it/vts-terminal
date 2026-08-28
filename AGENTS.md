@@ -272,6 +272,67 @@ admin surface on the public side at all — which is why, for instance, a suppor
 reply can only ever be posted as `user`: a client must not be able to post a
 message that renders as staff having answered.
 
+**THERE IS NO PUBLIC SIGN-UP, SO ADMITTING SOMEBODY IS ITS OWN PATH**
+(`src/admit.ts`, `npm --workspace @vts/public-api run admit`). A visitor asks
+through the early-access form and an operator lets them in. It is the **only**
+supported way to create an account, because a hand-written row is an account
+that can never sign in in three separate ways, **all three of which answer with
+the same generic 401 a wrong password does**: `password_hash` is
+`scrypt$<salt>$<digest>` rather than a password; `force_password_change` without
+an unexpired `temporary_password_expires_at` is refused **outright** by `login`,
+so the setting that sounds like the safe one locks the account instead; and a
+password below the terminal's own rule signs in and can then never be **changed**,
+since `changePassword` validates the new one against a rule the old one never had
+to meet. The password is printed once and is not recoverable.
+- **It deliberately does NOT force a change.** The window a forced change needs
+  is fifteen minutes — right for a password the terminal itself just emailed,
+  wrong for an invitation read the next morning.
+- **MAIL IS A HARD DEPENDENCY OF SIGNING IN AT ALL.** Every login is gated on an
+  emailed code and `SmtpPublicMailer` has **no fallback that logs it**, unlike
+  the employee portal's. With `PUBLIC_SMTP_URL` pointing at nothing, a correct
+  password reaches the second factor and stops there, for everybody, permanently.
+
+**THE INVESTMENTS WORKSPACE READS THREE THINGS THAT ARE NOT ON THE PORTFOLIO
+PAYLOAD** — `/investments/performance`, `/investments/dividends` and
+`/investments/contributions`, each its own route. They were built and served on
+the private side and never ported, so Performance, Dividends and Contributions
+rendered **permanently empty on a real account while the demo showed them
+full**, which is the worst way round: the showcase proves a screen the first
+customer finds blank. The rules travel with them — a **trailing** yield rather
+than a forward one, a tax year with no catalog entry reporting **no limit**
+rather than the nearest year's, an employer match reported **beside** the
+contribution and never added into it, and the performance window's contribution
+figure taken as the difference between the running totals at each end so it
+reconciles with the line above it.
+
+**THE PORTFOLIO PAYLOAD'S SHAPE IS THE CONTRACT, NOT JUST ITS FIGURES.**
+`flags` sits **inside** `allocation` (beside `byClass`/`bySector`/`byRegion`),
+and `livePricesConfigured` and `asOf` are required. The public payload had
+`flags` as a sibling, so `portfolio.allocation.flags.length` threw and the
+**Investments Overview — the workspace's landing page — was blank for any
+account that actually held an investment account.** It rendered perfectly while
+empty, which is why nothing but a real account with rows in it could find it.
+`apps/web/src/api/types.ts` is the authority on that shape for both services.
+
+**THE TO-DO PAYLOAD'S `tag` IS LOAD-BEARING AND MUST BE `'trading'`.** The
+screen renders only sections carrying it and adds new items to the first one
+that does, so a null tag is a To Do list that shows nothing whatever is in it
+and cannot be added to either. Privately the tag marks the desk's own list among
+several; publicly there is one To Do screen and one list, so every section
+belongs on it. The demo already set it, so this worked in the showcase and was
+dead for a real account — the same shape as the Investments screens above, and
+the reason the live-account suite exists.
+
+**SIGNING OUT IS `signOut` IN `adapters/publicAuth.ts`, AND IT HAS TO REVOKE.**
+There was no control for it anywhere in the public terminal and the adapter's
+`logout` was a stub returning nothing, so an account, once in, could not get out
+— on a shared computer, for the twelve hours the session cookie lasts. The
+`/auth/logout` route and `publicAuth.logout()` both existed the whole time;
+only the wiring and a button were missing. The demo is the one case that reaches
+no service: leaving it is dropping the module flag, which a load of the bare URL
+does. The live suite's last test asserts the session answers **401 afterwards**,
+because a screen that merely forgot you is not a sign-out.
+
 **Two adapter files carry the seam and they are not the same job.**
 `apps/public-terminal/src/adapters/publicApi.ts` maps a portal `api.*` call to a
 public route; `apps/public-terminal/src/demo/demoStore.ts` answers the same names
@@ -292,6 +353,10 @@ rather than observed to pass:**
   first real customer, so the screen that was the proof the product works is the
   screen that breaks. The named lists are the point: a gap somebody decided to
   leave is fine, a gap nobody knows about is not.
+  **It matches `api` and the method name across a LINE BREAK**, which is not a
+  detail: `api\n  .investmentPerformance(days)` is ordinary formatting, and
+  requiring the dot to be adjacent made four whole screens invisible to this
+  check — every one of them demo-only, which is the class it exists to catch.
 - **`verify:demo-writes`** drives every demo write to the act it exists for,
   asserting on the field the SCREEN destructures. This is the half a screenshot
   test cannot see: a capture asserts a page rendered, not that pressing "add" on
@@ -308,8 +373,52 @@ rather than observed to pass:**
   goes in comes back out as the same shape. **Assert every column on the way
   back, not the few a summary happens to use** — the first version missed a
   wrong alias because the win rate it checked was computed from prices.
+  It also drives an **admitted account through the real login, the real emailed
+  code and the real session lookup** — the one thing that can tell an account
+  that works from one that only looks like it does — and that is what found the
+  fault where `consumeRateLimit` bound a `limit` parameter its SQL never
+  referenced, which Postgres refuses to type. **Every rate-limited route threw
+  against a real database**: sign in, the second factor, recovery and early
+  access, i.e. every way in, on a store the suite had otherwise exercised
+  happily because it seeded its session directly instead of logging in.
+  It ends by asserting **every statement in the store has actually executed**,
+  through a Proxy that records each call, with a named exemption list. That is
+  what turns the above from a lucky find into a rule: **29 statements had never
+  run** when it was first switched on — every UPDATE and every DELETE in the
+  whole API, the market-data layout, the password change, and the early-access
+  upsert the marketing site's own form posts to. `this` is bound to the proxy so
+  a helper the store calls on itself is recorded too, and the list is checked
+  for STALE entries as well as missing ones — an excuse that is no longer true
+  hides the next real gap.
 
-- **`verify:public-wiring`** reads the ~66 paths OUT OF the adapter and calls
+- **The live-account browser suite** (`scripts/public-terminal.live.spec.mjs`,
+  its own CI job) drives the public terminal as a REAL SIGNED-IN ACCOUNT against
+  a real server and a real database. Every case asserts that data which was
+  seeded is ON THE SCREEN — a blank page passes "the root is visible", and only
+  the trade's own instrument proves the payload arrived and was understood.
+  **Its `pageerror` listener is removed again after each screen**: left
+  attached, an error thrown late lands in whichever arrays are still listening
+  and gets reported against a screen that did not cause it, which sent one chase
+  after the wrong file.
+  **It serves HTTPS**, with a throwaway self-signed certificate, because the API
+  refuses a non-HTTPS entry in `PUBLIC_ALLOWED_ORIGINS` outright. Over plain
+  HTTP the browser's Origin matched nothing and the origin guard refused **every
+  write before it reached any code** — invisibly, because the suite was
+  read-only at the time, so the first write test added to it failed for a reason
+  that had nothing to do with the write. It also drives one write THROUGH THE
+  UI and re-reads it after a reload: the demo answers writes out of module
+  memory and the API's own tests post to the routes directly, so neither can see
+  a screen that destructures a key the write's response does not carry.
+
+- **`verify:limits-mirror`** compares the IRS contribution limits in
+  `apps/api/src/investments/limits.ts` against the copy in
+  `apps/public-api/src/investmentLimits.ts`, line for line. The public API is
+  its own service and may not import from the private one, so the catalog is
+  copied; nothing in either build would notice them diverging, and it is the one
+  figure here where being wrong means somebody over-contributes on the strength
+  of a number that looked right on their screen.
+
+- **`verify:public-wiring`** reads every path OUT OF the adapter (about seventy) and calls
   each against a real server on a real database, because both halves are written
   by hand and nothing else compares them: the adapter is not typechecked against
   the routes, the demo never reaches them, and the API's own tests write the

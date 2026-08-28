@@ -13,7 +13,13 @@ import { test, expect } from '@playwright/test';
 // Each case below therefore asserts that DATA THAT WAS SEEDED IS ON THE SCREEN,
 // not merely that the page rendered. A blank page passes "the root is visible";
 // only the trade's own instrument proves the payload arrived and was understood.
-const base = process.env.PUBLIC_LIVE_BASE ?? 'http://127.0.0.1:4174';
+// What the harness does NOT prove: the market board and the news feed are
+// driven by an upstream provider that is not wired yet, so here they answer
+// 503 — the state the public service actually ships in. Every screen is shown
+// to survive that. What they render against a REAL market payload is not
+// covered by anything, and is the next thing worth a check once a provider
+// exists.
+const base = process.env.PUBLIC_LIVE_BASE ?? 'https://127.0.0.1:4174';
 const cookie = process.env.PUBLIC_LIVE_COOKIE ?? '';
 
 const [name, value] = cookie.split('=');
@@ -22,18 +28,32 @@ test.beforeEach(async ({ context }) => {
   expect(cookie, 'PUBLIC_LIVE_COOKIE must be set by the harness').not.toBe('');
   await context.addCookies([{
     name, value: decodeURIComponent(value ?? ''), domain: '127.0.0.1', path: '/',
-    httpOnly: true, secure: false, sameSite: 'Lax',
+    // Carried as the production cookie is: Secure, over HTTPS.
+    httpOnly: true, secure: true, sameSite: 'Lax',
   }]);
 });
 
 // A page is only reached once the shell has decided the session is good. Before
 // that it renders nothing at all, so waiting on the sidebar is what separates
 // "signed in and empty" from "still checking".
+// The listener is REMOVED again, which is not tidiness: left attached, every
+// screen's handler stays live for the rest of the run, so an error thrown late
+// — after a navigation, by a request that had not resolved yet — is pushed into
+// whichever arrays are still listening and gets reported against a screen that
+// did not cause it. That sent one chase after the wrong file.
 async function open(page, screen) {
   const errors = [];
-  page.on('pageerror', (error) => errors.push(String(error)));
-  await page.goto(`${base}/#${screen}`, { waitUntil: 'networkidle' });
-  await expect(page.locator('#root')).toBeVisible();
+  const record = (error) => errors.push(`${screen}: ${error.stack ?? String(error)}`);
+  page.on('pageerror', record);
+  try {
+    await page.goto(`${base}/#${screen}`, { waitUntil: 'networkidle' });
+    await expect(page.locator('#root')).toBeVisible();
+    // A render that throws asynchronously does so after the network settles, so
+    // the error arrives a tick later than the assertion above.
+    await page.waitForTimeout(250);
+  } finally {
+    page.off('pageerror', record);
+  }
   return errors;
 }
 
@@ -101,17 +121,151 @@ test('reporting a bug renders the report that was filed', async ({ page }) => {
   expect(errors).toEqual([]);
 });
 
+test('the investments screens render the rows the account actually has', async ({ page }) => {
+  // These three read routes of their own rather than the portfolio payload, and
+  // every one of them rendered permanently EMPTY for a real account while the
+  // demo showed them full — the worst way round, since the showcase then proves
+  // a screen the first customer finds blank. Nothing but a real account against
+  // a real server can tell those two apart.
+  const holdings = await open(page, 'inv_holdings');
+  await expect(page.getByText('S&P 500 ETF').first()).toBeVisible();
+  expect(holdings).toEqual([]);
+
+  const contributions = await open(page, 'inv_contributions');
+  await expect(page.getByText('Roth IRA').first()).toBeVisible();
+  expect(contributions).toEqual([]);
+
+  const dividends = await open(page, 'inv_dividends');
+  await expect(page.getByText('VOO').first()).toBeVisible();
+  expect(dividends).toEqual([]);
+
+  const performance = await open(page, 'inv_performance');
+  expect(performance).toEqual([]);
+});
+
+test('the to-do list and the deleted trades show what is in them', async ({ page }) => {
+  // Both are lists, and an empty list is exactly what a payload the screen
+  // could not read also renders. The seeded row is what separates the two.
+  const todo = await open(page, 'td_trading');
+  await expect(page.getByText('Review the session plan').first()).toBeVisible();
+  expect(todo).toEqual([]);
+
+  const deleted = await open(page, 'deleted');
+  await expect(page.getByText('GBP/JPY').first()).toBeVisible();
+  expect(deleted).toEqual([]);
+});
+
+test('a write made through the UI lands, and survives a reload', async ({ page }) => {
+  // Everything above this reads. Nothing anywhere drove a WRITE through the
+  // real interface on a real account — the demo answers writes out of module
+  // memory, and the API's own tests post to the routes directly, so neither can
+  // see a screen that destructures a key the write response does not carry.
+  // That is the same fault class as the two payload-shape bugs above, on the
+  // half a customer notices fastest: they press "add" and nothing happens.
+  const errors = await open(page, 'fin_budget');
+  const name = `Coffee ${Date.now()}`;
+
+  await page.getByRole('button', { name: '+ Add a category' }).click();
+  await page.getByPlaceholder('Groceries').fill(name);
+  await page.getByRole('button', { name: 'Add category', exact: true }).click();
+
+  // On the screen straight away — from the write's OWN response, which is what
+  // a screen reading the wrong key would fail on.
+  await expect(page.getByText(name).first()).toBeVisible();
+  expect(errors, 'the screen threw while saving').toEqual([]);
+
+  // And still there after a reload, which is what separates a row that was
+  // saved from one that was only rendered.
+  const after = await open(page, 'fin_budget');
+  await expect(page.getByText(name).first()).toBeVisible();
+  expect(after).toEqual([]);
+});
+
+test('the compliance disclaimers are actually on the screens that must carry them', async ({ page }) => {
+  // Written down, reviewed, and then rendered by a component behind a
+  // conditional is a disclaimer that is not there. Nothing else checks that
+  // these reach a real account's screen, and this is the half the product's
+  // regulatory posture actually rests on: informational only, never advice.
+  for (const screen of ['inv_overview', 'inv_accounts', 'inv_holdings', 'inv_allocation',
+    'inv_performance', 'inv_dividends', 'inv_contributions', 'inv_projections']) {
+    const errors = await open(page, screen);
+    await expect(page.getByText(/Informational only/i).first(),
+      `${screen} rendered without its disclaimer`).toBeVisible();
+    expect(errors).toEqual([]);
+  }
+
+  // Trading Notes says it in its own words, because a prediction is the most
+  // advice-shaped thing a public account can write down.
+  const notes = await open(page, 'notes');
+  await expect(page.getByText(/personal record, not a recommendation/i).first()).toBeVisible();
+  expect(notes).toEqual([]);
+});
+
+test('a visitor with no account can ask for early access', async ({ browser }) => {
+  // The only thing an unauthenticated visitor does, the one route with no
+  // session behind it, and the top of the funnel for the whole product — the
+  // marketing site's two buttons both land here. Its own browser context, with
+  // NO cookie, because "works while signed in" says nothing about it.
+  const context = await browser.newContext({ ignoreHTTPSErrors: true });
+  const page = await context.newPage();
+  const errors = [];
+  page.on('pageerror', (error) => errors.push(String(error)));
+
+  await page.goto(`${base}/?screen=early-access`, { waitUntil: 'networkidle' });
+  await page.getByPlaceholder('you@example.com').fill(`visitor-${Date.now()}@example.com`);
+  await page.getByRole('button', { name: 'Send request' }).click();
+
+  // Told something, rather than left looking at a form that did nothing.
+  await expect(page.getByText(/Request received/i)).toBeVisible();
+  expect(errors).toEqual([]);
+  await context.close();
+});
+
 test('every remaining screen renders without throwing', async ({ page }) => {
   // The ones with nothing seeded. Nothing is asserted about their content —
   // there is none — but a thrown render leaves the root dead for every later
   // hash navigation, so one broken screen would blank the rest.
-  const screens = ['deleted', 'td_trading', 'my_access', 'my_prefs', 'my_settings',
-    'inv_overview', 'inv_accounts', 'inv_holdings', 'st_decks', 'st_test', 'st_progress',
+  const screens = ['my_access', 'my_prefs', 'my_settings', 'my_rules',
+    // The market-facing screens. The harness serves an EMPTY market payload,
+    // which is the case worth covering: a provider that answered with nothing
+    // is a real state, and a screen that throws on it takes every later hash
+    // navigation down with it.
+    'data', 'news', 'news_world', 'news_politics',
+    'st_packages', 'hp_news', 'hp_notes', 'hp_suggest',
+    'inv_overview', 'inv_accounts', 'inv_allocation', 'inv_projections', 'st_decks', 'st_test', 'st_progress',
     'hp_howto', 'hp_rules', 'hp_terms', 'hp_privacy'];
   const broken = [];
   for (const screen of screens) {
     const errors = await open(page, screen);
-    if (errors.length > 0) broken.push(`${screen}: ${errors[0]}`);
+    if (errors.length > 0) broken.push(errors[0]);
   }
   expect(broken, 'screens that threw on a real account').toEqual([]);
+});
+
+// LAST, deliberately: it revokes the session every other test signs in with.
+test('signing out revokes the session, not just the screen', async ({ browser, request }) => {
+  // There was no way out at all — the account chip has never had a handler and
+  // the adapter's logout was a stub — so a signed-in public account stayed
+  // signed in on whatever computer it was signed in on, for the twelve hours
+  // the session cookie lasts. The route and the client method both existed the
+  // whole time.
+  const context = await browser.newContext({ ignoreHTTPSErrors: true });
+  await context.addCookies([{
+    name, value: decodeURIComponent(value ?? ''), domain: '127.0.0.1', path: '/',
+    httpOnly: true, secure: true, sameSite: 'Lax',
+  }]);
+  const page = await context.newPage();
+  await page.goto(`${base}/#live`, { waitUntil: 'networkidle' });
+  await page.getByRole('button', { name: 'Sign out' }).click();
+
+  // Back at the sign-in card.
+  await expect(page.getByText(/Explore the demo|Sign in/i).first()).toBeVisible();
+
+  // And the session is DEAD on the server, which is the half that matters: a
+  // screen that merely forgot you is not a sign-out.
+  const still = await request.get(`${base}/public/v1/auth/session`, {
+    headers: { cookie }, ignoreHTTPSErrors: true,
+  });
+  expect(still.status(), 'the session still answered after signing out').toBe(401);
+  await context.close();
 });

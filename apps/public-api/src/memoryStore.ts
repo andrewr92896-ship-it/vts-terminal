@@ -9,6 +9,7 @@ export class MemoryPublicStore implements PublicStore {
   rates=new Map<string,{count:number;reset:number}>(); layouts=new Map<string,unknown>(); audits:Array<{event:string;accountId?:string;metadata:Record<string,unknown>}>=[];
   constructor(private now=()=>Date.now()){}
   addAccount(account:PublicAccount){this.accounts.set(account.id,account)}
+  async createAccount(v:{email:string;displayName:string;passwordHash:string}){const id=crypto.randomUUID();this.accounts.set(id,{id,email:v.email,passwordHash:v.passwordHash,displayName:v.displayName,forcePasswordChange:false,privateGroupWarning:false,disabled:false});return id}
   async findAccountByEmail(email:string){return [...this.accounts.values()].find((a)=>a.email===email)}
   async findAccountById(id:string){return this.accounts.get(id)}
   async updatePassword(id:string,passwordHash:string,force:boolean,temporaryPasswordExpiresAt?:number){const a=this.accounts.get(id);if(a)this.accounts.set(id,{...a,passwordHash,forcePasswordChange:force,temporaryPasswordExpiresAt})}

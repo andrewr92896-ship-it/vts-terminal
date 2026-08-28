@@ -36,9 +36,9 @@ const token = signToken(session, key);
 // — silently, because a refusal still answers.
 const origin = (process.env.PUBLIC_ALLOWED_ORIGINS ?? '').split(',')[0].trim();
 
-const post = async (path, body) => {
-  const req = Readable.from([JSON.stringify(body)]);
-  req.method = 'POST';
+const send = async (method, path, body) => {
+  const req = Readable.from(body === undefined ? [] : [JSON.stringify(body)]);
+  req.method = method;
   req.url = `/public/v1${path}`;
   req.headers = {
     origin, 'x-vts-public-csrf': '1',
@@ -52,9 +52,12 @@ const post = async (path, body) => {
   const parsed = JSON.parse(payload || '{}');
   // Loudly, so a seed that produced nothing cannot be mistaken for a screen
   // that rendered nothing.
-  if (status >= 400) throw new Error(`seed ${path} → ${status} ${JSON.stringify(parsed)}`);
+  if (status >= 400) throw new Error(`seed ${method} ${path} → ${status} ${JSON.stringify(parsed)}`);
   return parsed;
 };
+const get = (path) => send('GET', path);
+const post = (path, body) => send('POST', path, body ?? {});
+const del = (path) => send('DELETE', path);
 
 const now = Date.now();
 await post('/trades', {
@@ -85,6 +88,35 @@ await post('/studies/decks', {
 await post('/studies/flashcards', { name: 'Basics', cards: [{ term: 'Bid', def: 'What a buyer will pay', topic: 'Terms' }] });
 await post('/studies/guides', { name: 'Spreads', slides: [{ title: 'What a spread is', body: 'The gap between bid and ask.' }] });
 await post('/support/bugs', { body: 'The chart tile does not resize below 400px.' });
+
+// Investments. Seeded LAST because the three screens that read it — Contributions,
+// Dividends and Performance — read routes of their own rather than the portfolio
+// payload, and every one of them rendered empty for a real account until they
+// existed. A blank screen is what this whole file is here to tell apart from a
+// screen that could not read its answer.
+const invest = await post('/investments/accounts', { label: 'Roth IRA', kind: 'roth_ira', cashBalance: 0 });
+const fund = await post('/investments/holdings', {
+  investmentAccountId: invest.id, symbol: 'VOO', name: 'S&P 500 ETF',
+  assetClass: 'us_stock', quantity: 12, manualPrice: 512.40,
+});
+const taxYear = Number(new Intl.DateTimeFormat('en-CA', { timeZone: 'America/New_York', year: 'numeric' }).format(new Date()));
+await post('/investments/transactions', { investmentAccountId: invest.id, kind: 'contribution', amount: 4_200, taxYear });
+await post('/investments/transactions', { investmentAccountId: invest.id, holdingId: fund.id, kind: 'dividend', amount: 63.18 });
+await post('/investments/goals', { label: 'Retirement', targetAmount: 1_000_000, targetYear: 2055 });
+
+// A to-do item and a deleted trade, so the two screens that show them have
+// something to show. Both are soft-delete surfaces: "nothing here" and "the
+// screen could not read its answer" look identical when a list is empty, which
+// is the confusion this whole file exists to remove.
+const todo = await get('/todo');
+const section = todo.sections?.[0]?.id;
+if (section) await post('/todo/items', { sectionId: section, text: 'Review the session plan' });
+
+const removable = await post('/trades', {
+  instrument: 'GBP/JPY', side: 'long', status: 'closed', entryPrice: 191.2, exitPrice: 190.8,
+  units: 5_000, realizedPl: -140, openedAt: now - 5 * 86_400_000, closedAt: now - 5 * 86_400_000 + 1_800_000,
+});
+await del(`/trades/${removable.trades.find((t) => t.instrument === 'GBP/JPY').id}`);
 
 await store.close();
 

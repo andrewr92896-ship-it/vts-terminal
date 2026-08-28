@@ -98,6 +98,13 @@ const liveRecords:Record<string,(...args:any[])=>Promise<unknown>>={
   deleteInvestmentTransaction:(id:string)=>publicRequest(`/investments/transactions/${encodeURIComponent(id)}`,{method:'DELETE'}),
   createInvestmentGoal:(input:unknown)=>publicRequest('/investments/goals',{method:'POST',body:JSON.stringify(input)}),
   deleteInvestmentGoal:(id:string)=>publicRequest(`/investments/goals/${encodeURIComponent(id)}`,{method:'DELETE'}),
+  // The three reads the Contributions, Dividends and Performance screens were
+  // built against. Each rendered permanently empty on a real account and full
+  // in the demo, which is the worst way round: the showcase proved a screen the
+  // first customer would find blank.
+  investmentPerformance:(days:number)=>publicRequest(`/investments/performance?days=${encodeURIComponent(String(days))}`),
+  investmentDividends:()=>publicRequest('/investments/dividends'),
+  investmentContributions:(taxYear:number)=>publicRequest(`/investments/contributions?taxYear=${encodeURIComponent(String(taxYear))}`),
 
   netWorth:()=>publicRequest('/net-worth'),
   createNetWorthItem:(input:unknown)=>publicRequest('/net-worth/items',{method:'POST',body:JSON.stringify(input)}),

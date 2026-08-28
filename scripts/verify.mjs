@@ -22,6 +22,7 @@ const STEPS = [
   // and every write must drive to the act it exists for. Neither is visible to
   // a typecheck or to a screenshot.
   ['demo coverage', 'verify:demo-coverage'],
+  ['limits mirror', 'verify:limits-mirror'],
   ['demo writes', 'verify:demo-writes'],
   ['Desk right now responsive layout', 'verify:desk-layout'],
   ['rollover alerts and re-entry math', 'verify:rollover'],
