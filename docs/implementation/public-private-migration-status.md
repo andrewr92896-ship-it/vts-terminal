@@ -267,6 +267,24 @@ Updated: 2026-08-27.
   checking that no table anywhere still holds rows for it. Every record family
   cascades correctly.
 
+- **There is a migration RUNNER now**, which there was not: provisioning meant
+  feeding twelve files through psql by hand, in order, remembering which had
+  already been applied. `npm run db:migrate:public` does it once and repeatably,
+  is idempotent, and is on the public API's start command so every deploy
+  applies what is pending.
+- It **refuses to run against a database holding non-`public_*` tables** — that
+  is the private database's shape, and pointing this at it by mistake is the
+  worst thing the script could do. Proved by pointing it at a database holding
+  `users` and `broker_connections`.
+- `verify:migrations` read the first two migrations BY NAME, so every migration
+  added since was covered by none of its guards — including the one that stops a
+  public migration creating a private table. It reads all of them now, and also
+  checks the numbering is a sequence rather than assuming it.
+- `deploy/railway/public-api.json` did not exist; the other three services had
+  configs and the API had none.
+- `docs/implementation/public-launch-runbook.md` is the ordered list of what is
+  left, all of which needs a Railway account and a domain.
+
 ## Partially completed
 
 - `PRIVATE_DATABASE_URL` is supported, but the physical existing database has not been moved or renamed.

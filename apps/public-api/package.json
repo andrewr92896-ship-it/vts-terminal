@@ -10,7 +10,8 @@
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "test": "npm run build && node --test dist/test/*.test.js",
     "verify:migrations": "node scripts/verify-migrations.mjs",
-    "test:postgres": "npm run build && node --test dist/test/postgres.test.js"
+    "test:postgres": "npm run build && node --test dist/test/postgres.test.js",
+    "db:migrate": "node scripts/migrate.mjs"
   },
   "dependencies": {
     "nodemailer": "^9.0.3",

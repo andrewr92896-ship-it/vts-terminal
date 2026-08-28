@@ -11,9 +11,17 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 7.56';
+export const APP_VERSION = 'Beta V 7.57';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 7.57',
+    date: 'August 28, 2026',
+    notes: [
+      'Corrected the marketing page: it offered reading a trade off a screenshot, which the public terminal cannot do yet.',
+      'Setting up the public database is now one command rather than twelve files applied by hand.',
+    ],
+  },
   {
     version: 'Beta V 7.56',
     date: 'August 28, 2026',

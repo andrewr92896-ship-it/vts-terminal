@@ -58,15 +58,18 @@ jobs:
       postgres:
         image: postgres:16
         env:
-          POSTGRES_PASSWORD: public
-          POSTGRES_USER: public
+          # NOT `public`: that is a reserved role in Postgres — the implicit
+          # group every role belongs to — so the container refuses to create it
+          # and dies during initdb, which reads as the service being broken.
+          POSTGRES_PASSWORD: vts
+          POSTGRES_USER: vts
           POSTGRES_DB: public_check
         ports:
           - 5432:5432
         # Without this the steps start before the server accepts connections and
         # the failure reads as a broken test rather than a race.
         options: >-
-          --health-cmd "pg_isready -U public"
+          --health-cmd "pg_isready -U vts"
           --health-interval 5s
           --health-timeout 5s
           --health-retries 10
@@ -83,4 +86,4 @@ jobs:
 
       - run: npm run verify:postgres
         env:
-          PUBLIC_TEST_DATABASE_URL: postgres://public:public@127.0.0.1:5432/public_check
+          PUBLIC_TEST_DATABASE_URL: postgres://vts:vts@127.0.0.1:5432/public_check
