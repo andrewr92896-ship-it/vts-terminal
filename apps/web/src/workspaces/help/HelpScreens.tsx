@@ -532,9 +532,9 @@ export function HelpSuggestion({ theme, user }: { theme: Theme; user: User }) {
     setBusy(true);
     setMsg(null);
     try {
-      await api.sendSuggestion(text);
+      const res = await api.sendSuggestion(text);
       setBody('');
-      setMsg({ ok: true, text: 'Thanks! Your suggestion was sent to the admins.' });
+      setMsg({ ok: true, text: res.notice ?? 'Thanks! Your suggestion was sent to the admins.' });
     } catch (e) {
       setMsg({ ok: false, text: e instanceof ApiError ? e.message : 'Could not send suggestion' });
     } finally {

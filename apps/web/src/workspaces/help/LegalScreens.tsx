@@ -6,6 +6,7 @@ import {
   RULES,
   LEGAL_EFFECTIVE_DATE,
   LEGAL_VERSION,
+  LEGAL_STATUS,
   COMPANY,
   type Block,
   type LegalDoc,
@@ -50,6 +51,25 @@ function DocHeader({ title, theme }: { title: string; theme: Theme }) {
         {COMPANY.product} is an informational and educational tool. It does not provide financial,
         investment, or trading advice, and nothing in it should be relied on as such.
       </div>
+      {/* Drawn only where the documents are not the operative ones — today that is the
+          public terminal, whose Terms and Privacy are summaries pending launch. The
+          private portal sets LEGAL_STATUS to null and draws nothing. */}
+      {LEGAL_STATUS && (
+        <div
+          style={{
+            marginTop: 10,
+            padding: '11px 14px',
+            borderRadius: 8,
+            border: '1px solid rgba(255,159,69,.55)',
+            background: 'rgba(255,159,69,.09)',
+            fontSize: 11.5,
+            color: '#ffd7b0',
+            lineHeight: 1.6,
+          }}
+        >
+          {LEGAL_STATUS}
+        </div>
+      )}
     </div>
   );
 }

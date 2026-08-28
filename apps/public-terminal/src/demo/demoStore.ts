@@ -474,7 +474,12 @@ const writes: Record<string, (args: any[]) => unknown> = {
   sendSuggestion: ([body]) => {
     const suggestion = { id: nextId('demo-sug'), body: String(body ?? ''), author: 'Demo Trader', status: 'new', createdAt: Date.now() };
     DEMO_SUGGESTIONS.unshift(suggestion);
-    return { suggestion: clone(suggestion) };
+    // The send genuinely worked — the suggestion is in demo state and is listed back.
+    // What it did NOT do is reach anybody, and the visitor has to be told that outright.
+    return {
+      suggestion: clone(suggestion),
+      notice: 'Sent — for demonstration purposes only. Nothing here reaches us, and it resets when you leave. Suggestions will be available to Early Access members.',
+    };
   },
   createNote: ([input]) => {
     demoState.notes.unshift({

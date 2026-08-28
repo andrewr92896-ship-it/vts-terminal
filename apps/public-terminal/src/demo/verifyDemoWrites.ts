@@ -128,6 +128,11 @@ assert.ok(filed.report?.id, 'createBugReport must answer with a report');
 assert.equal(call('myBugReports').reports.length, 1, 'and it is in the list it was added to');
 const replied = call('replyBugReport', [filed.report.id, 'It happens at 390px too']);
 assert.equal(replied.report.messages.length, 2);
-assert.ok(call('sendSuggestion', ['A dark-mode print view']).suggestion?.id);
+const suggested = call('sendSuggestion', ['A dark-mode print view']);
+assert.ok(suggested.suggestion?.id, 'sendSuggestion must answer with the suggestion');
+// The screen prints `notice` in place of its own "sent to the admins" line, so a demo
+// that answers without one silently claims the suggestion reached somebody.
+assert.match(String(suggested.notice ?? ''), /demonstration purposes only/i);
+assert.match(String(suggested.notice ?? ''), /Early Access/);
 
 console.log('demo writes: every path drove to the act it exists for');

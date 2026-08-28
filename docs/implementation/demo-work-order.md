@@ -43,36 +43,44 @@ item below is done:
 
 ### Copy, disclaimers and compliance
 
-- [ ] **1. Premium Features screen — no tier levels.** Replace the tier display
+- [x] **1. Premium Features screen — no tier levels.** Replace the tier display
       with a statement that **Early Access members will have full access during
       pre-release**.
 
-- [ ] **2. Demo bar wording.** The bar currently reads "Sample data. Nothing is
+- [x] **2. Demo bar wording.** The bar currently reads "Sample data. Nothing is
       saved, and everything resets when you leave. Informational only." Add that
       **features will be available upon the release of Early Access.**
 
-- [ ] **3. Suggestions are functional, and say what they are.** Sending a
+- [x] **3. Suggestions are functional, and say what they are.** Sending a
       suggestion in the demo must WORK (it lands in demo state like every other
       demo write). After sending, tell the visitor this is for demonstration
       purposes only and that **suggestions will be available to Early Access
       members**.
 
-- [ ] **4. Site Rules / Terms / Privacy carry an "incomplete, in production"
+- [x] **4. Site Rules / Terms / Privacy carry an "incomplete, in production"
       notice**, plus whatever is needed to keep the owner covered legally while
       this demo is being shared publicly.
 
-- [ ] **5. Terms of Service and Privacy Policy — "available at launch".** The
+- [x] **5. Terms of Service and Privacy Policy — "available at launch".** The
       owner does NOT want full ToS/Privacy text published before the site is up,
       out of liability concern. These pages stay viewable, state that the real
       documents arrive at launch, and **for every subsection give a line
       explaining how it will work** — the marketing purpose.
 
-- [ ] **6. Expand Rules & Conduct** for compliance, as judged appropriate.
+- [x] **6. Expand Rules & Conduct** for compliance, as judged appropriate.
 
-- [ ] **7. Compliance audit of the whole demo.** Find anything questionable and
+- [x] **7. Compliance audit of the whole demo.** Find anything questionable and
       add the right disclaimer. Includes deciding whether a "some features will
       eventually be monetised" line is needed — **the owner would rather it were
       not**, so add it only if genuinely warranted, and say where and why.
+      **Decided (2026-08-28):** no monetisation line on any marketing or in-terminal
+      surface. What the demo says is the true and sufficient fact — Early Access is
+      full access, free, for the whole pre-release. The one place the possibility of
+      future paid features is stated is the Terms of Service ▸ Fees subsection, which
+      is where a reader goes looking for it and where it creates no impression that
+      anything is for sale now. Nothing anywhere claims the product is free forever,
+      and no payment detail is collected anywhere in the pre-release, so there is
+      nothing to disclaim beyond that.
 
 ### Structure and navigation
 

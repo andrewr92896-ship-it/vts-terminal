@@ -1410,7 +1410,10 @@ export const api = {
     return request('/api/trading/truth');
   },
   // ---- Feedback: suggestions ----
-  sendSuggestion(body: string): Promise<{ suggestion: Suggestion }> {
+  // `notice` is what the caller SHOWS after a send, when the answering service has
+  // something to say beyond "sent". The private API never sets it, so the screen falls
+  // back to its own wording; the public demo sets it to say the send went nowhere real.
+  sendSuggestion(body: string): Promise<{ suggestion: Suggestion; notice?: string }> {
     return request('/api/feedback/suggestions', { method: 'POST', body: JSON.stringify({ body }) });
   },
   adminSuggestions(): Promise<{ suggestions: Suggestion[] }> {
