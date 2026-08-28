@@ -31,6 +31,16 @@ export type InvestmentHolding = { id:string; investmentAccountId:string; symbol:
 export type InvestmentTransaction = { id:string; investmentAccountId:string; holdingId:string|null; kind:string; amount:number; quantity:number|null; occurredAt:number; taxYear:number|null; note:string|null; source:string };
 export type InvestmentGoal = { id:string; label:string; targetAmount:number|null; targetYear:number|null; note:string|null };
 export type InvestmentSnapshot = { onDate:string; value:number; contributions:number };
+// ---- net worth --------------------------------------------------------------
+//
+// `value` is ALWAYS positive and `kind` carries the sign. There is deliberately
+// no 'brokerage' or 'investments' category: the portfolio is tracked live, and
+// offering one would invite somebody to type it in a second time.
+export const NET_WORTH_CATEGORIES=['cash','real_estate','vehicle','crypto','business','valuables','retirement_other','other_asset','mortgage','auto_loan','student_loan','credit_card','personal_loan','other_debt'] as const;
+export type NetWorthCategory=(typeof NET_WORTH_CATEGORIES)[number];
+export type NetWorthKind='asset'|'liability';
+export type NetWorthItem={id:string;kind:NetWorthKind;category:NetWorthCategory;label:string;value:number;note:string|null;active:boolean;sortOrder:number;updatedAt:number};
+export type NetWorthSnapshot={onDate:string;assets:number;liabilities:number;netWorth:number};
 export type NewBudgetEntry = { categoryId:string; amountCents:number; note:string|null; occurredOn:string };
 
 export interface PublicStore {
@@ -91,6 +101,14 @@ export interface PublicStore {
   deleteInvestmentGoal(accountId:string,id:string):Promise<boolean>;
   // Written forward, one per Eastern day, never back-filled.
   recordInvestmentSnapshot(accountId:string,onDate:string,value:number,contributions:number):Promise<void>;
+  // Net worth. The hand-entered half only — the tracked half is read live from
+  // the portfolio and is deliberately not stored here.
+  listNetWorthItems(accountId:string):Promise<NetWorthItem[]>;
+  createNetWorthItem(accountId:string,value:Omit<NetWorthItem,'id'|'updatedAt'>):Promise<NetWorthItem>;
+  updateNetWorthItem(accountId:string,id:string,patch:Partial<Omit<NetWorthItem,'id'|'updatedAt'>>):Promise<boolean>;
+  deleteNetWorthItem(accountId:string,id:string):Promise<boolean>;
+  listNetWorthSnapshots(accountId:string):Promise<NetWorthSnapshot[]>;
+  recordNetWorthSnapshot(accountId:string,onDate:string,assets:number,liabilities:number,netWorth:number):Promise<void>;
   audit(event:string,accountId:string|undefined,metadata:Record<string,unknown>):Promise<void>;
 }
 

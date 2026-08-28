@@ -1,5 +1,5 @@
 import pg from 'pg';
-import type { InvestmentAccount, InvestmentGoal, InvestmentHolding, InvestmentSnapshot, InvestmentTransaction, BudgetCategory, BudgetEntry, Challenge, NewBudgetCategory, NewBudgetEntry, PublicAccount, PublicStore, RateLimitResult, Session, TodoItemRow, TodoSectionRow, TrustedDevice } from './types.js';
+import type { NetWorthItem, NetWorthSnapshot, InvestmentAccount, InvestmentGoal, InvestmentHolding, InvestmentSnapshot, InvestmentTransaction, BudgetCategory, BudgetEntry, Challenge, NewBudgetCategory, NewBudgetEntry, PublicAccount, PublicStore, RateLimitResult, Session, TodoItemRow, TodoSectionRow, TrustedDevice } from './types.js';
 import { STARTER_SECTIONS } from './todo.js';
 const {Pool}=pg;
 
@@ -254,6 +254,49 @@ export class PostgresPublicStore implements PublicStore {
       `insert into public_investment_snapshots(account_id,on_date,value,contributions) values($1,$2::date,$3,$4)
        on conflict (account_id,on_date) do update set value=excluded.value,contributions=excluded.contributions`,
       [accountId,onDate,value,contributions]);
+  }
+  // ---- net worth ------------------------------------------------------------
+  async listNetWorthItems(accountId:string):Promise<NetWorthItem[]>{
+    const r=await this.pool.query('select id,kind,category,label,value,note,active,sort_order as "sortOrder",updated_at as "updatedAt" from public_net_worth_items where account_id=$1 order by sort_order,label',[accountId]);
+    return r.rows.map((v)=>({...v,value:Number(v.value),sortOrder:Number(v.sortOrder),updatedAt:new Date(v.updatedAt).getTime()})) as NetWorthItem[];
+  }
+  async createNetWorthItem(accountId:string,v:Omit<NetWorthItem,'id'|'updatedAt'>):Promise<NetWorthItem>{
+    // Stored positive whatever arrives: `kind` is what carries the sign, and a
+    // negative in this column is invisible to anything that sums it.
+    const r=await this.pool.query(
+      `insert into public_net_worth_items(account_id,kind,category,label,value,note,active,sort_order)
+       values($1,$2,$3,$4,$5,$6,$7,$8)
+       returning id,kind,category,label,value,note,active,sort_order as "sortOrder",updated_at as "updatedAt"`,
+      [accountId,v.kind,v.category,v.label,Math.abs(v.value),v.note,v.active,v.sortOrder]);
+    const row=r.rows[0];
+    return {...row,value:Number(row.value),sortOrder:Number(row.sortOrder),updatedAt:new Date(row.updatedAt).getTime()} as NetWorthItem;
+  }
+  async updateNetWorthItem(accountId:string,id:string,patch:Partial<Omit<NetWorthItem,'id'|'updatedAt'>>){
+    const columns:Record<string,string>={kind:'kind',category:'category',label:'label',value:'value',note:'note',active:'active',sortOrder:'sort_order'};
+    const sets:string[]=[]; const params:unknown[]=[accountId,id];
+    for(const [key,column] of Object.entries(columns)){
+      if(!(key in patch))continue;
+      const raw=(patch as Record<string,unknown>)[key];
+      params.push(key==='value'?Math.abs(Number(raw)):raw);
+      sets.push(`${column}=$${params.length}`);
+    }
+    if(!sets.length)return (await this.pool.query('select 1 from public_net_worth_items where account_id=$1 and id=$2',[accountId,id])).rowCount!>0;
+    const r=await this.pool.query(`update public_net_worth_items set ${sets.join(',')},updated_at=now() where account_id=$1 and id=$2`,params);
+    return (r.rowCount??0)>0;
+  }
+  async deleteNetWorthItem(accountId:string,id:string){
+    const r=await this.pool.query('delete from public_net_worth_items where account_id=$1 and id=$2',[accountId,id]);
+    return (r.rowCount??0)>0;
+  }
+  async listNetWorthSnapshots(accountId:string):Promise<NetWorthSnapshot[]>{
+    const r=await this.pool.query(`select to_char(on_date,'YYYY-MM-DD') as "onDate",assets,liabilities,net_worth as "netWorth" from public_net_worth_snapshots where account_id=$1 order by on_date`,[accountId]);
+    return r.rows.map((v)=>({...v,assets:Number(v.assets),liabilities:Number(v.liabilities),netWorth:Number(v.netWorth)})) as NetWorthSnapshot[];
+  }
+  async recordNetWorthSnapshot(accountId:string,onDate:string,assets:number,liabilities:number,netWorth:number){
+    await this.pool.query(
+      `insert into public_net_worth_snapshots(account_id,on_date,assets,liabilities,net_worth) values($1,$2::date,$3,$4,$5)
+       on conflict (account_id,on_date) do update set assets=excluded.assets,liabilities=excluded.liabilities,net_worth=excluded.net_worth`,
+      [accountId,onDate,assets,liabilities,netWorth]);
   }
   async audit(event:string,accountId:string|undefined,metadata:Record<string,unknown>){await this.pool.query('insert into public_audit_events(event,account_id,metadata) values($1,$2,$3)',[event,accountId??null,metadata])}
 }

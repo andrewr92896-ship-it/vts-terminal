@@ -61,6 +61,13 @@ Updated: 2026-08-27.
   holding is excluded from every total and COUNTED. The three price sources are
   already distinguished, so wiring a provider is a branch rather than a rewrite.
 
+- Gave the public terminal a fourth record family with real storage: Net Worth,
+  which reads the portfolio live rather than storing it (one definition of what
+  a portfolio is worth, not two), offers no category that would let it be typed
+  in a second time, stores every value positive with `kind` carrying the sign,
+  and refuses an incomplete total rather than approximating one — writing no
+  history point in that state either.
+
 ## Partially completed
 
 - `PRIVATE_DATABASE_URL` is supported, but the physical existing database has not been moved or renamed.
@@ -77,7 +84,7 @@ Updated: 2026-08-27.
 ## Blocked/manual
 
 - Provision separate Railway services.
-- Provision a public database and public API (the API exists and has auth, market data, layout, early access, budget, to-do and investments; the remaining record families are still demo-only).
+- Provision a public database and public API (the API exists and has auth, market data, layout, early access, budget, to-do, investments and net worth; the remaining record families are still demo-only).
 - Configure separate public authentication.
 - Configure private MFA.
 - Populate `PRIVATE_ACCESS_USER_IDS`. Since 7.42 an entry may be an ID, a username or an email — a username survives the database changing, which an ID does not.

@@ -1,4 +1,4 @@
-import type { InvestmentAccount, InvestmentGoal, InvestmentHolding, InvestmentSnapshot, InvestmentTransaction, BudgetCategory, BudgetEntry, Challenge, NewBudgetCategory, NewBudgetEntry, PublicAccount, PublicStore, RateLimitResult, Session, TodoItemRow, TodoSectionRow, TrustedDevice } from './types.js';
+import type { NetWorthItem, NetWorthSnapshot, InvestmentAccount, InvestmentGoal, InvestmentHolding, InvestmentSnapshot, InvestmentTransaction, BudgetCategory, BudgetEntry, Challenge, NewBudgetCategory, NewBudgetEntry, PublicAccount, PublicStore, RateLimitResult, Session, TodoItemRow, TodoSectionRow, TrustedDevice } from './types.js';
 import { STARTER_SECTIONS } from './todo.js';
 
 export class MemoryPublicStore implements PublicStore {
@@ -210,6 +210,33 @@ export class MemoryPublicStore implements PublicStore {
   async recordInvestmentSnapshot(accountId:string,onDate:string,value:number,contributions:number){
     // Last reading of the day stands, keyed by (account, day).
     this.invSnapshots.set(`${accountId}:${onDate}`,{accountId,onDate,value,contributions});
+  }
+  // ---- net worth ------------------------------------------------------------
+  netWorthItems=new Map<string,NetWorthItem&{accountId:string}>();
+  netWorthSnapshots=new Map<string,NetWorthSnapshot&{accountId:string}>();
+  async listNetWorthItems(accountId:string){
+    return this.mine(this.netWorthItems,accountId).sort((a,b)=>a.sortOrder-b.sortOrder||a.label.localeCompare(b.label)).map((v)=>this.strip(v)) as NetWorthItem[];
+  }
+  async createNetWorthItem(accountId:string,v:Omit<NetWorthItem,'id'|'updatedAt'>){
+    // Positive whatever arrives — `kind` carries the sign, as in Postgres.
+    const row={...v,value:Math.abs(v.value),id:this.id(),accountId,updatedAt:Date.now()};
+    this.netWorthItems.set(row.id,row); return this.strip(row) as NetWorthItem;
+  }
+  async updateNetWorthItem(accountId:string,id:string,patch:Partial<Omit<NetWorthItem,'id'|'updatedAt'>>){
+    const row=this.netWorthItems.get(id); if(!row||row.accountId!==accountId)return false;
+    const next={...row,...patch,updatedAt:Date.now()};
+    if('value' in patch)next.value=Math.abs(Number(patch.value));
+    this.netWorthItems.set(id,next); return true;
+  }
+  async deleteNetWorthItem(accountId:string,id:string){
+    const row=this.netWorthItems.get(id); if(!row||row.accountId!==accountId)return false;
+    this.netWorthItems.delete(id); return true;
+  }
+  async listNetWorthSnapshots(accountId:string){
+    return this.mine(this.netWorthSnapshots,accountId).sort((a,b)=>a.onDate.localeCompare(b.onDate)).map((v)=>this.strip(v)) as NetWorthSnapshot[];
+  }
+  async recordNetWorthSnapshot(accountId:string,onDate:string,assets:number,liabilities:number,netWorth:number){
+    this.netWorthSnapshots.set(`${accountId}:${onDate}`,{accountId,onDate,assets,liabilities,netWorth});
   }
   async audit(event:string,accountId:string|undefined,metadata:Record<string,unknown>){this.audits.push({event,accountId,metadata})}
 }
