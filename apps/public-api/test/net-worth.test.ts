@@ -105,7 +105,11 @@ test('a value is stored positive however it arrives', async () => {
   const me = await signedIn(store);
   const created = await call(store, 'POST', '/public/v1/net-worth/items', me.token,
     { kind: 'liability', category: 'mortgage', label: 'House', value: -250_000 });
-  assert.equal(created.body.value, 250_000);
+  // A write answers with the WHOLE net worth — the shape the portal's own screen
+  // reads — plus the id of the row that was added, so the headline figure and the
+  // row that changed it cannot be a request apart.
+  assert.equal(created.body.liabilities[0].value, 250_000);
+  assert.equal(created.body.totals.liabilities, 250_000);
   const read = await call(store, 'GET', '/public/v1/net-worth', me.token);
   // Subtracted once, not added because it was already negative.
   assert.equal(read.body.totals.liabilities, 250_000);
@@ -208,4 +212,21 @@ test('malformed input is refused rather than coerced', async () => {
   ]) {
     assert.equal((await call(store, 'POST', '/public/v1/net-worth/items', me.token, body)).status, 400, JSON.stringify(body));
   }
+});
+
+test('the payload uses the names the portal screen actually reads', async () => {
+  // A near-miss here does not error — it renders an undefined figure — which is
+  // exactly the kind of mismatch that reaches production intact. `daysRecorded`
+  // shipped where `totalDays` was expected and nothing anywhere said so.
+  const store = new MemoryPublicStore();
+  const me = await signedIn(store);
+  const read = await call(store, 'GET', '/public/v1/net-worth', me.token);
+  for (const field of ['tracked', 'assets', 'liabilities', 'totals', 'history', 'totalDays', 'asOf']) {
+    assert.ok(field in read.body, `the screen reads ${field}`);
+  }
+  for (const field of ['assets', 'liabilities', 'netWorth', 'manualAssets']) {
+    assert.ok(field in read.body.totals, `the screen reads totals.${field}`);
+  }
+  assert.equal(typeof read.body.asOf, 'number');
+  assert.equal(read.body.totalDays, read.body.history.length);
 });

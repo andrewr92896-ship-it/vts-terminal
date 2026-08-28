@@ -84,6 +84,27 @@ Updated: 2026-08-27.
   and tested anyway, so the rules a feed must follow (an unchanged price is a
   MISS; no reference is unsettleable, never a miss) are already pinned.
 
+- **Wired the public terminal's client to those five families.** They had real
+  storage that nothing could reach: the adapter sends any unrecognised `api.*`
+  call to `/records/<name>`, which the public API does not serve, so on a real
+  account Budget, To Do, Investments, Net Worth and Trading Notes would all have
+  404'd while the storage behind them sat there working. It was invisible only
+  because nothing but the demo has ever run. The demo is still checked FIRST —
+  `publicRequest` refuses to reach the service from inside it — which is why the
+  live map sits behind that branch rather than beside the market-data methods.
+- Two payload mismatches surfaced doing it, both of which render as an undefined
+  figure rather than an error: the budget month carried no totals at all (the
+  screen reads six), and net worth sent `daysRecorded` where the screen reads
+  `totalDays`, with no `asOf`. Both are fixed on the SERVER, since the totals are
+  money arithmetic and there must be one definition of them; a test now pins the
+  field names.
+- Budget money now arrives as DOLLARS and is converted to cents at the edge,
+  matching the private route exactly, so the adapter carries no unit conversion —
+  the one place a 100× error could hide silently.
+- Still demo-only, and now visibly so: the investments and trading-notes WRITE
+  paths in the demo store (they fall through to an empty fixture), and every
+  Studies record family.
+
 ## Partially completed
 
 - `PRIVATE_DATABASE_URL` is supported, but the physical existing database has not been moved or renamed.

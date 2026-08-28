@@ -72,6 +72,20 @@ const readNetWorthItem=(body:Record<string,unknown>)=>{
 
 // Today's Eastern day as YYYY-MM-DD, for the one-per-day snapshot key.
 const etTodayMs2Date=()=>new Intl.DateTimeFormat('en-CA',{timeZone:ET,year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
+// The month a write should report back on: the one the caller is looking at,
+// which is what keeps a screen's totals in step with the row it just changed.
+const monthParam=(req:IncomingMessage)=>{
+  const asked=new URL(req.url||'/','http://public.invalid').searchParams.get('month');
+  return asked&&isMonthKey(asked)?asked:etToday().slice(0,7);
+};
+// Money from a client, in DOLLARS. Null stays null — for a monthly target that
+// means NO TARGET, which is a real state and not the same as zero.
+const readMoney=(v:unknown,what:string):number|null=>{
+  if(v==null)return null;
+  const n=Number(v);
+  if(!Number.isFinite(n)||n<0||n>1_000_000_000)throw new AuthError(400,`${what} is a number.`);
+  return n;
+};
 const isCents=(v:unknown):v is number=>typeof v==='number'&&Number.isInteger(v)&&v>0&&v<=2_147_483_647;
 
 export const PUBLIC_SESSION_COOKIE='vts_public_session_v1';
@@ -100,6 +114,63 @@ const sessionCookie=(req:IncomingMessage)=>cookies(req)[PUBLIC_SESSION_COOKIE];
 // authenticated half of this API untestable — the routes that most need a check
 // are exactly the ones that could not have one.
 export type PublicDependencies={store:PublicStore;market:PublicMarketProvider;auth?:PublicAuthService};
+
+// Money arrives from the client as DOLLARS (what the user typed) and is stored
+// as CENTS. The conversion happens exactly here, at the edge, so nothing behind
+// it has to wonder which unit it is holding — the same rule the private side
+// settled on, and the same reason: a budget adds the same figures up repeatedly,
+// and binary floats accumulate visible error doing that.
+//
+// `Math.round` rather than truncation: 12.345 typed into a money field means
+// 12.35 to the person typing it, and truncating would quietly lose a cent per
+// entry in a feature whose whole job is adding money up.
+const dollarsToCents=(v:number)=>Math.round(v*100);
+
+// One month, with its totals ALREADY ADDED UP.
+//
+// The totals are computed here rather than in the client adapter, because they
+// are money arithmetic and there must be exactly one definition of them. An
+// adapter that summed the same rows a second way is how two screens come to
+// disagree about what a month cost.
+async function readBudgetMonth(store:PublicStore,accountId:string,month:string){
+  const [rawCategories,entries]=await Promise.all([
+    store.listBudgetCategories(accountId),
+    store.listBudgetEntries(accountId,month),
+  ]);
+  const byCategory=new Map<string,{total:number;count:number}>();
+  for(const entry of entries){
+    const seen=byCategory.get(entry.categoryId)??{total:0,count:0};
+    seen.total+=entry.amountCents; seen.count+=1;
+    byCategory.set(entry.categoryId,seen);
+  }
+  // An ARCHIVED category with activity in the month being viewed is still
+  // listed. Dropping it would silently change a past month's total, which is the
+  // one thing a record of what you spent must never do.
+  const categories=rawCategories
+    .filter((c)=>!c.archived||(byCategory.get(c.id)?.count??0)>0)
+    .map((c)=>({...c,actualCents:byCategory.get(c.id)?.total??0,entryCount:byCategory.get(c.id)?.count??0}));
+  const names=new Map(rawCategories.map((c)=>[c.id,c]));
+  let incomeCents=0,spentCents=0,plannedIncomeCents=0,plannedSpendCents=0,hasTargets=false;
+  for(const c of categories){
+    if(c.kind==='income'){incomeCents+=c.actualCents;plannedIncomeCents+=c.monthlyLimit??0}
+    else{
+      spentCents+=c.actualCents;plannedSpendCents+=c.monthlyLimit??0;
+      // Null is "no target" and is NOT zero. A budget with no targets is a
+      // spending log, and pretending otherwise draws every bar at 0%.
+      if(c.monthlyLimit!=null)hasTargets=true;
+    }
+  }
+  return {
+    month,categories,
+    entries:entries.map((e)=>{
+      const c=names.get(e.categoryId);
+      return {...e,categoryName:c?.name??'(removed)',kind:c?.kind??'expense'};
+    }),
+    incomeCents,spentCents,netCents:incomeCents-spentCents,
+    plannedIncomeCents,plannedSpendCents,plannedNetCents:plannedIncomeCents-plannedSpendCents,
+    hasTargets,
+  };
+}
 
 // The whole decorated list, built from the two reads. Sections are ensured on
 // every read rather than at sign-up: an account created before this shipped
@@ -227,7 +298,11 @@ async function readNetWorth(store:PublicStore,accountId:string){
     liabilities:liabilityRows,
     totals:{assets,liabilities,netWorth,manualAssets},
     history,
-    daysRecorded:history.length,
+    // `totalDays` and `asOf` are the names the portal's own Net Worth screen
+    // reads. A near-miss here renders as an undefined figure rather than an
+    // error, which is the kind of mismatch that reaches production intact.
+    totalDays:history.length,
+    asOf:Date.now(),
   };
 }
 
@@ -345,11 +420,7 @@ export async function handleRequest(req:IncomingMessage,res:ServerResponse,depen
       const id=await authenticatedAccount(req,authService);
       const asked=new URL(req.url||'/','http://public.invalid').searchParams.get('month')||etToday().slice(0,7);
       if(!isMonthKey(asked))throw new AuthError(400,'Month must look like 2026-08.');
-      const [categories,entries]=await Promise.all([
-        dependencies.store.listBudgetCategories(id),
-        dependencies.store.listBudgetEntries(id,asked),
-      ]);
-      return json(res,200,{month:asked,categories,entries});
+      return json(res,200,await readBudgetMonth(dependencies.store,id,asked));
     }
     if(path==='/public/v1/budget/categories'&&method==='POST'){
       const id=await authenticatedAccount(req,authService); const body=await readBody(req);
@@ -359,11 +430,11 @@ export async function handleRequest(req:IncomingMessage,res:ServerResponse,depen
       if(kind!=='income'&&kind!=='expense')throw new AuthError(400,'A category is either income or expense.');
       // Null is "no target" and is NOT zero: a budget with no targets is a
       // spending log, and a stored 0 would draw every bar at 0% instead.
-      const limit=body.monthlyLimit===null||body.monthlyLimit===undefined?null:body.monthlyLimit;
-      if(limit!==null&&(!Number.isInteger(limit)||(limit as number)<0))throw new AuthError(400,'A monthly target is a whole number of cents.');
+      const limit=readMoney(body.monthlyLimit,'A monthly target');
       const icon=typeof body.icon==='string'&&body.icon.trim()?body.icon.trim().slice(0,24):null;
       try{
-        return json(res,201,await dependencies.store.addBudgetCategory(id,{name,kind,monthlyLimit:limit as number|null,icon}));
+        await dependencies.store.addBudgetCategory(id,{name,kind,monthlyLimit:limit==null?null:dollarsToCents(limit),icon});
+        return json(res,201,await readBudgetMonth(dependencies.store,id,monthParam(req)));
       }catch(error){
         // A duplicate name is the caller's to fix, not a server fault.
         if((error as {code?:string}).code==='23505')throw new AuthError(409,'You already have a category with that name.');
@@ -378,33 +449,41 @@ export async function handleRequest(req:IncomingMessage,res:ServerResponse,depen
         // one, which is why it is the separate, easier call.
         const gone=await dependencies.store.deleteBudgetCategory(id,categoryId);
         if(!gone)throw new AuthError(404,'No such category.');
-        return json(res,200,{ok:true});
+        return json(res,200,await readBudgetMonth(dependencies.store,id,monthParam(req)));
       }
       const body=await readBody(req);
       if(typeof body.archived!=='boolean')throw new AuthError(400,'Say whether the category is archived.');
       const changed=await dependencies.store.archiveBudgetCategory(id,categoryId,body.archived);
       if(!changed)throw new AuthError(404,'No such category.');
-      return json(res,200,{ok:true});
+      return json(res,200,await readBudgetMonth(dependencies.store,id,monthParam(req)));
     }
     if(path==='/public/v1/budget/entries'&&method==='POST'){
       const id=await authenticatedAccount(req,authService); const body=await readBody(req);
-      if(!isCents(body.amountCents))throw new AuthError(400,'An amount is a whole number of cents above zero.');
+      // DOLLARS in, cents stored. One input contract, converted once at the
+      // edge — the same shape the portal's own component sends.
+      const amount=readMoney(body.amount,'An amount');
+      if(amount==null||amount<=0)throw new AuthError(400,'An amount is a number above zero.');
+      const amountCents=dollarsToCents(amount);
+      if(!isCents(amountCents))throw new AuthError(400,'An amount is a number above zero.');
       const occurredOn=String(body.occurredOn||'')||etToday();
       if(!isDayKey(occurredOn))throw new AuthError(400,'A date looks like 2026-08-27.');
       const note=typeof body.note==='string'&&body.note.trim()?body.note.trim().slice(0,200):null;
       // `source` is deliberately not read from the body. It is the aggregator
       // seam, and a hand-entered row must never be able to claim it came from a
       // connected provider.
-      const entry=await dependencies.store.addBudgetEntry(id,{categoryId:String(body.categoryId||''),amountCents:body.amountCents,note,occurredOn});
+      const entry=await dependencies.store.addBudgetEntry(id,{categoryId:String(body.categoryId||''),amountCents,note,occurredOn});
       if(!entry)throw new AuthError(404,'No such category.');
-      return json(res,201,entry);
+      // The month the entry LANDED IN, not the one the caller happens to be
+      // looking at: an entry dated last month must not report itself into this
+      // month's totals. The private route resolves it the same way.
+      return json(res,201,await readBudgetMonth(dependencies.store,id,occurredOn.slice(0,7)));
     }
     if(path.startsWith('/public/v1/budget/entries/')&&method==='DELETE'){
       const id=await authenticatedAccount(req,authService);
       const entryId=decodeURIComponent(path.slice('/public/v1/budget/entries/'.length));
       const gone=await dependencies.store.deleteBudgetEntry(id,entryId);
       if(!gone)throw new AuthError(404,'No such entry.');
-      return json(res,200,{ok:true});
+      return json(res,200,await readBudgetMonth(dependencies.store,id,monthParam(req)));
     }
     // ---- to do ---------------------------------------------------------------
     //
@@ -598,14 +677,17 @@ export async function handleRequest(req:IncomingMessage,res:ServerResponse,depen
     }
     if(path==='/public/v1/net-worth/items'&&method==='POST'){
       const id=await authenticatedAccount(req,authService); const body=await readBody(req);
-      return json(res,201,await dependencies.store.createNetWorthItem(id,readNetWorthItem(body)));
+      // The portal's screen reads the WHOLE net worth back from a write, so the
+      // headline figure and the row it just added cannot be a request apart.
+      const created=await dependencies.store.createNetWorthItem(id,readNetWorthItem(body));
+      return json(res,201,{...await readNetWorth(dependencies.store,id),id:created.id});
     }
     if(path.startsWith('/public/v1/net-worth/items/')&&(method==='PATCH'||method==='DELETE')){
       const id=await authenticatedAccount(req,authService);
       const target=decodeURIComponent(path.slice('/public/v1/net-worth/items/'.length));
       if(method==='DELETE'){
         if(!await dependencies.store.deleteNetWorthItem(id,target))throw new AuthError(404,'No such item.');
-        return json(res,200,{ok:true});
+        return json(res,200,await readNetWorth(dependencies.store,id));
       }
       const body=await readBody(req);
       const patch:Record<string,unknown>={};
@@ -617,7 +699,7 @@ export async function handleRequest(req:IncomingMessage,res:ServerResponse,depen
       if('active' in body)patch.active=body.active===true;
       if('sortOrder' in body&&Number.isInteger(body.sortOrder))patch.sortOrder=Number(body.sortOrder);
       if(!await dependencies.store.updateNetWorthItem(id,target,patch))throw new AuthError(404,'No such item.');
-      return json(res,200,{ok:true});
+      return json(res,200,await readNetWorth(dependencies.store,id));
     }
     // ---- trading notes ---------------------------------------------------------
     //
