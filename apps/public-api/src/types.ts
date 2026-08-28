@@ -1,5 +1,5 @@
 import type { NoteDirection, NoteKind, NoteRow } from './notes.js';
-import type { DeckQuestion } from './studies.js';
+import type { DeckQuestion, Flashcard, GuideSlide } from './studies.js';
 
 export type PublicAccount = { id:string; email:string; passwordHash:string; displayName:string; forcePasswordChange:boolean; temporaryPasswordExpiresAt?:number; privateGroupWarning:boolean; disabled:boolean };
 export type Challenge = { accountId:string; codeHash:string; expiresAt:number; attempts:number; consumedAt?:number };
@@ -67,6 +67,19 @@ export type StudyDeckRow={id:string;name:string;description:string|null;source:s
 export type StudyDeckDetail=StudyDeckRow&{questions:DeckQuestion[]};
 export type NewStudyDeck={name:string;description:string|null;source:string;categories:string[];categoryWeights:Record<string,number>|null;questions:DeckQuestion[]};
 export type StudyDeckPatch={name?:string;description?:string|null;categories?:string[];categoryWeights?:Record<string,number>|null;questions?:DeckQuestion[]};
+
+// ---- flashcards and presentations -------------------------------------------
+//
+// Both belong to ONE account. A presentation's slides are stored whole, and each
+// slide's `id` is its identity across an edit or a reorder — see studies.ts.
+export type FlashcardSetRow={id:string;name:string;description:string|null;source:string;topics:string[];cardCount:number;createdAt:number};
+export type FlashcardSetDetail=FlashcardSetRow&{cards:Flashcard[]};
+export type NewFlashcardSet={name:string;description:string|null;source:string;cards:Flashcard[]};
+export type FlashcardSetPatch={name?:string;description?:string|null;cards?:Flashcard[]};
+export type StudyGuideRow={id:string;name:string;description:string|null;slideCount:number;createdAt:number;updatedAt:number};
+export type StudyGuideDetail=StudyGuideRow&{slides:GuideSlide[]};
+export type NewStudyGuide={name:string;description:string|null;slides:GuideSlide[]};
+export type StudyGuidePatch={name?:string;description?:string|null;slides?:GuideSlide[]};
 
 export interface PublicStore {
   findAccountByEmail(email:string):Promise<PublicAccount|undefined>;
@@ -153,6 +166,18 @@ export interface PublicStore {
   getStudyDeckGame(accountId:string,deckId:string):Promise<string|null>;
   saveStudyDeckGame(accountId:string,deckId:string,state:string):Promise<void>;
   recordStudyDeckRun(accountId:string,deckId:string,attempted:number,correct:number,bestStep:number):Promise<void>;
+  // Flashcards and presentations. Same rule as everything else here: every
+  // method filters on the account and none takes a "whose" parameter.
+  listFlashcardSets(accountId:string):Promise<FlashcardSetRow[]>;
+  getFlashcardSet(accountId:string,id:string):Promise<FlashcardSetDetail|undefined>;
+  createFlashcardSet(accountId:string,value:NewFlashcardSet):Promise<FlashcardSetDetail>;
+  updateFlashcardSet(accountId:string,id:string,patch:FlashcardSetPatch):Promise<FlashcardSetDetail|undefined>;
+  deleteFlashcardSet(accountId:string,id:string):Promise<boolean>;
+  listStudyGuides(accountId:string):Promise<StudyGuideRow[]>;
+  getStudyGuide(accountId:string,id:string):Promise<StudyGuideDetail|undefined>;
+  createStudyGuide(accountId:string,value:NewStudyGuide):Promise<StudyGuideDetail>;
+  updateStudyGuide(accountId:string,id:string,patch:StudyGuidePatch):Promise<StudyGuideDetail|undefined>;
+  deleteStudyGuide(accountId:string,id:string):Promise<boolean>;
   audit(event:string,accountId:string|undefined,metadata:Record<string,unknown>):Promise<void>;
 }
 

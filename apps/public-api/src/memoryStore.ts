@@ -1,6 +1,7 @@
-import type { NewStudyDeck, StudyDeckDetail, StudyDeckPatch, StudyDeckRow, NewTradingNote, TradingNotePatch, NetWorthItem, NetWorthSnapshot, InvestmentAccount, InvestmentGoal, InvestmentHolding, InvestmentSnapshot, InvestmentTransaction, BudgetCategory, BudgetEntry, Challenge, NewBudgetCategory, NewBudgetEntry, PublicAccount, PublicStore, RateLimitResult, Session, TodoItemRow, TodoSectionRow, TrustedDevice } from './types.js';
+import type { FlashcardSetDetail, FlashcardSetPatch, FlashcardSetRow, NewFlashcardSet, NewStudyGuide, StudyGuideDetail, StudyGuidePatch, StudyGuideRow, NewStudyDeck, StudyDeckDetail, StudyDeckPatch, StudyDeckRow, NewTradingNote, TradingNotePatch, NetWorthItem, NetWorthSnapshot, InvestmentAccount, InvestmentGoal, InvestmentHolding, InvestmentSnapshot, InvestmentTransaction, BudgetCategory, BudgetEntry, Challenge, NewBudgetCategory, NewBudgetEntry, PublicAccount, PublicStore, RateLimitResult, Session, TodoItemRow, TodoSectionRow, TrustedDevice } from './types.js';
 import { STARTER_SECTIONS } from './todo.js';
 import type { NoteRow } from './notes.js';
+
 
 export class MemoryPublicStore implements PublicStore {
   accounts=new Map<string,PublicAccount>(); challenges=new Map<string,Challenge>(); sessions=new Map<string,Session>(); trusted=new Map<string,TrustedDevice>();
@@ -317,6 +318,79 @@ export class MemoryPublicStore implements PublicStore {
   async saveStudyDeckGame(accountId:string,deckId:string,state:string){this.deckGames.set(`${accountId}:${deckId}`,state)}
   async recordStudyDeckRun(accountId:string,deckId:string,attempted:number,correct:number,bestStep:number){
     this.deckRuns.push({accountId,deckId,attempted,correct,bestStep});
+  }
+  // ---- flashcards -----------------------------------------------------------
+  flashcardSets=new Map<string,FlashcardSetDetail&{accountId:string}>();
+  private setView(row:FlashcardSetDetail):FlashcardSetRow{
+    const {cards,...rest}=row; void cards; return rest;
+  }
+  // The topics a set covers are DERIVED from its cards, never stored beside
+  // them: stored, the two could disagree about what is in the set.
+  private topicsOf(cards:Array<{topic:string|null}>):string[]{
+    const seen=new Set<string>(); const out:string[]=[];
+    for(const card of cards){
+      if(!card.topic)continue;
+      const key=card.topic.toLowerCase();
+      if(seen.has(key))continue;
+      seen.add(key); out.push(card.topic);
+    }
+    return out;
+  }
+  async listFlashcardSets(accountId:string){
+    return this.mine(this.flashcardSets,accountId).sort((a,b)=>b.createdAt-a.createdAt).map((r)=>this.setView(this.strip(r) as FlashcardSetDetail));
+  }
+  async getFlashcardSet(accountId:string,id:string){
+    const row=this.flashcardSets.get(id);
+    if(!row||row.accountId!==accountId)return undefined;
+    return structuredClone(this.strip(row)) as FlashcardSetDetail;
+  }
+  async createFlashcardSet(accountId:string,v:NewFlashcardSet){
+    const row={accountId,id:crypto.randomUUID(),name:v.name,description:v.description,source:v.source,
+      topics:this.topicsOf(v.cards),cardCount:v.cards.length,cards:v.cards,createdAt:this.now()};
+    this.flashcardSets.set(row.id,row);
+    return structuredClone(this.strip(row)) as FlashcardSetDetail;
+  }
+  async updateFlashcardSet(accountId:string,id:string,patch:FlashcardSetPatch){
+    const row=this.flashcardSets.get(id); if(!row||row.accountId!==accountId)return undefined;
+    const next={...row,...patch};
+    if(patch.cards){next.cardCount=patch.cards.length;next.topics=this.topicsOf(patch.cards)}
+    this.flashcardSets.set(id,next);
+    return structuredClone(this.strip(next)) as FlashcardSetDetail;
+  }
+  async deleteFlashcardSet(accountId:string,id:string){
+    const row=this.flashcardSets.get(id); if(!row||row.accountId!==accountId)return false;
+    this.flashcardSets.delete(id); return true;
+  }
+  // ---- presentations --------------------------------------------------------
+  studyGuides=new Map<string,StudyGuideDetail&{accountId:string}>();
+  private guideView(row:StudyGuideDetail):StudyGuideRow{
+    const {slides,...rest}=row; void slides; return rest;
+  }
+  async listStudyGuides(accountId:string){
+    return this.mine(this.studyGuides,accountId).sort((a,b)=>b.createdAt-a.createdAt).map((r)=>this.guideView(this.strip(r) as StudyGuideDetail));
+  }
+  async getStudyGuide(accountId:string,id:string){
+    const row=this.studyGuides.get(id);
+    if(!row||row.accountId!==accountId)return undefined;
+    return structuredClone(this.strip(row)) as StudyGuideDetail;
+  }
+  async createStudyGuide(accountId:string,v:NewStudyGuide){
+    const now=this.now();
+    const row={accountId,id:crypto.randomUUID(),name:v.name,description:v.description,
+      slides:v.slides,slideCount:v.slides.length,createdAt:now,updatedAt:now};
+    this.studyGuides.set(row.id,row);
+    return structuredClone(this.strip(row)) as StudyGuideDetail;
+  }
+  async updateStudyGuide(accountId:string,id:string,patch:StudyGuidePatch){
+    const row=this.studyGuides.get(id); if(!row||row.accountId!==accountId)return undefined;
+    const next={...row,...patch,updatedAt:this.now()};
+    if(patch.slides)next.slideCount=patch.slides.length;
+    this.studyGuides.set(id,next);
+    return structuredClone(this.strip(next)) as StudyGuideDetail;
+  }
+  async deleteStudyGuide(accountId:string,id:string){
+    const row=this.studyGuides.get(id); if(!row||row.accountId!==accountId)return false;
+    this.studyGuides.delete(id); return true;
   }
   async audit(event:string,accountId:string|undefined,metadata:Record<string,unknown>){this.audits.push({event,accountId,metadata})}
 }

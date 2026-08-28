@@ -130,6 +130,26 @@ Updated: 2026-08-27.
   a category no question was filed under, keeping its weight in the denominator
   of a score nothing on screen explained.
 
+- Gave the public terminal a seventh and eighth record family with real storage:
+  FLASHCARD SETS and STUDY PRESENTATIONS. With study games that is every Studies
+  screen except the sharing half working on a real account.
+- **A slide's `id` is the whole presentation design.** Slides are stored as one
+  blob, so an array position identifies nothing — it changes the moment somebody
+  drags a slide up the deck. Each slide carries its own id, MINTED ON WRITE ONLY
+  (a read that invented identity would hand out a different id every time) and
+  round-tripped through the editor, or every save would look like a deck of brand
+  new slides. Tested in both directions.
+- **An oversized screenshot is REFUSED, not dropped** — a deliberate divergence
+  from the private side, which drops it. Dropping saves a presentation with a
+  slide the author believes has a picture on it, and they find out when they
+  present. A slide with nothing on it at all is still dropped, because that is
+  nothing rather than something lost.
+- A set's topics are DERIVED from its cards on every read rather than stored
+  beside them: stored, the two could disagree about what is in the set.
+- `flashcardsFromGame` is now refused BY NAME as an AI route. None of the words
+  the AI guard matches appear in it, so it fell through to "route not found" —
+  which reads as a broken button rather than a feature that is switched off.
+
 - Still demo-only: the Study PACKAGE, sharing and public-library half. Sharing by
   username and a moderated public library both mean one public account's content
   reaching another's screen, plus an attestation and a review queue with no admin
@@ -151,7 +171,7 @@ Updated: 2026-08-27.
 ## Blocked/manual
 
 - Provision separate Railway services.
-- Provision a public database and public API (the API exists and has auth, market data, layout, early access, budget, to-do, investments, net worth, trading notes and study games; the remaining record families are still demo-only).
+- Provision a public database and public API (the API exists and has auth, market data, layout, early access, budget, to-do, investments, net worth, trading notes, study games, flashcards and presentations; the remaining record families are still demo-only).
 - Configure separate public authentication.
 - Configure private MFA.
 - Populate `PRIVATE_ACCESS_USER_IDS`. Since 7.42 an entry may be an ID, a username or an email — a username survives the database changing, which an ID does not.

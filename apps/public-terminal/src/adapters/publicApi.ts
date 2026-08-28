@@ -124,6 +124,18 @@ const liveRecords:Record<string,(...args:any[])=>Promise<unknown>>={
   studyDeckGame:(id:string)=>publicRequest(`/studies/decks/${encodeURIComponent(id)}/game`),
   saveStudyDeckGame:(id:string,state:string)=>publicRequest(`/studies/decks/${encodeURIComponent(id)}/game`,{method:'PUT',body:JSON.stringify({state})}),
   archiveStudyDeckGame:(id:string,state:string)=>publicRequest(`/studies/decks/${encodeURIComponent(id)}/game/archive`,{method:'POST',body:JSON.stringify({state})}),
+
+  studyFlashcardSets:()=>publicRequest('/studies/flashcards'),
+  studyFlashcardSet:(id:string)=>publicRequest(`/studies/flashcards/${encodeURIComponent(id)}`),
+  createFlashcardSet:(input:unknown)=>publicRequest('/studies/flashcards',{method:'POST',body:JSON.stringify(input)}),
+  updateFlashcardSet:(id:string,patch:unknown)=>publicRequest(`/studies/flashcards/${encodeURIComponent(id)}`,{method:'PATCH',body:JSON.stringify(patch)}),
+  deleteFlashcardSet:(id:string)=>publicRequest(`/studies/flashcards/${encodeURIComponent(id)}`,{method:'DELETE'}),
+
+  studyGuides:()=>publicRequest('/studies/guides'),
+  studyGuide:(id:string)=>publicRequest(`/studies/guides/${encodeURIComponent(id)}`),
+  saveStudyGuide:(input:unknown)=>publicRequest('/studies/guides',{method:'POST',body:JSON.stringify(input)}),
+  updateStudyGuide:(id:string,patch:unknown)=>publicRequest(`/studies/guides/${encodeURIComponent(id)}`,{method:'PUT',body:JSON.stringify(patch)}),
+  deleteStudyGuide:(id:string)=>publicRequest(`/studies/guides/${encodeURIComponent(id)}`,{method:'DELETE'}),
 };
 
 
@@ -159,7 +171,11 @@ const evidenceEmpty=(name:string):any=>{
 export const api:any=new Proxy(baseApi as any,{get(target,key:string){if(key in target)return target[key];return async(...args:any[])=>{
  // AI fails closed EVERYWHERE until the separate provider migration, demo
  // included: a showcase must never imply a capability that is not wired.
- if(/(import|extract|chat|generate|analyze|audit|categorize|preview|fixture|tutor)/i.test(key)||/^ai/i.test(key))throw new ApiError(501,'AI features are moving to a new provider and are switched off in the public terminal.');
+ // `flashcardsFromGame` is named in full because none of the words below appear
+ // in it: it is an AI route (the model pulls the terms out of a study game), and
+ // without it the call fell through to a "route not found" — which reads as a
+ // broken button rather than a feature that is switched off.
+ if(/(import|extract|chat|generate|analyze|audit|categorize|preview|fixture|tutor)/i.test(key)||/^ai/i.test(key)||key==='flashcardsFromGame')throw new ApiError(501,'AI features are moving to a new provider and are switched off in the public terminal.');
  // The DEMO comes first, always. It is the showcase, it answers out of module
  // memory, and `publicRequest` refuses to reach the service from inside it.
  if(isDemo()){const answered=demoCall(key,args);return answered.handled?answered.value:evidenceEmpty(key)}

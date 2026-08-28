@@ -1,14 +1,16 @@
+import { randomUUID } from 'node:crypto';
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 import { pathToFileURL } from 'node:url';
 import { loadPublicConfig } from './config.js';
 import { PublicAuthService, AuthError } from './auth.js';
 import { PostgresPublicStore } from './postgresStore.js';
 import { HttpPublicMarketProvider, SmtpPublicMailer } from './adapters.js';
-import type { BudgetKind, NetWorthCategory, NetWorthKind, PublicMarketProvider, PublicStore, StudyDeckDetail, StudyDeckRow, TodoItemRow } from './types.js';
+import type { BudgetKind, FlashcardSetDetail, FlashcardSetRow, NetWorthCategory, NetWorthKind, PublicMarketProvider, PublicStore, StudyDeckDetail, StudyDeckRow, StudyGuideDetail, StudyGuideRow, TodoItemRow } from './types.js';
 import { NET_WORTH_CATEGORIES } from './types.js';
 import { buildSections, dailyDone, etTodayMs, nextEtMidnight } from './todo.js';
-import { MAX_DECKS, MAX_DESCRIPTION, MAX_NAME, StudyError, normalizeState, readCategories,
-  readCategoryWeights, readQuestions, statsFromState, type DeckQuestion } from './studies.js';
+import { MAX_DECKS, MAX_DESCRIPTION, MAX_NAME, StudyError, normalizeState, readCards, readCategories,
+  readCategoryWeights, readQuestions, readSlides, slidesForRead, statsFromState,
+  type DeckQuestion } from './studies.js';
 import { CONFIDENCE_STATED, MAX_BODY, MAX_INSTRUMENT, MAX_PER_WEEK, MAX_REFLECTION, MAX_TITLE,
   computeStats, defaultWindow, etWeekKey, isLocked, isWeekKey, shiftWeekKey, toView, weekRange,
   type NoteDirection, type NoteKind, type NoteOutcome, type NoteRow } from './notes.js';
@@ -115,6 +117,9 @@ const BODY_LIMIT=16_384;
 // state, with a message that says so, rather than a body limit refusing it as
 // "too large" — and roomy enough for a thousand-question import.
 const STUDY_BODY_LIMIT=2_000_000;
+// A presentation carries its screenshots inline as base64 data URLs, so it is in
+// a different size class again — the private side allows 25 MB for exactly this.
+const GUIDE_BODY_LIMIT=25*1024*1024;
 const readBody=async(req:IncomingMessage,limit=BODY_LIMIT)=>{let body='';for await(const chunk of req){body+=chunk;if(body.length>limit)throw new AuthError(413,'Request too large.')}try{return body?JSON.parse(body):{}}catch{throw new AuthError(400,'Invalid JSON.')}};
 const ip=(req:IncomingMessage)=>String(req.headers['x-forwarded-for']||req.socket.remoteAddress||'unknown').split(',')[0]!.trim();
 const unsafe=(req:IncomingMessage)=>!['GET','HEAD','OPTIONS'].includes(req.method||'GET');
@@ -376,6 +381,15 @@ const readOutcome=(v:unknown):NoteOutcome=>{
   if(v==='hit'||v==='miss'||v==='partial'||v==='unsettleable')return v;
   throw new AuthError(400,'An outcome is hit, miss, partial, or unsettleable.');
 };
+
+// A flashcard set and a presentation as the portal's own screens read them.
+// `createdBy` is null for the same reason a deck's is: every one is the reader's
+// own, so there is nobody else it could have been. Slides go out through
+// `slidesForRead`, which MINTS NOTHING.
+const setView=(set:FlashcardSetRow)=>({...set,createdBy:null,createdByName:null});
+const setDetailView=(set:FlashcardSetDetail)=>({...setView(set),cards:set.cards});
+const guideView=(guide:StudyGuideRow)=>({...guide,createdBy:null,createdByName:null});
+const guideDetailView=(guide:StudyGuideDetail)=>({...guideView(guide),slides:slidesForRead(guide.slides)});
 
 // A deck as the portal's own launcher reads it.
 //
@@ -992,6 +1006,95 @@ export async function handleRequest(req:IncomingMessage,res:ServerResponse,depen
         const stats=statsFromState(state);
         if(stats)await dependencies.store.recordStudyDeckRun(id,deckId,stats.attempted,stats.correct,stats.bestStep);
         return json(res,200,{ok:true});
+      }
+      throw new AuthError(404,'Public route not found.');
+    }
+    // ---- flashcard sets --------------------------------------------------------
+    if(path==='/public/v1/studies/flashcards'&&method==='GET'){
+      const id=await authenticatedAccount(req,authService);
+      return json(res,200,{sets:(await dependencies.store.listFlashcardSets(id)).map(setView)});
+    }
+    if(path==='/public/v1/studies/flashcards'&&method==='POST'){
+      const id=await authenticatedAccount(req,authService); const body=await readBody(req,STUDY_BODY_LIMIT);
+      const name=text(body.name,MAX_NAME);
+      if(!name)throw new AuthError(400,'Give the set a name.');
+      if((await dependencies.store.listFlashcardSets(id)).length>=MAX_DECKS){
+        throw new AuthError(400,`That is ${MAX_DECKS} flashcard sets already.`);
+      }
+      const created=await dependencies.store.createFlashcardSet(id,{
+        name,description:text(body.description,MAX_DESCRIPTION),
+        // Server-owned, like a study game's: the AI paths are switched off here,
+        // so a set claiming to have been generated would describe something that
+        // did not happen.
+        source:'manual',
+        cards:readCards(body.cards),
+      });
+      return json(res,201,{set:setDetailView(created),sets:(await dependencies.store.listFlashcardSets(id)).map(setView)});
+    }
+    if(path.startsWith('/public/v1/studies/flashcards/')){
+      const id=await authenticatedAccount(req,authService);
+      const setId=decodeURIComponent(path.slice('/public/v1/studies/flashcards/'.length));
+      const set=await dependencies.store.getFlashcardSet(id,setId);
+      if(!set)throw new AuthError(404,'No such flashcard set.');
+      if(method==='GET')return json(res,200,{set:setDetailView(set)});
+      if(method==='DELETE'){
+        await dependencies.store.deleteFlashcardSet(id,setId);
+        return json(res,200,{sets:(await dependencies.store.listFlashcardSets(id)).map(setView)});
+      }
+      if(method==='PATCH'){
+        const body=await readBody(req,STUDY_BODY_LIMIT);
+        const patch:Record<string,unknown>={};
+        if('name' in body){const name=text(body.name,MAX_NAME); if(!name)throw new AuthError(400,'Give the set a name.'); patch.name=name}
+        if('description' in body)patch.description=text(body.description,MAX_DESCRIPTION);
+        if('cards' in body)patch.cards=readCards(body.cards);
+        const updated=await dependencies.store.updateFlashcardSet(id,setId,patch);
+        if(!updated)throw new AuthError(404,'No such flashcard set.');
+        return json(res,200,{set:setDetailView(updated),sets:(await dependencies.store.listFlashcardSets(id)).map(setView)});
+      }
+      throw new AuthError(404,'Public route not found.');
+    }
+    // ---- study presentations ---------------------------------------------------
+    //
+    // A SLIDE'S ID IS MINTED HERE, ON WRITE ONLY, and has to round-trip through
+    // the editor. Minting on read would hand out a different id every time and
+    // nothing pointing at a slide could rely on it; not minting at all would make
+    // every save look like a deck of brand new slides.
+    if(path==='/public/v1/studies/guides'&&method==='GET'){
+      const id=await authenticatedAccount(req,authService);
+      return json(res,200,{guides:(await dependencies.store.listStudyGuides(id)).map(guideView)});
+    }
+    if(path==='/public/v1/studies/guides'&&method==='POST'){
+      const id=await authenticatedAccount(req,authService); const body=await readBody(req,GUIDE_BODY_LIMIT);
+      const name=text(body.name,MAX_NAME);
+      if(!name)throw new AuthError(400,'Give the presentation a name.');
+      if((await dependencies.store.listStudyGuides(id)).length>=MAX_DECKS){
+        throw new AuthError(400,`That is ${MAX_DECKS} presentations already.`);
+      }
+      const created=await dependencies.store.createStudyGuide(id,{
+        name,description:text(body.description,MAX_DESCRIPTION),
+        slides:readSlides(body.slides,()=>randomUUID()),
+      });
+      return json(res,201,{guide:guideDetailView(created),guides:(await dependencies.store.listStudyGuides(id)).map(guideView)});
+    }
+    if(path.startsWith('/public/v1/studies/guides/')){
+      const id=await authenticatedAccount(req,authService);
+      const guideId=decodeURIComponent(path.slice('/public/v1/studies/guides/'.length));
+      const guide=await dependencies.store.getStudyGuide(id,guideId);
+      if(!guide)throw new AuthError(404,'No such presentation.');
+      if(method==='GET')return json(res,200,{guide:guideDetailView(guide)});
+      if(method==='DELETE'){
+        await dependencies.store.deleteStudyGuide(id,guideId);
+        return json(res,200,{guides:(await dependencies.store.listStudyGuides(id)).map(guideView)});
+      }
+      if(method==='PUT'||method==='PATCH'){
+        const body=await readBody(req,GUIDE_BODY_LIMIT);
+        const patch:Record<string,unknown>={};
+        if('name' in body){const name=text(body.name,MAX_NAME); if(!name)throw new AuthError(400,'Give the presentation a name.'); patch.name=name}
+        if('description' in body)patch.description=text(body.description,MAX_DESCRIPTION);
+        if('slides' in body)patch.slides=readSlides(body.slides,()=>randomUUID());
+        const updated=await dependencies.store.updateStudyGuide(id,guideId,patch);
+        if(!updated)throw new AuthError(404,'No such presentation.');
+        return json(res,200,{guide:guideDetailView(updated),guides:(await dependencies.store.listStudyGuides(id)).map(guideView)});
       }
       throw new AuthError(404,'Public route not found.');
     }

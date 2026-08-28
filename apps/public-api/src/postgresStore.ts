@@ -1,8 +1,8 @@
 import pg from 'pg';
-import type { NewStudyDeck, StudyDeckDetail, StudyDeckPatch, StudyDeckRow, NewTradingNote, TradingNotePatch, NetWorthItem, NetWorthSnapshot, InvestmentAccount, InvestmentGoal, InvestmentHolding, InvestmentSnapshot, InvestmentTransaction, BudgetCategory, BudgetEntry, Challenge, NewBudgetCategory, NewBudgetEntry, PublicAccount, PublicStore, RateLimitResult, Session, TodoItemRow, TodoSectionRow, TrustedDevice } from './types.js';
+import type { FlashcardSetDetail, FlashcardSetPatch, FlashcardSetRow, NewFlashcardSet, NewStudyGuide, StudyGuideDetail, StudyGuidePatch, StudyGuideRow, NewStudyDeck, StudyDeckDetail, StudyDeckPatch, StudyDeckRow, NewTradingNote, TradingNotePatch, NetWorthItem, NetWorthSnapshot, InvestmentAccount, InvestmentGoal, InvestmentHolding, InvestmentSnapshot, InvestmentTransaction, BudgetCategory, BudgetEntry, Challenge, NewBudgetCategory, NewBudgetEntry, PublicAccount, PublicStore, RateLimitResult, Session, TodoItemRow, TodoSectionRow, TrustedDevice } from './types.js';
 import { STARTER_SECTIONS } from './todo.js';
 import type { NoteRow } from './notes.js';
-import type { DeckQuestion } from './studies.js';
+import type { DeckQuestion, Flashcard, GuideSlide } from './studies.js';
 const {Pool}=pg;
 
 export class PostgresPublicStore implements PublicStore {
@@ -469,6 +469,144 @@ export class PostgresPublicStore implements PublicStore {
   async recordStudyDeckRun(accountId:string,deckId:string,attempted:number,correct:number,bestStep:number):Promise<void>{
     await this.pool.query('insert into public_study_deck_runs(account_id,deck_id,attempted,correct,best_step) values($1,$2,$3,$4,$5)',
       [accountId,deckId,attempted,correct,bestStep]);
+  }
+  // ---- flashcards -----------------------------------------------------------
+  //
+  // The topics a set covers are DERIVED from its cards on every read, never
+  // stored beside them — stored, the two could disagree about what is in the set.
+  private topicsOf(cards:Array<{topic:string|null}>):string[]{
+    const seen=new Set<string>(); const out:string[]=[];
+    for(const card of cards){
+      if(!card.topic)continue;
+      const key=card.topic.toLowerCase();
+      if(seen.has(key))continue;
+      seen.add(key); out.push(card.topic);
+    }
+    return out;
+  }
+  async listFlashcardSets(accountId:string):Promise<FlashcardSetRow[]>{
+    const r=await this.pool.query(
+      `select s.id,s.name,s.description,s.source,s.created_at as "createdAt",
+              coalesce((select json_agg(c.topic) from public_flashcards c where c.set_id=s.id and c.topic is not null),'[]') as topics,
+              (select count(*) from public_flashcards c where c.set_id=s.id)::int as "cardCount"
+         from public_flashcard_sets s where s.account_id=$1 order by s.created_at desc`,[accountId]);
+    return r.rows.map((v)=>({id:String(v.id),name:String(v.name),description:v.description??null,source:String(v.source),
+      topics:this.topicsOf((v.topics as string[]).map((topic)=>({topic}))),
+      cardCount:Number(v.cardCount),createdAt:new Date(String(v.createdAt)).getTime()}));
+  }
+  async getFlashcardSet(accountId:string,id:string):Promise<FlashcardSetDetail|undefined>{
+    const r=await this.pool.query(
+      `select id,name,description,source,created_at as "createdAt" from public_flashcard_sets where account_id=$1 and id=$2`,[accountId,id]);
+    const row=r.rows[0];
+    if(!row)return undefined;
+    const c=await this.pool.query('select seq,term,def,topic from public_flashcards where set_id=$1 order by seq',[id]);
+    const cards=c.rows as Flashcard[];
+    return {id:String(row.id),name:String(row.name),description:row.description??null,source:String(row.source),
+      topics:this.topicsOf(cards),cardCount:cards.length,createdAt:new Date(String(row.createdAt)).getTime(),cards};
+  }
+  private async writeCards(client:pg.PoolClient,setId:string,cards:Flashcard[]):Promise<void>{
+    await client.query('delete from public_flashcards where set_id=$1',[setId]);
+    if(cards.length===0)return;
+    const values:unknown[]=[setId];
+    const rows=cards.map((card)=>{
+      const at=values.length;
+      values.push(card.seq,card.term,card.def,card.topic);
+      return `($1,$${at+1},$${at+2},$${at+3},$${at+4})`;
+    });
+    await client.query(`insert into public_flashcards(set_id,seq,term,def,topic) values ${rows.join(',')}`,values);
+  }
+  async createFlashcardSet(accountId:string,v:NewFlashcardSet):Promise<FlashcardSetDetail>{
+    const client=await this.pool.connect();
+    try{
+      await client.query('begin');
+      const r=await client.query(
+        `insert into public_flashcard_sets(account_id,name,description,source) values($1,$2,$3,$4)
+         returning id,created_at as "createdAt"`,[accountId,v.name,v.description,v.source]);
+      const id=String(r.rows[0].id);
+      await this.writeCards(client,id,v.cards);
+      await client.query('commit');
+      return {id,name:v.name,description:v.description,source:v.source,topics:this.topicsOf(v.cards),
+        cardCount:v.cards.length,createdAt:new Date(String(r.rows[0].createdAt)).getTime(),cards:v.cards};
+    }catch(error){
+      await client.query('rollback').catch(()=>{});
+      throw error;
+    }finally{client.release()}
+  }
+  async updateFlashcardSet(accountId:string,id:string,patch:FlashcardSetPatch):Promise<FlashcardSetDetail|undefined>{
+    const client=await this.pool.connect();
+    try{
+      await client.query('begin');
+      const owned=await client.query('select 1 from public_flashcard_sets where account_id=$1 and id=$2',[accountId,id]);
+      if((owned.rowCount??0)===0){await client.query('rollback');return undefined}
+      const sets:string[]=[]; const params:unknown[]=[accountId,id];
+      for(const [key,column] of Object.entries({name:'name',description:'description'})){
+        if(!(key in patch))continue;
+        params.push((patch as Record<string,unknown>)[key]??null);
+        sets.push(`${column}=$${params.length}`);
+      }
+      if(sets.length)await client.query(`update public_flashcard_sets set ${sets.join(',')},updated_at=now() where account_id=$1 and id=$2`,params);
+      if(patch.cards)await this.writeCards(client,id,patch.cards);
+      await client.query('commit');
+    }catch(error){
+      await client.query('rollback').catch(()=>{});
+      throw error;
+    }finally{client.release()}
+    return this.getFlashcardSet(accountId,id);
+  }
+  async deleteFlashcardSet(accountId:string,id:string):Promise<boolean>{
+    const r=await this.pool.query('delete from public_flashcard_sets where account_id=$1 and id=$2',[accountId,id]);
+    return (r.rowCount??0)>0;
+  }
+  // ---- presentations --------------------------------------------------------
+  //
+  // The slides are one blob and each slide's `id` inside it is what survives an
+  // edit or a reorder. Nothing here mints one — the route does, on write only.
+  async listStudyGuides(accountId:string):Promise<StudyGuideRow[]>{
+    const r=await this.pool.query(
+      `select id,name,description,jsonb_array_length(slides) as "slideCount",
+              created_at as "createdAt",updated_at as "updatedAt"
+         from public_study_guides where account_id=$1 order by created_at desc`,[accountId]);
+    return r.rows.map((v)=>({id:String(v.id),name:String(v.name),description:v.description??null,
+      slideCount:Number(v.slideCount),createdAt:new Date(String(v.createdAt)).getTime(),
+      updatedAt:new Date(String(v.updatedAt)).getTime()}));
+  }
+  async getStudyGuide(accountId:string,id:string):Promise<StudyGuideDetail|undefined>{
+    const r=await this.pool.query(
+      `select id,name,description,slides,created_at as "createdAt",updated_at as "updatedAt"
+         from public_study_guides where account_id=$1 and id=$2`,[accountId,id]);
+    const row=r.rows[0];
+    if(!row)return undefined;
+    const slides=(Array.isArray(row.slides)?row.slides:[]) as GuideSlide[];
+    return {id:String(row.id),name:String(row.name),description:row.description??null,
+      slideCount:slides.length,createdAt:new Date(String(row.createdAt)).getTime(),
+      updatedAt:new Date(String(row.updatedAt)).getTime(),slides};
+  }
+  async createStudyGuide(accountId:string,v:NewStudyGuide):Promise<StudyGuideDetail>{
+    const r=await this.pool.query(
+      `insert into public_study_guides(account_id,name,description,slides) values($1,$2,$3,$4::jsonb)
+       returning id,created_at as "createdAt",updated_at as "updatedAt"`,
+      [accountId,v.name,v.description,JSON.stringify(v.slides)]);
+    const row=r.rows[0];
+    return {id:String(row.id),name:v.name,description:v.description,slideCount:v.slides.length,
+      createdAt:new Date(String(row.createdAt)).getTime(),updatedAt:new Date(String(row.updatedAt)).getTime(),
+      slides:v.slides};
+  }
+  async updateStudyGuide(accountId:string,id:string,patch:StudyGuidePatch):Promise<StudyGuideDetail|undefined>{
+    const sets:string[]=[]; const params:unknown[]=[accountId,id];
+    for(const [key,column] of Object.entries({name:'name',description:'description'})){
+      if(!(key in patch))continue;
+      params.push((patch as Record<string,unknown>)[key]??null);
+      sets.push(`${column}=$${params.length}`);
+    }
+    if(patch.slides){params.push(JSON.stringify(patch.slides));sets.push(`slides=$${params.length}::jsonb`)}
+    if(!sets.length)return this.getStudyGuide(accountId,id);
+    const r=await this.pool.query(`update public_study_guides set ${sets.join(',')},updated_at=now() where account_id=$1 and id=$2`,params);
+    if((r.rowCount??0)===0)return undefined;
+    return this.getStudyGuide(accountId,id);
+  }
+  async deleteStudyGuide(accountId:string,id:string):Promise<boolean>{
+    const r=await this.pool.query('delete from public_study_guides where account_id=$1 and id=$2',[accountId,id]);
+    return (r.rowCount??0)>0;
   }
   async audit(event:string,accountId:string|undefined,metadata:Record<string,unknown>){await this.pool.query('insert into public_audit_events(event,account_id,metadata) values($1,$2,$3)',[event,accountId??null,metadata])}
 }
