@@ -418,6 +418,17 @@ rather than observed to pass:**
   test to burn and the test skips with its reason when that one is already spent
   — otherwise a local re-run fails on a test that is working correctly. CI
   seeds before every suite, so it always runs there.
+  Two things about the harness that were each wrong once and are easy to get
+  wrong again. **Opening a screen goes via `about:blank` first**, because
+  navigating to the URL the page is already on — same path, same hash — is a
+  same-document navigation the browser does not reload for, so every "and it is
+  still there after a reload" assertion was reading the DOM already on screen.
+  And **cross-device state is checked in a SECOND BROWSER CONTEXT, polled**: the
+  study player keeps its own copy on the device and syncs it up, so a reload in
+  the same browser shows the count back whether or not the server was ever told
+  (that test passed with the save path broken until it was written this way),
+  and the account's saved progress is a second request behind the deck, so
+  reading once races the hydrate.
 
 - **`verify:limits-mirror`** compares the IRS contribution limits in
   `apps/api/src/investments/limits.ts` against the copy in

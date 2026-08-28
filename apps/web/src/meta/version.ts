@@ -19,6 +19,7 @@ export const PATCH_NOTES: PatchNote[] = [
     date: '2026-08-28',
     notes: [
       'The public terminal is now checked by writing a prediction and adding an investment account through the real screens, not just by reading them. Every screen in the workspace is checked again afterwards, because a bad write takes down the screens around it rather than the one that made it.',
+      'Study progress is now checked the way it matters: answer a question, then open the account in a second browser and confirm it is there.',
     ],
   },
   {

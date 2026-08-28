@@ -50,6 +50,13 @@ async function open(page, screen) {
   const record = (error) => errors.push(`${screen}: ${error.stack ?? String(error)}`);
   page.on('pageerror', record);
   try {
+    // `about:blank` first, so this is always a REAL document load. Navigating
+    // to a URL the page is already on — same path, same hash — is a
+    // same-document navigation the browser does not reload for, so opening the
+    // screen you are already on did nothing at all: every "and it is still
+    // there after a reload" assertion was reading the DOM already on screen,
+    // which proves the opposite of what it claims.
+    await page.goto('about:blank');
     await page.goto(`${base}/#${screen}`, { waitUntil: 'networkidle' });
     await expect(page.locator('#root')).toBeVisible();
     // A render that throws asynchronously does so after the network settles, so
@@ -260,6 +267,59 @@ test('a prediction and an investment account, written through the UI', async ({ 
   for (const screen of ['inv_overview', 'inv_holdings', 'inv_allocation']) {
     expect(await open(page, screen), `${screen} threw after a write`).toEqual([]);
   }
+});
+
+test('answering a study question is remembered by the server', async ({ page, browser }) => {
+  // The one public surface where state ACCUMULATES per deck rather than being a
+  // row somebody typed: the level, the streak and the per-category standing are
+  // computed from an answer count the server keeps. A game that plays fine and
+  // forgets everything on reload looks identical while you are playing it.
+  // Relative, never absolute: the deck carries whatever has already been
+  // answered against it, so what is checked is that answering MOVED the count.
+  // A deck with no history does not draw the line at all, so ABSENT is zero
+  // rather than a failure to read — the state this runs against on a fresh
+  // account, and the one an assertion written against a used deck misses.
+  const answered = async () => {
+    const line = page.getByText(/correct all-time/).first();
+    if (await line.count() === 0) return 0;
+    return Number((await line.innerText()).match(/\/\s*(\d+)/)?.[1] ?? NaN);
+  };
+
+  const errors = await open(page, 'st_game');
+  await page.getByRole('button', { name: 'Play' }).first().click();
+  await expect(page.locator('button').filter({ hasText: 'Answer A' }).first()).toBeVisible();
+  const before = await answered();
+
+  await page.locator('button').filter({ hasText: 'Answer A' }).first().click();
+  await page.getByRole('button', { name: /^Confirm/ }).click();
+  await expect.poll(answered, { message: 'answering did not move the count' }).toBe(before + 1);
+  expect(errors, 'the study game threw while answering').toEqual([]);
+
+  // Reloading is what separates a counter held in the component from one the
+  // server was actually told about.
+  // A DIFFERENT BROWSER, not a reload. The player keeps its own per-deck state
+  // on the device and syncs it up, so a reload in the same browser shows the
+  // count back whether or not the server was ever told — this test passed with
+  // the save path broken until it was written this way. Only a context that has
+  // never seen this deck can tell the two apart, which is also the case that
+  // matters: the same account on a second machine.
+  const elsewhere = await browser.newContext({ ignoreHTTPSErrors: true });
+  await elsewhere.addCookies([{
+    name, value: decodeURIComponent(value ?? ''), domain: '127.0.0.1', path: '/',
+    httpOnly: true, secure: true, sameSite: 'Lax',
+  }]);
+  const second = await elsewhere.newPage();
+  await second.goto(`${base}/#st_game`, { waitUntil: 'networkidle' });
+  await second.getByRole('button', { name: 'Play' }).first().click();
+  await expect(second.locator('button').filter({ hasText: 'Answer A' }).first()).toBeVisible();
+  // POLLED: the deck loads first and the account's saved progress is a second
+  // request behind it, so reading once races the hydrate.
+  await expect.poll(async () => {
+    const line = second.getByText(/correct all-time/).first();
+    if (await line.count() === 0) return 0;
+    return Number((await line.innerText()).match(/\/\s*(\d+)/)?.[1] ?? NaN);
+  }, { message: 'a second browser on the same account saw no progress' }).toBe(before + 1);
+  await elsewhere.close();
 });
 
 test('every remaining screen renders without throwing', async ({ page }) => {
