@@ -11,9 +11,23 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 7.63';
+export const APP_VERSION = 'Beta V 7.64';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 7.64',
+    date: '2026-08-28',
+    notes: [
+      'Settings is its own workspace now, with Preferences under it and Premium Features beside them. My Terminal keeps the rows that are yours.',
+      'My Terminal is customizable: put any section of the terminal on it, and take off the ones you do not use. A section you add is a second way in — it stays in its own workspace too.',
+      'Public demo: the Live Wall is a real board — add, move, resize and remove tiles.',
+      'Public demo: Premium Features no longer lists tiers. Early Access members have full access during pre-release.',
+      'Public demo: Terms, Privacy and Rules & Conduct now say plainly that they are pre-release summaries, and each subsection says how the finished document will work.',
+      'Public demo: announcements and patch notes can be posted from the screens they appear on, suggestions send and say what happens to them, and the How-to guides were rewritten to say what to do rather than what a screen is.',
+      'Fixed: picking a time zone or opting off the leaderboards on the public terminal did nothing — there was no route behind it.',
+      'Fixed: five private section names were readable in the public JavaScript, pulled in by a shared module.',
+    ],
+  },
   {
     version: 'Beta V 7.63',
     date: '2026-08-28',

@@ -269,6 +269,77 @@ leaves the root dead for every later hash navigation, so one broken screen
 blanks every capture after it. That is not hypothetical: it shipped, and eight
 screens were blank behind a passing test.
 
+### The public Live Wall is a board (`apps/web/src/public/PublicBoard.tsx`)
+
+**Editable exactly as the private one is** (owner instruction, 2026-08): add,
+move, resize and remove tiles. It was five fixed panels.
+
+**IT IS NOT `ChartBoard.tsx`, AND THAT IS A BUNDLE DECISION.** That component
+maps every tile kind there is through `tiles/index.tsx`, so importing it would
+pull the order ticket, the desk tiles and the broker panels into a bundle served
+to the public. What IS shared is everything that decides how a board looks and
+behaves while it is being arranged — `BOARD_GRID_CSS` (extracted to
+`workspaces/trading/boardGridCss.ts` for exactly this), the portal's own tile
+components, `useContentWidth` — so this is the portal's board with a shorter list
+of tiles rather than a second board.
+
+**What is absent is absent by not being listed.** `PublicBoard` names the
+fourteen kinds it can draw and imports only `MarketTiles` and `PersonalTiles`;
+the desk tiles, the ticket and the team tiles live in their own files and are
+never imported. There is no render-time filter to get wrong.
+
+**Where the arrangement lives depends on who is looking**: a signed-in account
+keeps it in the preferences blob; the demo keeps it for the visit and says so
+rather than drawing a Save that would do nothing. The write is debounced and
+flushed on unmount — a drag fires a layout change per frame, and leaving
+mid-arrangement is when the write matters most. A phone renders one column and
+never writes that back, the same rule the private board follows.
+
+### Live streams show the SLOT in the public terminal
+
+`StreamChannel.placeholder` (`api/types.ts`) means **no player is mounted for
+this channel — draw the slot and say what would be in it**. Set only by the
+public terminal, which has no YouTube key and does not embed a third party's
+broadcast into a showcase; the private API never sets it, so nothing on the
+private terminal changed.
+
+- **`streamEmbed.ts` owns it**: `isPlaceholder` is checked first in `shouldPlay`,
+  so no code path can mount an embed for one, and `STREAM_PLACEHOLDER_TEXT`
+  ("Live stream plays here") is one string read by both render sites — the
+  Market News wall (including its mini player) and the Live Wall's stream tile.
+- **Nothing is marked `live`.** A fabricated live reading is the thing the
+  terminal's own rules forbid, and a placeholder says "preview slot" rather than
+  "unconfirmed" — the latter would imply we looked and could not tell.
+
+### The screenshot reader shows a worked EXAMPLE (`ScreenshotExample.tsx`)
+
+The import panel asks somebody to hand over a picture of their trade history
+before it will say what happens to it. "See an example" answers that first: a
+drawn screenshot, the rows that come out of it, and what lands on the account —
+**running no AI and calling no route on either terminal**. That is what makes it
+usable in the public terminal, where AI fails closed until the provider
+migration, and it is why an import refused with **501 opens it automatically**
+rather than ending on "switched off". The example set is deliberately not
+flattering: a loser, a scratch, and a duplicate shown as skipped rather than
+quietly dropped.
+
+### Admin editing inside the demo, without an Admin workspace
+
+Owner instruction, 2026-08. The public terminal has **no Admin workspace and must
+not gain one** — administration code is absent from the public bundle by
+construction. So what is demonstrated is the administrative ACT, on the very
+screens the notice appears on: post an announcement on Announcements, publish a
+note on Patch notes. The screens are the portal's own.
+
+- Both composers are gated on **`canManage` from the payload**. The private API
+  sends it for announcements (admins) and does not send it at all for patch
+  notes, which are published from Admin ▸ Patch Notes there — so the private
+  Site Help is unchanged. The public API answers **false**: there is no public
+  administrator, and a composer a visitor could post through is one anybody could
+  post through.
+- `publishPatchNote` is therefore **demo-only by construction** and is named in
+  `verify:demo-coverage`'s `DEMO_ONLY` with that reason.
+
 ### What the public terminal does not have
 
 Groups in every form (creation, invitations, chat, shared books, signals,

@@ -92,6 +92,17 @@ const DEMO_ONLY = {
   // so it is answered in the demo, where the tile behaves as it does in the
   // portal, and is not wired for a real account.
   alerts: ['createPriceAlert'],
+  // Publishing a patch note from the Patch notes screen. THE COMPOSER IS NEVER
+  // DRAWN FOR A REAL ACCOUNT: it is gated on `canManage` from the payload, and
+  // the public API answers false — there is no public administrator, and a
+  // composer a visitor could post through is one anybody could post through. So
+  // this is unreachable outside the demo by construction rather than by luck,
+  // which is exactly the kind of gap that belongs written down here.
+  //
+  // (`addAnnouncement` and `removeAnnouncement` are NOT in this list: the
+  // private API serves them, and the same `canManage` gate decides who sees the
+  // composer, so they are wired the ordinary way.)
+  admin: ['publishPatchNote'],
   // The hand-kept trade log and the funded book. Both are real public-safe
   // features — a record of trades somebody typed in, with no broker behind them
   // — and both are storage that has not been built yet. Until it is, these three

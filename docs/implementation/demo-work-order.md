@@ -108,7 +108,7 @@ item below is done:
       private portal — add, remove, move and resize tiles — excluding anything
       that will not be available to the public.
 
-- [ ] **12. AI trade reading.** The public terminal will get the private
+- [x] **12. AI trade reading.** The public terminal will get the private
       portal's ability to have AI read a screenshot and log an active or closed
       trade. **For the demo: do not let it actually place/log the trade via AI.**
       Give the visitor the option to **see an example of what it would look
@@ -118,11 +118,11 @@ item below is done:
       box reading **"Live stream plays here"**, as though a video were playing.
       No actual video. **Do the same on the Live Wall.**
 
-- [ ] **14. Admin editing inside the demo.** Give an admin ability to edit
+- [x] **14. Admin editing inside the demo.** Give an admin ability to edit
       things directly in the demo portal — announcements, patch notes, and
       similar.
 
-- [ ] **15. The How-to section is generic and unhelpful.** Rewrite it so it is
+- [x] **15. The How-to section is generic and unhelpful.** Rewrite it so it is
       actually useful.
 
 ---

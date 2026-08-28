@@ -576,7 +576,12 @@ export const api = {
 
   // ---- Patch notes ----
   // Published release notes for members (Site Help).
-  patchNotes(): Promise<{ notes: PatchNoteEntry[] }> {
+  // `canManage` says the reader may publish a note from THIS screen. The private
+  // API does not send it — patch notes are published from Admin ▸ Patch Notes
+  // there — so it is undefined and the composer is not drawn, exactly as before.
+  // The public terminal's demo sends true, which is what makes "edit things
+  // directly in the demo" true without an Admin workspace existing there.
+  patchNotes(): Promise<{ notes: PatchNoteEntry[]; canManage?: boolean }> {
     return request('/api/patch-notes');
   },
   adminPatchNotes(): Promise<{ notes: PatchNoteEntry[] }> {
@@ -1754,6 +1759,12 @@ export const api = {
   },
   announcements(): Promise<{ announcements: Announcement[]; canManage: boolean }> {
     return request('/api/announcements');
+  },
+  // Publishing a patch note from the Patch notes screen itself. Answered by the
+  // demo; the private terminal has no such route and never calls this, because
+  // its composer is never drawn.
+  publishPatchNote(version: string, dateLabel: string, notes: string[]): Promise<{ notes: PatchNoteEntry[]; canManage?: boolean }> {
+    return request('/api/patch-notes', { method: 'POST', body: JSON.stringify({ version, dateLabel, notes }) });
   },
   addAnnouncement(title: string, body: string): Promise<{ announcements: Announcement[] }> {
     return request('/api/announcements', { method: 'POST', body: JSON.stringify({ title, body }) });

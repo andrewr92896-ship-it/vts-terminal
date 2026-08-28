@@ -166,6 +166,57 @@ test('the Live Wall can be edited in the demo', async ({ page }) => {
   expect(errors, 'editing the wall threw').toEqual([]);
 });
 
+// Two acts the demo has to be able to perform, neither of which a screenshot can
+// see: the worked example of the AI screenshot reader (the feature itself is
+// switched off, and an error alone leaves somebody unable to see its shape), and
+// editing the terminal's own notices from the screens they appear on.
+test('the demo shows what reading a screenshot produces, without reading one', async ({ page }) => {
+  const errors = [];
+  const record = (error) => errors.push(String(error));
+  page.on('pageerror', record);
+  try {
+    await page.goto('about:blank');
+    await page.goto(`${base}/?demo=1#funded`, { waitUntil: 'networkidle' });
+    await page.getByRole('button', { name: 'Import from screenshot' }).click();
+    await page.getByRole('button', { name: 'See an example' }).click();
+    const main = page.locator('.vts-public-main');
+    await expect(main).toContainText('Example — nothing was read, and nothing was logged');
+    // The example is the WORKED one, so the outcome has to be in it — including
+    // the duplicate the importer would skip, which is the half people report as
+    // a bug when it is not explained.
+    await expect(main).toContainText('duplicate — skipped');
+    await expect(main).toContainText('3 trades added');
+  } finally {
+    page.off('pageerror', record);
+  }
+  expect(errors, 'the screenshot example threw').toEqual([]);
+});
+
+test('the demo can post an announcement and publish a patch note', async ({ page }) => {
+  const errors = [];
+  const record = (error) => errors.push(String(error));
+  page.on('pageerror', record);
+  try {
+    await page.goto('about:blank');
+    await page.goto(`${base}/?demo=1#hp_news`, { waitUntil: 'networkidle' });
+    await page.getByPlaceholder('Title').fill('Doors open Monday');
+    await page.getByPlaceholder('Message').fill('A first wave of Early Access invitations goes out.');
+    await page.getByRole('button', { name: 'Post', exact: true }).click();
+    await expect(page.getByText('Doors open Monday')).toBeVisible();
+
+    await page.goto('about:blank');
+    await page.goto(`${base}/?demo=1#hp_notes`, { waitUntil: 'networkidle' });
+    await page.getByPlaceholder('Beta V 7.70').fill('Beta V 9.99');
+    await page.getByPlaceholder('One change per line').fill('A change made in the demo');
+    await page.getByRole('button', { name: 'Publish', exact: true }).click();
+    await expect(page.getByText('Beta V 9.99')).toBeVisible();
+    await expect(page.getByText('A change made in the demo')).toBeVisible();
+  } finally {
+    page.off('pageerror', record);
+  }
+  expect(errors, 'editing a notice threw').toEqual([]);
+});
+
 test('the demo reaches no service and leaves nothing behind', async ({ page, context }) => {
   const requests = [];
   page.on('request', (request) => requests.push(request.url()));

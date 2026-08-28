@@ -128,6 +128,21 @@ assert.ok(filed.report?.id, 'createBugReport must answer with a report');
 assert.equal(call('myBugReports').reports.length, 1, 'and it is in the list it was added to');
 const replied = call('replyBugReport', [filed.report.id, 'It happens at 390px too']);
 assert.equal(replied.report.messages.length, 2);
+// Admin editing INSIDE the demo: the act, on the screen the notice appears on.
+// Asserting the write answered is not enough — the screens re-render from the
+// list the write returns, so the list is what has to carry it.
+const posted = call('addAnnouncement', ['Doors open Monday', 'A first wave of Early Access invitations goes out.']);
+assert.equal(posted.canManage, true, 'the demo must offer the composer');
+assert.equal(posted.announcements[0].title, 'Doors open Monday');
+assert.equal(call('removeAnnouncement', [posted.announcements[0].id]).announcements.length, posted.announcements.length - 1);
+
+const published = call('publishPatchNote', ['Beta V 9.99', 'August 28, 2026', ['A change made in the demo']]);
+assert.equal(published.canManage, true);
+assert.equal(published.notes[0].version, 'Beta V 9.99');
+// The screen renders `notes` with `.map`, so an answer without the array is a
+// thrown render rather than an empty card.
+assert.deepEqual(published.notes[0].notes, ['A change made in the demo']);
+
 const suggested = call('sendSuggestion', ['A dark-mode print view']);
 assert.ok(suggested.suggestion?.id, 'sendSuggestion must answer with the suggestion');
 // The screen prints `notice` in place of its own "sent to the admins" line, so a demo

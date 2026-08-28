@@ -223,7 +223,10 @@ const evidenceEmpty=(name:string):any=>{
   budgetMonth:{month:new Date().toISOString().slice(0,7),categories:[],entries:[],incomeCents:0,spentCents:0,netCents:0,plannedIncomeCents:0,plannedSpendCents:0,plannedNetCents:0,hasTargets:false},
   listStudyPackages:{packages:[]},sharedStudyPackages:{pending:[],accepted:[]},browseStudyLibrary:{entries:[]},
   studyFlashcardSets:{sets:[]},teamFlashcardSets:{sets:[]},studyGuides:{guides:[]},
-  studyDecks:{decks:[]},studyGames:{decks:[]},siteContent:{howto:{}},patchNotes:{notes:[]},
+  studyDecks:{decks:[]},studyGames:{decks:[]},siteContent:{howto:{}},patchNotes:{notes:[],canManage:false},
+  // `canManage` is FALSE for a live public account and true only in the demo:
+  // there is no public administrator, and a composer a real visitor could post
+  // through would be one anybody could post through.
   announcements:{announcements:[],canManage:false},myBugReports:{reports:[]},bugReports:{reports:[]}
  };return structuredClone(table[name]??{ok:true,items:[],records:[]});
 };
