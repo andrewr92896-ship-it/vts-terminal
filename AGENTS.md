@@ -408,7 +408,7 @@ rather than observed to pass:**
   figure here where being wrong means somebody over-contributes on the strength
   of a number that looked right on their screen.
 
-- **`verify:public-wiring`** reads the ~66 paths OUT OF the adapter and calls
+- **`verify:public-wiring`** reads every path OUT OF the adapter (about seventy) and calls
   each against a real server on a real database, because both halves are written
   by hand and nothing else compares them: the adapter is not typechecked against
   the routes, the demo never reaches them, and the API's own tests write the
