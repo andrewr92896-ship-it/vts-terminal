@@ -390,6 +390,15 @@ rather than observed to pass:**
   attached, an error thrown late lands in whichever arrays are still listening
   and gets reported against a screen that did not cause it, which sent one chase
   after the wrong file.
+  **It serves HTTPS**, with a throwaway self-signed certificate, because the API
+  refuses a non-HTTPS entry in `PUBLIC_ALLOWED_ORIGINS` outright. Over plain
+  HTTP the browser's Origin matched nothing and the origin guard refused **every
+  write before it reached any code** — invisibly, because the suite was
+  read-only at the time, so the first write test added to it failed for a reason
+  that had nothing to do with the write. It also drives one write THROUGH THE
+  UI and re-reads it after a reload: the demo answers writes out of module
+  memory and the API's own tests post to the routes directly, so neither can see
+  a screen that destructures a key the write's response does not carry.
 
 - **`verify:limits-mirror`** compares the IRS contribution limits in
   `apps/api/src/investments/limits.ts` against the copy in

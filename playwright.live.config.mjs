@@ -13,5 +13,9 @@ export default {
   workers: 1,
   use: {
     launchOptions: process.env.PW_CHROMIUM ? { executablePath: process.env.PW_CHROMIUM } : {},
+    // The harness serves HTTPS with a throwaway self-signed certificate,
+    // because the public API refuses a non-HTTPS allowed origin outright — see
+    // scripts/serve-public-stack.mjs. Nothing here protects anything.
+    ignoreHTTPSErrors: true,
   },
 };

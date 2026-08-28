@@ -19,7 +19,7 @@ import { test, expect } from '@playwright/test';
 // to survive that. What they render against a REAL market payload is not
 // covered by anything, and is the next thing worth a check once a provider
 // exists.
-const base = process.env.PUBLIC_LIVE_BASE ?? 'http://127.0.0.1:4174';
+const base = process.env.PUBLIC_LIVE_BASE ?? 'https://127.0.0.1:4174';
 const cookie = process.env.PUBLIC_LIVE_COOKIE ?? '';
 
 const [name, value] = cookie.split('=');
@@ -28,7 +28,8 @@ test.beforeEach(async ({ context }) => {
   expect(cookie, 'PUBLIC_LIVE_COOKIE must be set by the harness').not.toBe('');
   await context.addCookies([{
     name, value: decodeURIComponent(value ?? ''), domain: '127.0.0.1', path: '/',
-    httpOnly: true, secure: false, sameSite: 'Lax',
+    // Carried as the production cookie is: Secure, over HTTPS.
+    httpOnly: true, secure: true, sameSite: 'Lax',
   }]);
 });
 
@@ -152,6 +153,32 @@ test('the to-do list and the deleted trades show what is in them', async ({ page
   const deleted = await open(page, 'deleted');
   await expect(page.getByText('GBP/JPY').first()).toBeVisible();
   expect(deleted).toEqual([]);
+});
+
+test('a write made through the UI lands, and survives a reload', async ({ page }) => {
+  // Everything above this reads. Nothing anywhere drove a WRITE through the
+  // real interface on a real account — the demo answers writes out of module
+  // memory, and the API's own tests post to the routes directly, so neither can
+  // see a screen that destructures a key the write response does not carry.
+  // That is the same fault class as the two payload-shape bugs above, on the
+  // half a customer notices fastest: they press "add" and nothing happens.
+  const errors = await open(page, 'fin_budget');
+  const name = `Coffee ${Date.now()}`;
+
+  await page.getByRole('button', { name: '+ Add a category' }).click();
+  await page.getByPlaceholder('Groceries').fill(name);
+  await page.getByRole('button', { name: 'Add category', exact: true }).click();
+
+  // On the screen straight away — from the write's OWN response, which is what
+  // a screen reading the wrong key would fail on.
+  await expect(page.getByText(name).first()).toBeVisible();
+  expect(errors, 'the screen threw while saving').toEqual([]);
+
+  // And still there after a reload, which is what separates a row that was
+  // saved from one that was only rendered.
+  const after = await open(page, 'fin_budget');
+  await expect(page.getByText(name).first()).toBeVisible();
+  expect(after).toEqual([]);
 });
 
 test('every remaining screen renders without throwing', async ({ page }) => {
