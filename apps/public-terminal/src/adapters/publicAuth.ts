@@ -25,7 +25,20 @@ const base={id:'public-user',username:'public',displayName:'Public account',emai
 // always used.
 let cached:any={...base,...readPublicUser()};
 let cachedFrom=readPublicUser();
-const snapshot=()=>{const current=readPublicUser();if(current!==cachedFrom){cachedFrom=current;cached={...base,...current,access:base.access}}return cached};
+// `isDemo` is DELIBERATELY NOT PASSED THROUGH to the screens.
+//
+// Shared screens read `user.isDemo` to mean "a write here will be refused", and
+// on the PRIVATE terminal that is true — `demoGuard` rejects every non-GET, so
+// the flag is what stops a button that could only ever error. The public demo
+// is the opposite case: it reaches no service at all, answers every write out
+// of module memory, and resets by virtue of that memory going away. A control
+// hidden here is not protecting anything; it is a screen the showcase cannot
+// demonstrate, which is most of what the demo exists for.
+//
+// The DEMO labelling does not come from here — the bar in PublicApp and the
+// badge in PublicTopBar both read `isDemo()` from PublicRuntime — so a visitor
+// is still told plainly that the data is sample data and nothing is saved.
+const snapshot=()=>{const current=readPublicUser();if(current!==cachedFrom){cachedFrom=current;cached={...base,...current,isDemo:false,access:base.access}}return cached};
 
 // Signing out was a no-op stub, and nothing in the public terminal called it
 // anyway — so an account, once in, could not get out. On a shared or borrowed

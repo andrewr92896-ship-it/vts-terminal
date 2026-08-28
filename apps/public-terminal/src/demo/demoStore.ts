@@ -575,7 +575,19 @@ const reads: Record<string, () => unknown> = {
     const contributed = mine.reduce((sum, e) => sum + num(e.amount), 0);
     return {
       taxYear: year, limitsKnown: true, latestLimitYear: year,
-      groups: [], goals: clone(DEMO_GOALS),
+      groups: [],
+      // SHAPED THE WAY THE SCREEN READS A GOAL, not the way one is stored.
+      // `current` and `pct` are derived here exactly as the live route derives
+      // them; handing back the stored row instead threw
+      // `goal.pct.toFixed is not a function` and blanked the screen the moment
+      // somebody added one. It was invisible while the demo hid its own add
+      // button — the count this used to be checked by was happy either way.
+      goals: DEMO_GOALS.map((g) => {
+        const current = portfolio().totals.value;
+        return { ...clone(g), accountId: g.accountId ?? null, accountLabel: null,
+          kind: g.kind ?? 'custom', targetDate: g.targetDate ?? null, current,
+          pct: g.targetAmount > 0 ? Math.min(100, (current / g.targetAmount) * 100) : 0 };
+      }),
       // No limit is claimed for these, so everything recorded is uncapped —
       // stating a cap the demo has no catalog behind would be inventing a
       // figure, which is the one thing these screens must not do.

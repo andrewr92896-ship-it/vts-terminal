@@ -61,7 +61,16 @@ call('createInvestmentTransaction', [{ accountId: 'ia2', kind: 'contribution', a
 assert.equal(call('investmentContributions').uncappedContributed, 500, 'a contribution appears on the screen that reads it');
 
 const goal = call('createInvestmentGoal', [{ label: 'Retire at 60', targetAmount: 1_000_000 }]);
+// EVERY FIELD THE SCREEN READS, not just the count. Counting was all this did,
+// and a goal missing `pct` threw `.toFixed of undefined` and blanked the screen
+// the moment one was added — which the count could never have seen.
+const [saved] = call('investmentContributions').goals;
 assert.equal(call('investmentContributions').goals.length, 1);
+for (const field of ['id', 'label', 'targetAmount', 'targetDate', 'accountLabel', 'current', 'pct']) {
+  assert.ok(field in saved, `a goal the screen renders is missing ${field}`);
+}
+assert.equal(typeof saved.pct, 'number', 'pct is rendered with .toFixed, so it has to be a number');
+assert.equal(typeof saved.current, 'number');
 call('deleteInvestmentGoal', [goal.id]);
 assert.equal(call('investmentContributions').goals.length, 0);
 
