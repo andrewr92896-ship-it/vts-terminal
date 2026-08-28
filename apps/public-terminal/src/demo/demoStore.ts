@@ -175,6 +175,7 @@ const DEMO_DIVIDENDS = [0, 3, 6, 9].flatMap((quarter, index) => ([
 // "add one and watch the figure move" the first thing they see.
 const DEMO_CONTRIBUTIONS: any[] = [];
 const DEMO_GOALS: any[] = [];
+const DEMO_PRICE_ALERTS: any[] = [];
 
 // A bug report a demo visitor files is kept for the session, like every other
 // demo write. `myBugReports` is a fixture-only name otherwise, so the report
@@ -358,6 +359,19 @@ const writes: Record<string, (args: any[]) => unknown> = {
       if (index >= 0) { list.splice(index, 1); return { entries: clone(list) }; }
     }
     return { entries: clone(DEMO_DIVIDENDS) };
+  },
+  // The chart tile's price-alert control. The real one needs a server-side
+  // watch and a delivery channel, neither of which the public terminal has —
+  // but the tile is the portal's own, so the control is there, and a control
+  // that appears and silently does nothing is the one thing this demo must not
+  // do. It records the alert like every other demo write and resets with the
+  // rest of the session.
+  createPriceAlert: ([input]) => {
+    const id = nextId('demo-alert');
+    DEMO_PRICE_ALERTS.push({ id, symbol: String(input?.symbol ?? ''),
+      condition: String(input?.condition ?? 'above'), threshold: num(input?.threshold),
+      repeat: input?.repeat === true, createdAt: Date.now() });
+    return { id, ok: true };
   },
   createInvestmentGoal: ([input]) => {
     const id = nextId('demo-goal');

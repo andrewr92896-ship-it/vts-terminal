@@ -8,7 +8,7 @@ const ALLOWED_PORTAL_IMPORTS=[
   /^\.\.\/\.\.\/web\/src\/styles\/global\.css$/,
   /^\.\.\/\.\.\/web\/src\/public\/PublicApp$/,
   /^\.\.\/\.\.\/\.\.\/web\/src\/public\/PublicRuntime$/,
-  /^\.\.\/(components\/(Icon|Clock)|theme\/(tokens|themes)|workspaces\/trading\/(MarketData|CalendarTile|NewsTile|WatchlistTile|TvWidget)|api\/types)$/,
+  /^\.\.\/(components\/(Icon|Clock)|theme\/(tokens|themes)|workspaces\/trading\/(MarketData|CalendarTile|NewsTile|WatchlistTile|ChartTile|TvWidget)|api\/types)$/,
   /^\.\.\/(hooks\/useNowTick|lib\/timezone|workspaces\/trading\/(etClock|tvChart)|workspaces\/trading\/tiles\/TileFrame)$/,
   /^\.\/((Public(App|ClockTile|LiveWall|Login|Runtime|Sidebar|TopBar|Screens|AccountPages)|publicNav))$/,
   /^\.\.\/demo\/demo(Store|Seed)$/,
@@ -54,7 +54,7 @@ for(const directory of PUBLIC_DIRS){
   }
 }
 const config=readFileSync('apps/web/vite.public.config.ts','utf8');
-for(const seam of ['src/api/client','src/auth/AuthContext','src/auth/access','src/privacy/privacy','src/legal/content','src/meta/version','src/help/tutorials','src/auth/reviewMarks','src/workspaces/trading/TvWidget'])if(!config.includes(seam))fail(`public build is missing adapter seam ${seam}`);
+for(const seam of ['src/api/client','src/auth/AuthContext','src/auth/access','src/privacy/privacy','src/legal/content','src/meta/version','src/help/tutorials','src/auth/reviewMarks'])if(!config.includes(seam))fail(`public build is missing adapter seam ${seam}`);
 if(!config.includes('sourcemap:false'))fail('public build must keep source maps disabled');
 const dist='apps/public-terminal/dist';
 if(existsSync(dist))for(const file of walk(dist).filter((item)=>/\.(js|css|html|json)$/.test(item))){const text=readFileSync(file,'utf8');for(const pattern of PROHIBITED_BUNDLE)if(pattern.test(text))fail(`${file} contains prohibited bundle reference ${pattern}`)}

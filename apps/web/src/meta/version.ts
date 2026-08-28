@@ -11,9 +11,17 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 7.62';
+export const APP_VERSION = 'Beta V 7.63';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 7.63',
+    date: '2026-08-28',
+    notes: [
+      'The public terminal shows the real TradingView chart and ticker again, not a drawing of one. The demo is meant to be the same site with sample data, and a substituted chart made it look like a different product.',
+      'Fixed: the public build had renamed Advanced Trading to "Trade Tracking", and drew Premium as a purple gem and Max as a gold crown instead of the gold star and icy gem the terminal actually uses.',
+    ],
+  },
   {
     version: 'Beta V 7.62',
     date: '2026-08-28',
