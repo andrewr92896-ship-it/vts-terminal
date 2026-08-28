@@ -11,9 +11,17 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 7.59';
+export const APP_VERSION = 'Beta V 7.60';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 7.60',
+    date: '2026-08-28',
+    notes: [
+      'Public terminal: there is now a supported way to let somebody in. Admitting an account by hand could produce one that could never sign in, in three different ways that all looked like a wrong password.',
+      'Fixed: every rate-limited route on the public API — sign in, the emailed code, password recovery and the early-access form — failed outright against a real database. Nobody could have signed in.',
+    ],
+  },
   {
     version: 'Beta V 7.59',
     date: 'August 28, 2026',

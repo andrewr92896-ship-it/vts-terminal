@@ -272,6 +272,26 @@ admin surface on the public side at all — which is why, for instance, a suppor
 reply can only ever be posted as `user`: a client must not be able to post a
 message that renders as staff having answered.
 
+**THERE IS NO PUBLIC SIGN-UP, SO ADMITTING SOMEBODY IS ITS OWN PATH**
+(`src/admit.ts`, `npm --workspace @vts/public-api run admit`). A visitor asks
+through the early-access form and an operator lets them in. It is the **only**
+supported way to create an account, because a hand-written row is an account
+that can never sign in in three separate ways, **all three of which answer with
+the same generic 401 a wrong password does**: `password_hash` is
+`scrypt$<salt>$<digest>` rather than a password; `force_password_change` without
+an unexpired `temporary_password_expires_at` is refused **outright** by `login`,
+so the setting that sounds like the safe one locks the account instead; and a
+password below the terminal's own rule signs in and can then never be **changed**,
+since `changePassword` validates the new one against a rule the old one never had
+to meet. The password is printed once and is not recoverable.
+- **It deliberately does NOT force a change.** The window a forced change needs
+  is fifteen minutes — right for a password the terminal itself just emailed,
+  wrong for an invitation read the next morning.
+- **MAIL IS A HARD DEPENDENCY OF SIGNING IN AT ALL.** Every login is gated on an
+  emailed code and `SmtpPublicMailer` has **no fallback that logs it**, unlike
+  the employee portal's. With `PUBLIC_SMTP_URL` pointing at nothing, a correct
+  password reaches the second factor and stops there, for everybody, permanently.
+
 **Two adapter files carry the seam and they are not the same job.**
 `apps/public-terminal/src/adapters/publicApi.ts` maps a portal `api.*` call to a
 public route; `apps/public-terminal/src/demo/demoStore.ts` answers the same names
@@ -308,6 +328,14 @@ rather than observed to pass:**
   goes in comes back out as the same shape. **Assert every column on the way
   back, not the few a summary happens to use** — the first version missed a
   wrong alias because the win rate it checked was computed from prices.
+  It also drives an **admitted account through the real login, the real emailed
+  code and the real session lookup** — the one thing that can tell an account
+  that works from one that only looks like it does — and that is what found the
+  fault where `consumeRateLimit` bound a `limit` parameter its SQL never
+  referenced, which Postgres refuses to type. **Every rate-limited route threw
+  against a real database**: sign in, the second factor, recovery and early
+  access, i.e. every way in, on a store the suite had otherwise exercised
+  happily because it seeded its session directly instead of logging in.
 
 - **`verify:public-wiring`** reads the ~66 paths OUT OF the adapter and calls
   each against a real server on a real database, because both halves are written

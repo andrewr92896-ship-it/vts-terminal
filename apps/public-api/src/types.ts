@@ -101,6 +101,7 @@ export type NewFundedAccount=Omit<FundedAccountRow,'id'|'createdAt'|'updatedAt'|
 export type NewFundedTrade=Omit<FundedTradeRow,'id'>;
 
 export interface PublicStore {
+  createAccount(v:{email:string;displayName:string;passwordHash:string}):Promise<string>;
   findAccountByEmail(email:string):Promise<PublicAccount|undefined>;
   findAccountById(id:string):Promise<PublicAccount|undefined>;
   updatePassword(accountId:string,passwordHash:string,forcePasswordChange:boolean,temporaryPasswordExpiresAt?:number):Promise<void>;

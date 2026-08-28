@@ -90,6 +90,76 @@ if (!url) {
     assert.equal((await call('GET', '/public/v1/auth/session')).status, 200);
   });
 
+  test('the rate limiter counts, and refuses past its bound', async () => {
+    // The bound is applied in JS while the window lives in SQL, so nothing but
+    // running it proves the two agree. Everything that keeps a stranger from
+    // grinding the login is this one function.
+    const bucket = `probe-${randomBytes(4).toString('hex')}`;
+    const seen: Array<{ allowed: boolean; retryAfterSeconds: number }> = [];
+    for (let attempt = 0; attempt < 4; attempt += 1) {
+      seen.push(await store.consumeRateLimit(bucket, 'probe', 3, 60_000));
+    }
+    assert.deepEqual(seen.map((r) => r.allowed), [true, true, true, false]);
+    const refused = seen[3]!;
+    assert.ok(refused.retryAfterSeconds > 0 && refused.retryAfterSeconds <= 60,
+      `a refusal must say when to come back, got ${refused.retryAfterSeconds}`);
+    // A different key is a different budget, or one busy visitor would lock out
+    // everybody else.
+    assert.equal((await store.consumeRateLimit(bucket, 'other', 3, 60_000)).allowed, true);
+  });
+
+  test('an admitted account can actually sign in', async () => {
+    // The whole point. There is no public sign-up, so every real customer
+    // arrives through `admitAccount` — and three separate things make a
+    // hand-written row an account that can never sign in, all three of which
+    // answer with the SAME generic 401 that a wrong password does. So this
+    // drives an admitted account through the real login, the real emailed code
+    // and the real session lookup, because nothing short of that can tell an
+    // account that works from one that only looks like it does.
+    const { admitAccount, AdmitError } = await import('../src/admit.js');
+    const { PublicAuthService } = await import('../src/auth.js');
+
+    let emailedCode = '';
+    const auth = new PublicAuthService(store as any,
+      { sendVerification: async (_to: string, code: string) => { emailedCode = code; },
+        sendTemporaryPassword: async () => {} },
+      { session: key, challenge: key, trusted: key });
+
+    const address = `admitted-${randomBytes(6).toString('hex')}@example.com`;
+    const admitted = await admitAccount(store as any, { email: address, displayName: 'Admitted' });
+
+    const started = await auth.login(address, admitted.password, undefined, '203.0.113.9');
+    assert.equal(started.requiresTwoFactor, true, 'login did not reach the second factor');
+    assert.match(emailedCode, /^\d{6}$/, 'no code was sent, so nobody could complete a sign-in');
+
+    const finished = await auth.verify(started.challengeId!, emailedCode, false, '203.0.113.9');
+    assert.ok(finished.sessionToken, 'the code was accepted but no session was issued');
+    // Deliberately NOT forced: a forced change needs a temporary window, and
+    // that window is fifteen minutes — which locks out an invitation read the
+    // next morning.
+    assert.equal(finished.passwordChangeRequired, false);
+
+    // Through the HTTP route, with the cookie, exactly as a browser does it.
+    const held = token;
+    token = finished.sessionToken!;
+    const session = await ok('GET', '/public/v1/auth/session');
+    assert.equal(session.user.email, address);
+    assert.equal(session.user.displayName, 'Admitted');
+    token = held;
+
+    // The password it generated is one the terminal will let its owner change.
+    // A shorter one signs in and can then never be changed, because
+    // `changePassword` validates the new password against a rule the old one
+    // never had to meet.
+    await assert.rejects(
+      admitAccount(store as any, { email: `weak-${randomBytes(4).toString('hex')}@example.com`, displayName: 'Weak', password: 'short' }),
+      (error: unknown) => error instanceof AdmitError);
+    // And re-admitting says so, rather than raising the unique index.
+    await assert.rejects(
+      admitAccount(store as any, { email: address, displayName: 'Again' }),
+      (error: unknown) => error instanceof AdmitError && /already has an account/.test(error.message));
+  });
+
   test('budget: dollars in, cents out, and the totals add up', async () => {
     const created = await ok('POST', '/public/v1/budget/categories', { name: 'Groceries', kind: 'expense', monthlyLimit: 600 });
     const id = created.categories[0].id;

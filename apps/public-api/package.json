@@ -11,7 +11,8 @@
     "test": "npm run build && node --test dist/test/*.test.js",
     "verify:migrations": "node scripts/verify-migrations.mjs",
     "test:postgres": "npm run build && node --test dist/test/postgres.test.js",
-    "db:migrate": "node scripts/migrate.mjs"
+    "db:migrate": "node scripts/migrate.mjs",
+    "admit": "npm run build && node scripts/admit.mjs"
   },
   "dependencies": {
     "nodemailer": "^9.0.3",
