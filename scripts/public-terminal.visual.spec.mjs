@@ -56,6 +56,40 @@ test('candidate page-family evidence', async ({ page }) => {
   expect(blank, 'pages that captured with no content').toEqual([]);
 });
 
+// The write controls the demo used to hide. Shared screens read `user.isDemo`
+// to mean "a write here will be refused", which is true on the private terminal
+// — the server rejects it — and false here, where the demo answers out of
+// module memory. So they were hidden for a reason that does not apply, and the
+// showcase could not demonstrate most of what the product does.
+//
+// Each is driven to the act it exists for. A control that appears and silently
+// does nothing is worse than one that is missing, and that is exactly what the
+// first of these did: the goal came back without the `pct` the screen renders
+// with `.toFixed`, which threw and blanked the page.
+test('the demo can add things, on the screens that used to hide the controls', async ({ page }) => {
+  const errors = [];
+  page.on('pageerror', (error) => errors.push(String(error)));
+  const cases = [
+    ['fin_budget', '+ Add a category', 'Groceries', 'A demo category', 'Add category'],
+    ['inv_accounts', 'Add an account', 'Fidelity 401(k)', 'A demo account', 'Add account'],
+    ['inv_holdings', 'Add a holding', 'Vanguard Target 2055', 'A demo holding', 'Add holding'],
+    ['inv_contributions', 'Add a goal', 'Retirement at 60', 'A demo goal', 'Add goal'],
+  ];
+  for (const [screen, open, placeholder, value, submit] of cases) {
+    // `about:blank` first: navigating to the hash the page is already on is a
+    // same-document navigation the browser does not reload for.
+    await page.goto('about:blank');
+    await page.goto(`${base}/?demo=1#${screen}`, { waitUntil: 'networkidle' });
+    await page.getByRole('button', { name: open }).first().click();
+    await page.getByPlaceholder(placeholder).fill(value);
+    if (screen === 'inv_holdings') await page.getByPlaceholder('12.345').fill('5');
+    if (screen === 'inv_contributions') await page.getByPlaceholder('1000000').fill('250000');
+    await page.getByRole('button', { name: submit, exact: true }).click();
+    await expect(page.getByText(value).first(), `${screen} did not save`).toBeVisible();
+  }
+  expect(errors, 'a demo screen threw while saving').toEqual([]);
+});
+
 test('the demo reaches no service and leaves nothing behind', async ({ page, context }) => {
   const requests = [];
   page.on('request', (request) => requests.push(request.url()));

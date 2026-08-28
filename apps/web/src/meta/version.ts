@@ -11,9 +11,17 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 7.61';
+export const APP_VERSION = 'Beta V 7.62';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 7.62',
+    date: '2026-08-28',
+    notes: [
+      'The demo can be used, not just looked at. Investments, Budget, Net Worth and bug reports had no add buttons — they were hidden by a setting that means "the server will refuse this", which is true on the private terminal and not here, where the demo saves nothing anywhere.',
+      'Fixed: adding a goal in the demo blanked the page. It was invisible while the button was.',
+    ],
+  },
   {
     version: 'Beta V 7.61',
     date: '2026-08-28',

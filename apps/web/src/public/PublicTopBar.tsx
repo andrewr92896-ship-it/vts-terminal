@@ -3,6 +3,7 @@ import { Clock } from '../components/Clock';
 import { Icon } from '../components/Icon';
 import { C, GOLD_GRADIENT, tint } from '../theme/tokens';
 import { useAuth } from '../auth/AuthContext';
+import { isDemo } from './PublicRuntime';
 
 export function PublicTopBar({ workspaceLabel, sectionLabel, accent, onOpenNav }: { workspaceLabel:string; sectionLabel:string; accent:string; onOpenNav:()=>void }) {
   const { user, logout } = useAuth();
@@ -20,7 +21,7 @@ export function PublicTopBar({ workspaceLabel, sectionLabel, accent, onOpenNav }
         stayed signed in — on a shared computer, for the twelve hours the
         session cookie lasts. */}
     <button aria-label="Sign out" title="Sign out" onClick={() => { void logout(); }} style={iconBtn}><Icon name="log-out" size={17}/></button>
-    <button aria-label="Account settings" style={{display:'flex',alignItems:'center',gap:9,background:'none',border:0,color:C.text,cursor:'pointer',padding:0}}><span style={{width:34,height:34,display:'grid',placeItems:'center',borderRadius:'50%',border:`1px solid ${accent}`,boxShadow:`inset 0 0 0 3px ${tint(accent,.1)}`,fontFamily:C.mono,fontSize:12}}>{initial}</span><span className="vts-public-profile-copy" style={{textAlign:'left'}}><strong style={{display:'block',fontSize:12}}>{name}</strong><small style={{display:'block',color:accent,fontSize:8,letterSpacing:'1px'}}>{user?.isDemo?'DEMO':'PUBLIC'}</small></span></button>
+    <button aria-label="Account settings" style={{display:'flex',alignItems:'center',gap:9,background:'none',border:0,color:C.text,cursor:'pointer',padding:0}}><span style={{width:34,height:34,display:'grid',placeItems:'center',borderRadius:'50%',border:`1px solid ${accent}`,boxShadow:`inset 0 0 0 3px ${tint(accent,.1)}`,fontFamily:C.mono,fontSize:12}}>{initial}</span><span className="vts-public-profile-copy" style={{textAlign:'left'}}><strong style={{display:'block',fontSize:12}}>{name}</strong><small style={{display:'block',color:accent,fontSize:8,letterSpacing:'1px'}}>{isDemo()?'DEMO':'PUBLIC'}</small></span></button>
   </header>;
 }
 const iconBtn:CSSProperties={ width:36,height:36,flex:'none',display:'grid',placeItems:'center',color:C.muted,background:'rgba(255,255,255,.02)',border:`1px solid ${C.line2}`,borderRadius:8,cursor:'pointer' };

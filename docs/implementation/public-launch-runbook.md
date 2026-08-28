@@ -124,6 +124,30 @@ an account that can never sign in, and all three answer with the same generic
 The early-access list the marketing site writes to is where the addresses come
 from. Reading it is a query today — there is no admin screen on the public side.
 
+## Showcasing the demo needs NOTHING on this list
+
+Worth knowing before working through any of the above: **the demo is static
+files.** It reaches no service, holds its data in module memory, and answers
+every write from there — so it needs no API, no database, no Railway service and
+no domain.
+
+```
+npm run build:public
+PORT=4173 node scripts/serve-static-app.mjs apps/public-terminal
+# then open http://127.0.0.1:4173/?demo=1
+```
+
+`apps/public-terminal/dist` is about 1.8 MB and can be dropped on any static
+host as-is. Everything below this section is about serving REAL ACCOUNTS; none
+of it is needed to show the product to somebody.
+
+The demo can be used, not just looked at: trades, funded and manual accounts,
+predictions, to-dos, budget categories, net worth items, investment accounts,
+holdings and goals can all be added, and the study games are playable. Nothing
+is saved anywhere — leaving or reloading re-imports the module and the seeded
+state comes back, which is a property of where the data lives rather than a
+cleanup somebody has to remember.
+
 ## Before announcing: Market Data and News need a provider
 
 `PUBLIC_MARKET_PROVIDER_URL` is optional to the service *starting* and is not

@@ -212,6 +212,21 @@ because on a clean checkout there is no `dist` for the first pass to read.
 `?demo=1`, or "Explore the demo" on the sign-in card. One deployed bundle serves
 both the demo and real accounts.
 
+- **THE DEMO IS WRITABLE, and shared screens must not read `user.isDemo` to
+  decide otherwise.** That flag means "a write here will be refused", which is
+  true on the private terminal — `demoGuard` rejects every non-GET — and false
+  here, where the demo reaches no service and answers writes out of module
+  memory. So `adapters/publicAuth.ts` deliberately does NOT pass `isDemo`
+  through to the screens; the DEMO bar and badge read `isDemo()` from
+  `PublicRuntime` instead, so a visitor is still told plainly it is sample data.
+  Hidden, those controls made the showcase a thing you could only look at —
+  Investments, Budget, Net Worth and bug reports all had no add button.
+  - **A control that appears and silently does nothing is worse than one that is
+    missing**, which is exactly what the first one did: an added goal came back
+    without the `pct` the screen renders with `.toFixed`, so the page threw and
+    blanked. `verify:demo-writes` had only counted the goals. It asserts every
+    field the screen reads now, and the demo visual spec drives all four
+    formerly-hidden controls to the act they exist for.
 - **Nothing is saved, because there is nothing to save.** The data is module
   state in `apps/public-terminal/src/demo/`. Leaving or reloading re-imports the
   module, so the reset is a property of where the data lives rather than a
