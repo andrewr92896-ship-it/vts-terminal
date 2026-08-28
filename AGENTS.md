@@ -26,6 +26,18 @@ The rule that matters is unchanged: **write every instruction here**, not in
 `CLAUDE.md`. Two instruction files drift within a month, and whichever one is
 stale then gets followed confidently.
 
+## THERE IS AN OPEN WORK ORDER FOR THE PUBLIC DEMO
+
+**`docs/implementation/demo-work-order.md` is the owner's own brief, transcribed
+with a checkbox per item, and it is not finished.** It was written down rather
+than left in a chat because it is long and a context window is not a place to
+keep instructions. Read it before doing any work on the public demo, and tick an
+item only when the change is built and verified.
+
+It also carries an explicit instruction about how to FINISH: when every item is
+done, say so in capitals and stop, and ask the owner to type an acknowledgement
+rather than letting them press continue past it.
+
 ## Before you touch anything: confirm this is the live checkout
 
 The terminal is worked on from **more than one machine**, and the single most
