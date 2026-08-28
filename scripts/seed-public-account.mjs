@@ -118,10 +118,19 @@ const removable = await post('/trades', {
 });
 await del(`/trades/${removable.trades.find((t) => t.instrument === 'GBP/JPY').id}`);
 
+// A SECOND session on the same account, for the sign-out test to burn. Without
+// it that test consumes the one every other test signs in with, so the suite
+// runs once and then fails until somebody reseeds — which is fine in CI, where
+// the seed runs before each suite, and quietly maddening anywhere else.
+const spare = randomUUID();
+await store.createSession(sha256(spare), { accountId, expiresAt: Date.now() + 3_600_000, forcePasswordChange: false });
+const spareJar = `${PUBLIC_SESSION_COOKIE}=${encodeURIComponent(signToken(spare, key))}`;
+
 await store.close();
+
 
 const jar = `${PUBLIC_SESSION_COOKIE}=${encodeURIComponent(token)}`;
 // `--cookie` prints the cookie and nothing else, so a shell can capture it
 // without parsing JSON inline — which in a workflow file means quoting a node
 // one-liner inside YAML, and that is a thing that breaks silently.
-console.log(process.argv.includes('--cookie') ? jar : JSON.stringify({ accountId, cookie: jar, token }));
+console.log(process.argv.includes('--cookie') ? `${jar}\n${spareJar}` : JSON.stringify({ accountId, cookie: jar, spareCookie: spareJar, token }));

@@ -21,6 +21,10 @@ import { test, expect } from '@playwright/test';
 // exists.
 const base = process.env.PUBLIC_LIVE_BASE ?? 'https://127.0.0.1:4174';
 const cookie = process.env.PUBLIC_LIVE_COOKIE ?? '';
+// A second session on the same account. The sign-out test revokes whatever it
+// uses, so it burns this one rather than the one every other test needs — which
+// is what keeps the suite repeatable without reseeding between runs.
+const spareCookie = process.env.PUBLIC_LIVE_SPARE_COOKIE || cookie;
 
 const [name, value] = cookie.split('=');
 
@@ -221,6 +225,43 @@ test('a visitor with no account can ask for early access', async ({ browser }) =
   await context.close();
 });
 
+test('a prediction and an investment account, written through the UI', async ({ page }) => {
+  // Two more of the write paths a customer actually uses, and two different
+  // response shapes: the note route answers with the row it made, the account
+  // route answers with the row and the adapter re-reads the portfolio around
+  // it. A screen reading the wrong key off either renders nothing and reports
+  // nothing, which is what makes writes worth driving rather than posting.
+  const errors = await open(page, 'notes');
+  const call = `Probe call ${Date.now()}`;
+  await page.getByPlaceholder('The call, in one line').fill(call);
+  await page.getByRole('button', { name: 'Save private prediction' }).click();
+  await expect(page.getByText(call).first()).toBeVisible();
+  expect(errors, 'the predictions screen threw while saving').toEqual([]);
+
+  const accounts = await open(page, 'inv_accounts');
+  const label = `Probe Brokerage ${Date.now()}`;
+  await page.getByRole('button', { name: 'Add an account' }).click();
+  await page.getByPlaceholder('Fidelity 401(k)').fill(label);
+  await page.getByRole('button', { name: 'Add account', exact: true }).click();
+  await expect(page.getByText(label).first()).toBeVisible();
+  expect(accounts, 'the accounts screen threw while saving').toEqual([]);
+
+  // Still there after a reload, which separates a row that was saved from one
+  // that was only rendered.
+  const again = await open(page, 'inv_accounts');
+  await expect(page.getByText(label).first()).toBeVisible();
+  expect(again).toEqual([]);
+
+  // The whole workspace shares one portfolio snapshot, so a write answering
+  // with a shape the other screens cannot read takes THEM down rather than the
+  // screen that made it — which is exactly how the Overview fault stayed
+  // hidden. Nothing is asserted about their content; that they still render on
+  // an account that now holds something is the point.
+  for (const screen of ['inv_overview', 'inv_holdings', 'inv_allocation']) {
+    expect(await open(page, screen), `${screen} threw after a write`).toEqual([]);
+  }
+});
+
 test('every remaining screen renders without throwing', async ({ page }) => {
   // The ones with nothing seeded. Nothing is asserted about their content —
   // there is none — but a thrown render leaves the root dead for every later
@@ -249,9 +290,20 @@ test('signing out revokes the session, not just the screen', async ({ browser, r
   // signed in on whatever computer it was signed in on, for the twelve hours
   // the session cookie lasts. The route and the client method both existed the
   // whole time.
+  // Signing out CONSUMES a session, so this test cannot be repeated against one
+  // seed. Rather than fail on a second local run and look like a regression, it
+  // says what happened: in CI the seed runs before every suite, so it always
+  // has a live session and always runs.
+  const alive = await request.get(`${base}/public/v1/auth/session`, {
+    headers: { cookie: spareCookie }, ignoreHTTPSErrors: true,
+  });
+  test.skip(alive.status() !== 200,
+    'the spare session was already signed out — reseed to run this again');
+
+  const [spareName, spareValue] = spareCookie.split('=');
   const context = await browser.newContext({ ignoreHTTPSErrors: true });
   await context.addCookies([{
-    name, value: decodeURIComponent(value ?? ''), domain: '127.0.0.1', path: '/',
+    name: spareName, value: decodeURIComponent(spareValue ?? ''), domain: '127.0.0.1', path: '/',
     httpOnly: true, secure: true, sameSite: 'Lax',
   }]);
   const page = await context.newPage();
@@ -264,7 +316,7 @@ test('signing out revokes the session, not just the screen', async ({ browser, r
   // And the session is DEAD on the server, which is the half that matters: a
   // screen that merely forgot you is not a sign-out.
   const still = await request.get(`${base}/public/v1/auth/session`, {
-    headers: { cookie }, ignoreHTTPSErrors: true,
+    headers: { cookie: spareCookie }, ignoreHTTPSErrors: true,
   });
   expect(still.status(), 'the session still answered after signing out').toBe(401);
   await context.close();

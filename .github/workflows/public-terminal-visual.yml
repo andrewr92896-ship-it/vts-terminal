@@ -105,7 +105,12 @@ jobs:
       - run: npm run db:migrate:public
 
       - name: Seed one real account
-        run: echo "PUBLIC_LIVE_COOKIE=$(node scripts/seed-public-account.mjs --cookie)" >> $GITHUB_ENV
+        # Two sessions on it: the second is what the sign-out test burns, so the
+        # suite stays repeatable rather than signing itself out of its own run.
+        run: |
+          node scripts/seed-public-account.mjs --cookie > /tmp/vts-cookies
+          echo "PUBLIC_LIVE_COOKIE=$(sed -n 1p /tmp/vts-cookies)" >> $GITHUB_ENV
+          echo "PUBLIC_LIVE_SPARE_COOKIE=$(sed -n 2p /tmp/vts-cookies)" >> $GITHUB_ENV
 
       - name: Start the public stack
         run: PORT=4174 node scripts/serve-public-stack.mjs > /tmp/vts-public-stack.log 2>&1 &
