@@ -217,6 +217,32 @@ test('the demo can post an announcement and publish a patch note', async ({ page
   expect(errors, 'editing a notice threw').toEqual([]);
 });
 
+// On a phone the sidebar is not a rail — the stylesheet turns it into a
+// slide-over drawer at 768. It was opening COLLAPSED, so every row was a 76px
+// unlabelled icon inside a 310px panel. The page-family captures could not see
+// it: they never open the drawer, and a collapsed sidebar still renders content.
+test('the phone drawer opens with labels, not a column of icons', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 780 });
+  await page.goto('about:blank');
+  await page.goto(`${base}/?demo=1#live`, { waitUntil: 'networkidle' });
+
+  await page.getByRole('button', { name: 'Open navigation' }).click();
+  const sidebar = page.locator('aside');
+  // ASSERTED ON VISIBLE TEXT, NOT ON THE ROLE NAME. A collapsed row still has an
+  // accessible name — the component puts the label in `title` precisely so a
+  // rail is not a column of anonymous buttons — so `getByRole({name})` matches
+  // either way and proves nothing. It is the text node that is missing when the
+  // drawer is collapsed, and the text node is what a person reads.
+  // `.first()` because the workspace's own name is also the group heading above
+  // its section list — two nodes, one word, and either proves the labels render.
+  await expect(sidebar.getByText('Advanced Trading', { exact: true }).first()).toBeVisible();
+  await expect(sidebar.getByText('Market Data', { exact: true }).first()).toBeVisible();
+
+  // And picking a row closes the drawer rather than leaving it over the screen.
+  await sidebar.getByText('Market Data', { exact: true }).first().click();
+  await expect(sidebar).not.toBeInViewport();
+});
+
 test('the demo reaches no service and leaves nothing behind', async ({ page, context }) => {
   const requests = [];
   page.on('request', (request) => requests.push(request.url()));

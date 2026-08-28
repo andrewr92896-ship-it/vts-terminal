@@ -11,9 +11,17 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 7.64';
+export const APP_VERSION = 'Beta V 7.65';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 7.65',
+    date: '2026-08-28',
+    notes: [
+      'Fixed on the public terminal: the sidebar opened on a phone as a column of unlabelled icons. It is a slide-over drawer at that width, and a drawer has to carry its labels.',
+      'Fixed: the hamburger button on a phone was drawing a blank square — the icon it asked for did not exist.',
+    ],
+  },
   {
     version: 'Beta V 7.64',
     date: '2026-08-28',

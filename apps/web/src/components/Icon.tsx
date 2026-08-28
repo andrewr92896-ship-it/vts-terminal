@@ -10,6 +10,9 @@ import type { CSSProperties } from 'react';
 
 const ICONS: Record<string, string> = {
   // --- shell / chrome ---
+  // The phone drawer's hamburger. It was rendering the neutral fallback square,
+  // so the only way into the navigation on a phone looked like a blank box.
+  menu: '<line x1="4" y1="6" x2="20" y2="6"/><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="18" x2="20" y2="18"/>',
   'chevron-right': '<path d="m9 18 6-6-6-6"/>',
   'chevron-down': '<path d="m6 9 6 6 6-6"/>',
   'chevron-up': '<path d="m18 15-6-6-6 6"/>',

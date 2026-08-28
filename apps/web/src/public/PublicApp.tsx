@@ -4,6 +4,7 @@ import { PublicSidebar } from './PublicSidebar';
 import { PublicTopBar } from './PublicTopBar';
 import { PublicScreen } from './PublicScreens';
 import { publicAuth, isDemo, startDemo, setPublicUser, readPublicUser } from './PublicRuntime';
+import { useResponsive } from '../hooks/useMediaQuery';
 import { MyTerminalCustomizer } from '../components/MyTerminalCustomizer';
 import { MY_TERMINAL_WORKSPACE, myTerminalSections, parseMyTerminal, type MyTerminalLayout, type NavLike } from '../theme/myTerminal';
 
@@ -18,6 +19,16 @@ const allowed=new Set(PUBLIC_NAV.flatMap((workspace)=>workspace.sections.map((se
 export function PublicApp(){
  const initial=allowed.has(first)?first:'live';const [verified,setVerified]=useState(evidence);const [checking,setChecking]=useState(!evidence);const [passwordChangeRequired,setPasswordChangeRequired]=useState(false);const [authStep,setAuthStep]=useState<'login'|'early-access'|null>(null);const [screen,setScreen]=useState<PublicScreenKey>(initial);
  const [collapsed,setCollapsed]=useState(query.get('sidebar')==='collapsed'||(!query.has('sidebar')&&innerWidth<=1024));const [mobileOpen,setMobileOpen]=useState(query.get('sidebar')==='expanded'&&innerWidth<=768);
+ // BELOW 768 THE SIDEBAR IS A DRAWER, AND A DRAWER MUST NEVER BE COLLAPSED.
+ // `collapsed` initialises true on anything narrower than 1024, which is right
+ // for a laptop and wrong for the one place the sidebar is not a rail: the CSS
+ // turns it into a 310px slide-over at 768, and it was rendering 76px of
+ // unlabelled icons inside it — every row an icon with no word beside it, and
+ // the only way out a toggle nobody would think to press. The breakpoint here is
+ // `isTablet` because that is the same 768 the stylesheet switches at; two
+ // different numbers would leave a band where the drawer is a rail again.
+ const { isTablet }=useResponsive();
+ const drawer=isTablet;
  // My Terminal is customizable here exactly as it is on the private terminal, and
  // the SAME module decides what is on it (theme/myTerminal.ts) — over this nav
  // rather than the private one. Two copies of those rules is how the two shells
@@ -61,7 +72,7 @@ export function PublicApp(){
  // A section pinned from another workspace keeps its own label, so the top bar
  // has to look it up across the whole nav rather than only in this workspace.
  const selected=PUBLIC_NAV.flatMap((w)=>w.sections).find((section)=>section.key===screen)??workspaceNav.sections[0];
- return <div className="vts-public-shell" data-collapsed={collapsed} data-mobile-open={mobileOpen}><PublicSidebar workspace={workspaceNav.key} screen={screen} collapsed={collapsed} onToggle={()=>setCollapsed((value)=>!value)} onSelectWorkspace={selectWorkspace} onSelectScreen={select} sections={workspace===MY_TERMINAL_WORKSPACE?[...myTerminalKeys] as PublicScreenKey[]:undefined} onCustomize={workspace===MY_TERMINAL_WORKSPACE?()=>setCustomizing(true):undefined}/><section className="vts-public-column"><PublicTopBar workspaceLabel={workspaceNav.label} sectionLabel={selected?.label??workspaceNav.label} accent={workspaceNav.accent} onOpenNav={()=>setMobileOpen(true)}/><main className="vts-public-main">{isDemo()&&<div className="vts-public-demo-bar"><strong>DEMO</strong><span>Sample data. Nothing is saved, and everything resets when you leave. Informational only — not investment advice. Features become available on the release of Early Access.</span><button onClick={()=>setAuthStep('early-access')}>Request early access</button></div>}<PublicScreen screen={screen} workspace={workspaceNav.key} onNavigate={select}/></main><footer className="vts-public-footer"><span>VTS Public Terminal · Informational use only</span><span><a href="#hp_terms">Terms</a> · <a href="#hp_privacy">Privacy</a> · <a href="#hp_howto">Help</a></span></footer></section>{mobileOpen&&<button aria-label="Close navigation" onClick={()=>setMobileOpen(false)} style={{position:'fixed',inset:0,zIndex:70,background:'rgba(0,0,0,.55)',border:0}}/>}{customizing&&<MyTerminalCustomizer nav={PUBLIC_NAV as unknown as NavLike} layout={parseMyTerminal(sections)} reach={PUBLIC_REACH} busy={saving} onClose={()=>setCustomizing(false)} onSave={(next)=>{void saveSections(next)}}/>}</div>;
+ return <div className="vts-public-shell" data-collapsed={collapsed} data-mobile-open={mobileOpen}><PublicSidebar workspace={workspaceNav.key} screen={screen} collapsed={drawer?false:collapsed} onToggle={drawer?()=>setMobileOpen(false):()=>setCollapsed((value)=>!value)} onSelectWorkspace={selectWorkspace} onSelectScreen={select} sections={workspace===MY_TERMINAL_WORKSPACE?[...myTerminalKeys] as PublicScreenKey[]:undefined} onCustomize={workspace===MY_TERMINAL_WORKSPACE?()=>setCustomizing(true):undefined}/><section className="vts-public-column"><PublicTopBar workspaceLabel={workspaceNav.label} sectionLabel={selected?.label??workspaceNav.label} accent={workspaceNav.accent} onOpenNav={()=>setMobileOpen(true)}/><main className="vts-public-main">{isDemo()&&<div className="vts-public-demo-bar"><strong>DEMO</strong><span>Sample data. Nothing is saved, and everything resets when you leave. Informational only — not investment advice. Features become available on the release of Early Access.</span><button onClick={()=>setAuthStep('early-access')}>Request early access</button></div>}<PublicScreen screen={screen} workspace={workspaceNav.key} onNavigate={select}/></main><footer className="vts-public-footer"><span>VTS Public Terminal · Informational use only</span><span><a href="#hp_terms">Terms</a> · <a href="#hp_privacy">Privacy</a> · <a href="#hp_howto">Help</a></span></footer></section>{mobileOpen&&<button aria-label="Close navigation" onClick={()=>setMobileOpen(false)} style={{position:'fixed',inset:0,zIndex:70,background:'rgba(0,0,0,.55)',border:0}}/>}{customizing&&<MyTerminalCustomizer nav={PUBLIC_NAV as unknown as NavLike} layout={parseMyTerminal(sections)} reach={PUBLIC_REACH} busy={saving} onClose={()=>setCustomizing(false)} onSave={(next)=>{void saveSections(next)}}/>}</div>;
 }
 declare global{interface Window{__VTS_PUBLIC_BOUNDARY__?:{routes:readonly string[];sessionCookie:string;evidence:boolean}}}
 window.__VTS_PUBLIC_BOUNDARY__={routes:[...allowed],sessionCookie:'vts_public_session_v1',evidence};
