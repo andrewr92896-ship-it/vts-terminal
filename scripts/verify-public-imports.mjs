@@ -16,7 +16,15 @@ const ALLOWED_PORTAL_IMPORTS=[
   // a list editor, and myTerminal.ts is pure functions over whatever nav it is
   // handed.
   /^\.\.\/(components\/(Icon|Clock|MyTerminalCustomizer)|theme\/(tokens|themes|myTerminal)|workspaces\/trading\/(MarketData|CalendarTile|NewsTile|WatchlistTile|ChartTile|TvWidget)|api\/types)$/,
-  /^\.\.\/(hooks\/useNowTick|lib\/timezone|workspaces\/trading\/(etClock|tvChart)|workspaces\/trading\/tiles\/TileFrame)$/,
+  /^\.\.\/(hooks\/(useNowTick|useMediaQuery)|lib\/(timezone|measure)|workspaces\/trading\/(etClock|tvChart|boardGridCss)|workspaces\/trading\/tiles\/TileFrame)$/,
+  // The Live Wall's tiles. MarketTiles and PersonalTiles hold the market and
+  // personal kinds only — every one of them reaches the public API through the
+  // `api/client` seam, and none names a broker, an order or a desk. The desk
+  // tiles, the order ticket and the team tiles are in their OWN files and are
+  // deliberately absent here, which is what keeps them out of the bundle: the
+  // public board lists the kinds it can draw, so there is no render-time filter
+  // to get wrong.
+  /^\.\.\/workspaces\/trading\/tiles\/(MarketTiles|PersonalTiles)$/,
   /^\.\/((Public(App|ClockTile|LiveWall|Login|Runtime|Sidebar|TopBar|Screens|AccountPages)|publicNav))$/,
   /^\.\.\/demo\/demo(Store|Seed)$/,
   /^\.\/demo(Seed|Store|Questions)$/,

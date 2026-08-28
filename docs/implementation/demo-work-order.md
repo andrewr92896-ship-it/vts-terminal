@@ -104,7 +104,7 @@ item below is done:
 
 ### Features the demo must actually demonstrate
 
-- [ ] **11. Live Wall is editable in the demo**, in exactly the way it is in the
+- [x] **11. Live Wall is editable in the demo**, in exactly the way it is in the
       private portal — add, remove, move and resize tiles — excluding anything
       that will not be available to the public.
 
@@ -114,7 +114,7 @@ item below is done:
       Give the visitor the option to **see an example of what it would look
       like** if they did.
 
-- [ ] **13. Live stream placeholders.** Under Market News → Live Streams, show a
+- [x] **13. Live stream placeholders.** Under Market News → Live Streams, show a
       box reading **"Live stream plays here"**, as though a video were playing.
       No actual video. **Do the same on the Live Wall.**
 

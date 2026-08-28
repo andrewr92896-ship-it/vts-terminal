@@ -133,6 +133,39 @@ test('My Terminal can be customized, and a pinned section opens on it', async ({
   expect(errors, 'customizing My Terminal threw').toEqual([]);
 });
 
+// The Live Wall is EDITABLE in the demo, as it is on the private terminal. A
+// screenshot proves the board rendered; it cannot prove that pressing "Add a
+// tile" adds one, or that removing one removes it — which is the whole of what
+// this item asked for.
+test('the Live Wall can be edited in the demo', async ({ page }) => {
+  const errors = [];
+  const record = (error) => errors.push(String(error));
+  page.on('pageerror', record);
+  try {
+    await page.goto('about:blank');
+    await page.goto(`${base}/?demo=1#live`, { waitUntil: 'networkidle' });
+
+    const before = await page.locator('.wall-cell').count();
+    expect(before, 'the wall opened on an empty board').toBeGreaterThan(0);
+
+    await page.getByRole('button', { name: 'Edit layout' }).click();
+    await page.getByRole('button', { name: 'Add a tile' }).click();
+    await page.getByRole('button', { name: /^To Do/ }).click();
+    await expect(page.locator('.wall-cell')).toHaveCount(before + 1);
+
+    // And the added tile is the real one, not a placeholder with a label on it.
+    await expect(page.locator('.wall-cell').last()).toContainText(/To Do/i);
+
+    // Removing takes it off again. The ✕ only exists while editing, which is
+    // itself the assertion that edit mode is doing something.
+    await page.locator('.wall-cell').last().getByTitle('Remove tile').click();
+    await expect(page.locator('.wall-cell')).toHaveCount(before);
+  } finally {
+    page.off('pageerror', record);
+  }
+  expect(errors, 'editing the wall threw').toEqual([]);
+});
+
 test('the demo reaches no service and leaves nothing behind', async ({ page, context }) => {
   const requests = [];
   page.on('request', (request) => requests.push(request.url()));

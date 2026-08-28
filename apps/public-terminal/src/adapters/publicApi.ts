@@ -36,6 +36,13 @@ const marketNewsData:MarketNewsData={aiTagging:false,headlines:[
 ]};
 let layout:MarketDataLayout={pinned:[...marketDataPayload.defaultPins],hidden:[],custom:[]};
 
+const PUBLIC_STREAM_CHANNELS=[
+  {key:'yahoo-finance',name:'Yahoo Finance',handle:'@YahooFinance',channelId:'',alwaysOn:true,free:true,live:false,placeholder:true,liveChecked:false},
+  {key:'bloomberg',name:'Bloomberg Television',handle:'@markets',channelId:'',alwaysOn:true,free:false,live:false,placeholder:true,liveChecked:false},
+  {key:'reuters',name:'Reuters',handle:'@Reuters',channelId:'',alwaysOn:true,free:false,live:false,placeholder:true,liveChecked:false},
+  {key:'federal-reserve',name:'Federal Reserve',handle:'@federalreserve',channelId:'',alwaysOn:false,free:false,live:false,placeholder:true,liveChecked:false},
+];
+
 const baseApi={
   async marketData(){return isDemo()?structuredClone(marketDataPayload):publicRequest<MarketDataPayload>('/market-data')},
   async marketNews(){return isDemo()?structuredClone(marketNewsData):publicRequest<MarketNewsData>('/market-news')},
@@ -44,7 +51,21 @@ const baseApi={
   // The whole MarketNewsStreams shape, not just the catalog: the screen reads
   // `watching`, `notify` and `cols` straight off it and a missing array is a
   // render crash rather than an empty wall.
-  async marketNewsStreams(){return {streams:{channels:[],watching:[],docked:null,cols:2,notify:{},maxWatching:1},liveConfigured:false}},
+  //
+  // EVERY CHANNEL IS A PLACEHOLDER, and that is the honest shape rather than a
+  // limitation dressed up. The public terminal embeds nobody's video: there is
+  // no YouTube key here, and putting a third party's live broadcast inside a
+  // showcase is a decision nobody has made. So the wall draws the SLOT — "Live
+  // stream plays here" — which shows what the screen is for without playing
+  // anything or claiming a channel is live. `placeholder` is read by
+  // streamEmbed.ts, so the Market News wall and the Live Wall's stream tile
+  // reach the same answer from the same field.
+  //
+  // The channels are real ones, named, because a slot labelled "Channel 1" says
+  // nothing about what the finished screen does. Nothing here is marked `live`:
+  // a fabricated live reading is exactly the thing the terminal's own rules
+  // forbid.
+  async marketNewsStreams(){return {streams:{channels:PUBLIC_STREAM_CHANNELS.map((c)=>({...c})),watching:[PUBLIC_STREAM_CHANNELS[0]!.key],docked:null,cols:2,notify:{},maxWatching:4},liveConfigured:false}},
 
 };
 

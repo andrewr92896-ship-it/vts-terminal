@@ -36,14 +36,14 @@ export const publicAuth={
 // on purpose — the server treats this as an opaque blob and the CLIENT resolves
 // every value at render, exactly as the private terminal resolves its home
 // screen, because what an account can reach moves after a setting is written.
-export type PublicPreferences={displayTimezone?:string;hideFromLeaderboards?:boolean;homeWorkspace?:string|null;homeScreen?:string|null;myTerminalSections?:string|null};
+export type PublicPreferences={displayTimezone?:string;hideFromLeaderboards?:boolean;homeWorkspace?:string|null;homeScreen?:string|null;myTerminalSections?:string|null;wallLayout?:string|null};
 // WHO IS SIGNED IN IS A RUNTIME FACT, not a constant. The top bar carried the
 // literal "Andrew" — the owner's name — which every public visitor and every
 // demo visitor saw. The shell sets this once the session or the demo resolves;
 // the auth adapter reads it, so shared components see it through the same
 // useAuth() they always used. The preferences above ride on it for the same
 // reason: one identity object, one place the screens read it from.
-export type PublicIdentity={id:string;username:string;displayName:string;email?:string;isDemo?:boolean;displayTimezone?:string;hideFromLeaderboards?:boolean;homeWorkspace?:string|null;homeScreen?:string|null;myTerminalSections?:string|null};
+export type PublicIdentity={id:string;username:string;displayName:string;email?:string;isDemo?:boolean;displayTimezone?:string;hideFromLeaderboards?:boolean;homeWorkspace?:string|null;homeScreen?:string|null;myTerminalSections?:string|null;wallLayout?:string|null};
 let identity:PublicIdentity={id:'public-user',username:'public',displayName:'Public account'};
 const identityListeners=new Set<()=>void>();
 export function setPublicUser(next:PublicIdentity){identity=next;for(const listener of identityListeners)listener()}

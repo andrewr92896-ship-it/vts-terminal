@@ -13,7 +13,7 @@ import { ScreenTitle } from './ScreenTitle';
 import { newsFeeds, affectedInstruments, deriveWatchlist, DEFAULT_WATCHLIST } from './newsRelevance';
 import { decodeEntities, fmtDayKey, fmtTime } from './newsFormat';
 import { countdown, etDay, nextMeetingStamp, prevMeetingStamp } from './etClock';
-import { embedSrc, liveKnown } from './streamEmbed';
+import { STREAM_PLACEHOLDER_TEXT, embedSrc, isPlaceholder, liveKnown } from './streamEmbed';
 import type { MarketNewsData, MarketNewsStreams, MembershipTier, NewsItem, StreamChannel } from '../../api/types';
 import { useContentWidth } from '../../lib/measure';
 
@@ -918,11 +918,15 @@ function ChannelRow({
           )}
         </div>
         <div style={{ fontSize: 11, color: c.live ? C.muted : C.faint, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginTop: 2 }}>
-          {c.live
-            ? c.streamTitle ?? 'Live'
-            : liveKnown(c)
-              ? c.lastLive ?? 'Offline'
-              : 'Status unconfirmed'}
+          {isPlaceholder(c)
+            ? // No player behind it, so there is no status to report. Saying
+              // "unconfirmed" would imply we looked and could not tell.
+              'Preview slot'
+            : c.live
+              ? c.streamTitle ?? 'Live'
+              : liveKnown(c)
+                ? c.lastLive ?? 'Offline'
+                : 'Status unconfirmed'}
         </div>
         {c.handle && <div style={{ fontFamily: C.mono, fontSize: 9.5, color: '#3A4A6C', marginTop: 2 }}>{c.handle}</div>}
       </button>
@@ -1276,7 +1280,11 @@ function StreamTile({
   // negative reading, because there the countdown is the better thing to show and
   // being wrong for a few minutes costs nothing.
   const alwaysTries = c.alwaysOn === true;
+  // A placeholder channel has NO player behind it, so it can never embed —
+  // decided here rather than at the render, so every branch below inherits it.
+  const slot = isPlaceholder(c);
   const canEmbed =
+    !slot &&
     !c.embedBlocked &&
     (!!c.liveVideoId ||
       (!!c.channelId && (alwaysTries || c.live || !!c.upcoming || !liveKnown(c))));
@@ -1293,7 +1301,13 @@ function StreamTile({
           that runs long must be clipped, not allowed to spill over the tile's own
           caption below. `containerType` gives the card a width to size against. */}
       <div style={{ position: 'relative', width: '100%', paddingTop: '56.25%', background: '#050B18', overflow: 'hidden', containerType: 'inline-size' }}>
-        {c.embedBlocked ? (
+        {slot ? (
+          // The slot a video would play in, drawn as one, with nothing in it.
+          <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 7, padding: 16, textAlign: 'center', border: `1px dashed ${C.line2}`, borderRadius: 10 }}>
+            <div style={{ fontSize: 13, fontWeight: 700, color: C.text }}>{STREAM_PLACEHOLDER_TEXT}</div>
+            <div style={{ fontSize: 11.5, color: C.muted }}>{c.name}</div>
+          </div>
+        ) : c.embedBlocked ? (
           <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 10, padding: 16, textAlign: 'center', overflow: 'hidden' }}>
             {/* The badge states a fact about *now*, so it is tied to the live
                 reading rather than printed unconditionally. Hardcoding it put
@@ -1355,27 +1369,33 @@ function StreamTile({
           </button>
         </div>
         <div style={{ fontSize: 11, color: C.muted, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginTop: 3 }}>
-          {c.live
-            ? c.streamTitle ?? 'Live'
-            : c.upcoming
-              ? c.streamTitle ?? 'Scheduled — waiting to start'
-              : liveKnown(c) && !alwaysTries
-                ? `Offline · last stream ${c.lastTitle ?? '—'}`
-                : // Either no reading at all, or a "dark" reading on a channel
-                  // that broadcasts round the clock — where a negative answer is
-                  // more likely our read having failed than the channel being
-                  // off air. The player above is showing the truth either way,
-                  // so do not contradict it with a flat "Offline".
-                  'Live status unconfirmed — the player above shows whether it is on'}
+          {slot
+            ? 'This is where the channel plays. Nothing is streaming in this preview.'
+            : c.live
+              ? c.streamTitle ?? 'Live'
+              : c.upcoming
+                ? c.streamTitle ?? 'Scheduled — waiting to start'
+                : liveKnown(c) && !alwaysTries
+                  ? `Offline · last stream ${c.lastTitle ?? '—'}`
+                  : // Either no reading at all, or a "dark" reading on a channel
+                    // that broadcasts round the clock — where a negative answer is
+                    // more likely our read having failed than the channel being
+                    // off air. The player above is showing the truth either way,
+                    // so do not contradict it with a flat "Offline".
+                    'Live status unconfirmed — the player above shows whether it is on'}
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 11, flexWrap: 'wrap', marginTop: 6 }}>
-          <span style={{ fontFamily: C.mono, fontSize: 10, color: C.faint }}>{c.live ? c.viewers ?? '' : c.lastLive ?? 'offline'}</span>
+          <span style={{ fontFamily: C.mono, fontSize: 10, color: C.faint }}>{slot ? 'preview' : c.live ? c.viewers ?? '' : c.lastLive ?? 'offline'}</span>
           <button onClick={onDock} style={{ background: 'none', border: 'none', fontSize: 10.5, fontWeight: 600, color: C.muted, cursor: 'pointer' }}>
             Dock to corner
           </button>
-          <a href={channelUrl(c)} target="_blank" rel="noopener noreferrer" style={{ fontSize: 10.5, fontWeight: 600, color: C.gold, textDecoration: 'none' }}>
-            YouTube ↗
-          </a>
+          {/* A link out is only worth drawing when there is a channel to open.
+              A placeholder carries no channel id, so the link would go nowhere. */}
+          {!slot && (
+            <a href={channelUrl(c)} target="_blank" rel="noopener noreferrer" style={{ fontSize: 10.5, fontWeight: 600, color: C.gold, textDecoration: 'none' }}>
+              YouTube ↗
+            </a>
+          )}
         </div>
       </div>
     </div>
@@ -1402,7 +1422,7 @@ function StreamsEmpty({ channels, onWatch }: { channels: StreamChannel[]; onWatc
 }
 
 function MiniPlayer({ c, onUndock, onClose }: { c: StreamChannel; onUndock: () => void; onClose: () => void }) {
-  const canEmbed = !!c.channelId;
+  const canEmbed = !isPlaceholder(c) && !!c.channelId;
   return (
     <div
       style={{
@@ -1431,9 +1451,13 @@ function MiniPlayer({ c, onUndock, onClose }: { c: StreamChannel; onUndock: () =
           />
         ) : (
           <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 14, textAlign: 'center' }}>
-            <a href={channelUrl(c)} target="_blank" rel="noopener noreferrer" style={{ fontSize: 11, fontWeight: 600, color: C.gold, textDecoration: 'none' }}>
-              Open on YouTube ↗
-            </a>
+            {isPlaceholder(c) ? (
+              <span style={{ fontSize: 11.5, fontWeight: 600, color: C.text }}>{STREAM_PLACEHOLDER_TEXT}</span>
+            ) : (
+              <a href={channelUrl(c)} target="_blank" rel="noopener noreferrer" style={{ fontSize: 11, fontWeight: 600, color: C.gold, textDecoration: 'none' }}>
+                Open on YouTube ↗
+              </a>
+            )}
           </div>
         )}
       </div>
