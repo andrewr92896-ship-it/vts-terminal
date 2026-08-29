@@ -37,15 +37,12 @@ export function PublicLogin({ initialStep = 'login', onVerified, onDemo, onClose
   {step==='login'&&<><label>Email address<input name="email" type="email" autoComplete="email" placeholder="you@example.com" required/></label><label>Password<input name="password" type="password" autoComplete="current-password" required/></label></>}
   {step==='two-factor'&&<><label>Verification code<input name="code" inputMode="numeric" pattern="[0-9]{6}" autoComplete="one-time-code" maxLength={6} defaultValue={isDemo()?'246810':''} required/></label><label className="remember"><input name="remember" type="checkbox"/>Remember this device for 30 days</label></>}
   {step==='recovery'&&<label>Email address<input name="email" type="email" autoComplete="email" required/></label>}
+  {/* NOTHING IS OFFERED HERE (owner instruction, 2026-08). This step used to open
+      with what a pre-release place "includes" — a free Max membership, three months
+      free after launch — which is an inducement to hand over an email address, and it
+      named tiers the terminal does not sell. It asks for an address and says what
+      happens to it, and nothing else. Do not put an offer back on this form. */}
   {step==='early-access'&&<>
-    <div className="vts-public-early-terms">
-      <strong>What a pre-release place includes</strong>
-      <ul>
-        <li>A <em>free Max membership</em> for as long as the terminal is in pre-release.</li>
-        <li>At least <em>three months of free Max</em> after the official launch.</li>
-        <li>Early sight of features, and a direct line for reporting what does not work.</li>
-      </ul>
-    </div>
     <label>Email address<input name="email" type="email" autoComplete="email" placeholder="you@example.com" required/></label>
     <label>Anything you want us to know <span>optional</span><textarea name="note" rows={3} placeholder="What you trade or study, and what you are hoping the terminal does for you."/></label>
     {/* THE ONE BINDING STATEMENT ON THIS PAGE, and it is here rather than in the
@@ -86,7 +83,7 @@ export function PublicLogin({ initialStep = 'login', onVerified, onDemo, onClose
   </div>
   <div className="vts-public-early-access">
     <strong>Request early access</strong>
-    <p>Pre-release invitations include a <em>free Max membership</em> for the whole pre-release, and at least <em>three months of free Max</em> after launch.</p>
+    <p>The public terminal is in pre-release and admission is by invitation. Ask to be told when a place opens.</p>
     <button type="button" onClick={()=>{setStep('early-access');setError('');setNotice('')}}>Request an invitation</button>
   </div></>}
   <div className="vts-public-warning" role="note">

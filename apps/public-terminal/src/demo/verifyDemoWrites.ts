@@ -148,6 +148,6 @@ assert.ok(suggested.suggestion?.id, 'sendSuggestion must answer with the suggest
 // The screen prints `notice` in place of its own "sent to the admins" line, so a demo
 // that answers without one silently claims the suggestion reached somebody.
 assert.match(String(suggested.notice ?? ''), /demonstration purposes only/i);
-assert.match(String(suggested.notice ?? ''), /Early Access/);
+assert.match(String(suggested.notice ?? ''), /demonstration purposes only/);
 
 console.log('demo writes: every path drove to the act it exists for');

@@ -266,6 +266,13 @@ test('a visitor with no account can ask for early access', async ({ browser }) =
   await expect(card).toContainText(/delete it at any time/i);
   await expect(card).toContainText('support@vitalistradingsystems.com');
 
+  // AND NOTHING IS OFFERED IN EXCHANGE FOR IT (owner instruction, 2026-08). The
+  // form used to lead with a free Max membership and three months free after
+  // launch — an inducement to hand over an address, naming tiers the terminal
+  // does not sell. Asserted as an absence because that is the only way a promise
+  // quietly reappearing gets caught.
+  await expect(card).not.toContainText(/free (max|premium)|months of free|membership/i);
+
   await page.getByPlaceholder('you@example.com').fill(`visitor-${Date.now()}@example.com`);
   await page.getByRole('button', { name: 'Send request' }).click();
 

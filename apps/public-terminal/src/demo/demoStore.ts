@@ -517,7 +517,7 @@ const writes: Record<string, (args: any[]) => unknown> = {
     // What it did NOT do is reach anybody, and the visitor has to be told that outright.
     return {
       suggestion: clone(suggestion),
-      notice: 'Sent — for demonstration purposes only. Nothing here reaches us, and it resets when you leave. Suggestions will be available to Early Access members.',
+      notice: 'Sent — for demonstration purposes only. Nothing here reaches us, and it resets when you leave.',
     };
   },
   createNote: ([input]) => {

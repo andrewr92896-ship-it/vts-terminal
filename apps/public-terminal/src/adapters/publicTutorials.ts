@@ -93,7 +93,7 @@ export const TUTORIALS:Record<string,Tutorial>={
   {title:'What happens next',body:'The report opens a thread you can reply on, so it is a conversation rather than a form that vanishes.'}]},
  hp_suggest:{title:'Suggestions',intro:'Ideas for what the terminal should do next.',steps:[
   {title:'Send one',body:'Type it and press send. There is no form to fill in beyond that.'},
-  {title:'In this preview',body:'A suggestion sent here reaches nobody and resets when you leave. Suggestions will be available to Early Access members.'}]},
+  {title:'In this preview',body:'A suggestion sent here reaches nobody and resets when you leave.'}]},
  my_settings:{title:'Settings',intro:'The account itself.',steps:[
   {title:'Your details',body:'Change your display name, and your password. Your display name is unique across the terminal — it is the name on a leaderboard or a roster.'},
   {title:'Signing out',body:'The sign-out control is in the top bar. It ends the session on the server, not just on this device — worth knowing on a shared computer.'}]},
@@ -101,10 +101,10 @@ export const TUTORIALS:Record<string,Tutorial>={
   {title:'Your clock',body:'Pick the zone you read times in. It is stored on your account, so it follows you between devices. Market hours, the Fed schedule and anything bucketed by trading day stay on Eastern wherever you are — those are facts about the market, not about you.'},
   {title:'Leaderboards',body:'Switch off "show me on leaderboards" and other people stop seeing your row. You still see your own — it is about being findable, not about losing your standing.'},
   {title:'Where the terminal opens',body:'Pick the screen a sign-in lands on. If it later becomes unreachable, the terminal falls back rather than stranding you on it.'}]},
- my_access:{title:'Premium Features',intro:'What the terminal includes, and what Early Access gets you.',steps:[
-  {title:'During pre-release',body:'There are no tiers to choose between. Everyone admitted through Early Access has full access to every feature, for the whole pre-release period.'},
-  {title:'What is included',body:'Market data and news, your trade records and metrics, trading notes, the Live Wall, Finances, Investments and Studies.'},
-  {title:'What is not part of the public terminal',body:'Order placement, broker connections, live balances and group features. They are not included at any level, and no plan grants them.'}]},
+ my_access:{title:"What's Included",intro:'What this terminal does, and what it does not do.',steps:[
+  {title:'What is here',body:'Market data and news, your trade records and metrics, trading notes, the Live Wall, Finances, Investments and Studies.'},
+  {title:'What is not here',body:'Order placement, broker connections, live balances and group features. They are not part of the public terminal.'},
+  {title:'Pre-release',body:'The terminal is in pre-release and nothing is sold here. There are no plans, tiers or payments anywhere in it.'}]},
  // Says what is coming without implying it is here. Deliberately TRACKING
  // only — nothing here suggests the terminal will place an order.
  connections:{title:'Broker connections',intro:'Not available, and not what you might expect when it is.',steps:[
@@ -137,7 +137,7 @@ export const HOWTO_TOPICS:{key:string;label:string}[]=[
  {key:'hp_suggest',label:'Suggestions'},
  {key:'my_settings',label:'Settings'},
  {key:'my_prefs',label:'Preferences'},
- {key:'my_access',label:'Premium Features'},
+ {key:'my_access',label:"What's Included"},
  {key:'connections',label:'Broker connections'},
 ];
 

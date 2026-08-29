@@ -11,9 +11,17 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 7.69';
+export const APP_VERSION = 'Beta V 7.70';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 7.70',
+    date: '2026-08-29',
+    notes: [
+      'Nothing is offered anywhere on the public terminal or the marketing page. The early-access form, the sign-in card and the landing page no longer promise a free membership or months of free access after launch — the form asks for an address, says what happens to it, and stops.',
+      'The public terminal\u2019s Premium Features screen is now \u201cWhat\u2019s Included\u201d: what it does, what it deliberately does not, and a plain statement that nothing there is sold. The private terminal is unchanged.',
+    ],
+  },
   {
     version: 'Beta V 7.69',
     date: '2026-08-29',

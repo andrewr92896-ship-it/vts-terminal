@@ -119,15 +119,9 @@
   width: 100%; margin: 0; padding: 8px 14px; border: 1px solid #1c3a7a; border-radius: 7px;
   background: transparent; color: #9fb0d6; text-align: center; font-weight: 600; font-size: 12.5px; cursor: pointer;
 }
-.vts-public-early-terms {
-  margin: 4px 0 14px; padding: 13px 14px; border-radius: 9px;
-  border: 1px solid rgba(235, 203, 116, .3); background: rgba(235, 203, 116, .06);
-  color: #cbd7ef; font-size: 12px; line-height: 1.6;
-}
-.vts-public-early-terms strong { display: block; margin-bottom: 7px; color: #EBCB74; font-size: 12.5px; }
 /* The data-collection notice under the early-access fields. Deliberately QUIET
-   and slate rather than gold or amber: the blocks either side of it are an offer
-   and a pre-release warning, and this is neither — it is the plain, binding
+   and slate rather than gold or amber: it is not another banner to skim past but
+   the plain, binding
    statement of what happens to the address somebody just typed. Styled to read
    as fact, not as another banner to skim past. */
 .vts-public-collect {
@@ -139,9 +133,6 @@
 .vts-public-collect p { margin: 0 0 8px; }
 .vts-public-collect p:last-child { margin-bottom: 0; }
 .vts-public-collect em { color: #EBCB74; font-style: normal; font-weight: 600; }
-.vts-public-early-terms ul { margin: 0; padding-left: 17px; }
-.vts-public-early-terms li { margin-bottom: 4px; }
-.vts-public-early-terms em { color: #eef3ff; font-style: normal; font-weight: 700; }
 .vts-public-auth-card label span { color: #6f84b0; font-weight: 400; text-transform: none; letter-spacing: 0; }
 .vts-public-auth-card textarea {
   width: 100%; background: #091633; border: 1px solid #1c3a7a; border-radius: 8px;

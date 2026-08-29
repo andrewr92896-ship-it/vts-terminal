@@ -17,7 +17,7 @@ export interface PublicNavWorkspace { key:PublicWorkspaceKey;label:string;icon:s
 // Compile-time allowlist derived from portal NAV at 0ca961d6e5a14edb9e629f11f283ee71ec454e70. Prohibited rows are
 // absent rather than hidden; ordering and stable screen keys are retained.
 export const PUBLIC_NAV:readonly PublicNavWorkspace[]=[
- // My Terminal is the personal board. Premium Features, Preferences and Settings
+ // My Terminal is the personal board. What's Included, Preferences and Settings
  // left for the Settings workspace, and Market Data left for Advanced Trading —
  // it is a board of rates a trader reads beside their trades, not a personal row.
  // Every key is unchanged, so in-app links and howto wording still resolve.
@@ -49,7 +49,7 @@ export const PUBLIC_NAV:readonly PublicNavWorkspace[]=[
  // Settings is what YOU can change; Site Help above is what the terminal tells YOU.
  {key:'settings',label:'Settings',icon:'settings',accent:'#93A7C9',group:'Settings',sections:[
   {key:'my_settings',label:'Settings',icon:'settings'},{key:'my_prefs',label:'Preferences',icon:'settings-2'},
-  {key:'my_access',label:'Premium Features',icon:'gem'}]},
+  {key:'my_access',label:"What's Included",icon:'gem'}]},
 ] as const;
 export function publicNavFor(key:PublicWorkspaceKey){return PUBLIC_NAV.find((workspace)=>workspace.key===key)??PUBLIC_NAV[0];}
 export function publicWorkspaceFor(screen:PublicScreenKey){return PUBLIC_NAV.find((workspace)=>workspace.sections.some((section)=>section.key===screen))??PUBLIC_NAV[0];}

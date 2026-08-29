@@ -2,8 +2,12 @@ export interface PatchNote{version:string;date:string;notes:string[]}
 // The public terminal's own version and its historical archive. Separate from the
 // private terminal's `meta/version` (replaced at the build seam) because they are
 // different products on different release trains.
-export const APP_VERSION='Public Candidate V 1.7';
+export const APP_VERSION='Public Candidate V 1.8';
 export const PATCH_NOTES:PatchNote[]=[
+ {version:'Public Candidate V 1.8',date:'August 29, 2026',notes:[
+  'Nothing is offered anywhere in the terminal. The early-access form no longer promises a free membership or months of free access after launch, and neither does the sign-in card or the marketing page — it asks for an address, says what happens to it, and stops.',
+  'Premium Features is now "What\u2019s Included": a plain list of what the terminal does and what it deliberately does not, with no plans, tiers or payments named anywhere.',
+ ]},
  {version:'Public Candidate V 1.7',date:'August 29, 2026',notes:[
   'The early-access form says what happens to the address it asks for: what is kept, that it is used only to tell you when Early Access opens, that it is never sold or shared, and how to have it deleted.',
  ]},

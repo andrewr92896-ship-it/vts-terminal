@@ -59,8 +59,8 @@ export const TERMS:LegalDoc={
   {p:'This is pre-release software. Features may change, break, be added or be withdrawn, and data entered during pre-release may be reset.'},
   {p:'How this will work: the Terms will state that the service is provided without an uptime commitment during pre-release, and will describe the notice given before a change that would lose data.'}]},
  {heading:'Fees',blocks:[
-  {p:'The terminal is free to use during pre-release, and Early Access members have full access to every feature for the whole pre-release period. Some features may be offered on a paid basis after launch. Nothing is charged without a price being shown and accepted first, and no payment details are collected anywhere in this pre-release.'},
-  {p:'How this will work: the Terms will set out any subscription, its price, its renewal and its cancellation before purchase, as the app stores and consumer rules require, and will state clearly what a free account keeps.'}]},
+  {p:'Nothing is sold here. The terminal is in pre-release, there are no plans, tiers or payments anywhere in it, and no payment details are collected. If any part of it is charged for after launch, nothing is charged without a price being shown and accepted first.'},
+  {p:'How this would work: the Terms would set out any subscription, its price, its renewal and its cancellation before purchase, as the app stores and consumer rules require. None of that exists today.'}]},
  {heading:'Disclaimers and limitation of liability',blocks:[
   {note:'The service is provided “as is” and “as available”, without warranties of any kind, to the fullest extent the law allows.'},
   {p:'How this will work: the Terms will exclude implied warranties, cap liability, and exclude indirect and consequential loss — including trading losses — while preserving the rights your local law does not allow to be excluded.'}]},
