@@ -191,7 +191,7 @@ const DEMO_SUGGESTIONS: any[] = [];
 // notes. The screens are the portal's own; all that changes is that the demo
 // answers `canManage: true` and then answers the writes.
 const DEMO_ANNOUNCEMENTS: any[] = [
-  { id: 'demo-ann-1', title: 'Early Access is opening in waves', body: 'We are letting people in a handful at a time so support stays answerable. If you have asked, you are on the list.', author: 'VTS', createdAt: Date.now() - 26 * 3600_000 },
+  { id: 'demo-ann-1', title: 'Beta access is opening in waves', body: 'We are letting people in a handful at a time so support stays answerable. If you have asked, you are on the list.', author: 'VTS', createdAt: Date.now() - 26 * 3600_000 },
   { id: 'demo-ann-2', title: 'Market Data now covers the Treasury curve', body: 'Two-year through thirty-year, with the 2s10s and 3m10y spreads derived from the rows beside them rather than read separately.', author: 'VTS', createdAt: Date.now() - 5 * 86400_000 },
 ];
 const DEMO_PATCH_NOTES: any[] = [

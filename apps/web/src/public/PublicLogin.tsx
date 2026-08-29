@@ -31,13 +31,26 @@ export function PublicLogin({ initialStep = 'login', onVerified, onDemo, onClose
       }
     }catch(reason){setError(reason instanceof Error?reason.message:'Unable to continue.')}finally{setBusy(false)}
   }
-  const title=step==='login'?'Sign in to your terminal':step==='two-factor'?'Check your email':step==='recovery'?'Recover your account':step==='early-access'?'Request early access':'Change your temporary password';
+  const title=step==='login'?'Sign in to your terminal':step==='two-factor'?'Check your email':step==='recovery'?'Recover your account':step==='early-access'?'Request beta access':'Change your temporary password';
   const description=step==='login'?'Use your public VTS account email and password.':step==='two-factor'?`Enter the six-digit code sent to ${sentTo}.`:step==='recovery'?'Enter your public account email. The response is the same whether or not an account exists.':step==='early-access'?'Tell us where to reach you. Invitations go out in batches.':'Choose a new password before continuing.';
   return <main className="vts-public-auth"><section className="vts-public-auth-brand"><img className="vts-public-wordmark" src="/brand/vitalis-wordmark.png" alt="Vitalis Trading Systems"/><div><p style={{fontFamily:C.mono,color:C.gold,fontSize:10,letterSpacing:'1.7px'}}>VTS PUBLIC TERMINAL</p><h1>Your market workbench.<br/><em>Focused and personal.</em></h1><p>Market information, personal tracking, and study tools in a reduced public terminal with its own account boundary.</p></div><p style={{fontFamily:C.mono,fontSize:10}}>Password · email two-step verification · optional 30-day remembered device</p></section><section className="vts-public-auth-card-wrap"><form className="vts-public-auth-card" onSubmit={submit}><p style={{fontFamily:C.mono,color:C.gold,fontSize:10,letterSpacing:'1.4px'}}>{step==='two-factor'?'STEP 2 OF 2':step==='change-password'?'PASSWORD CHANGE REQUIRED':step==='early-access'?'PRE-RELEASE':'WELCOME'}</p><h2>{title}</h2><p>{description}</p>
   {step==='login'&&<><label>Email address<input name="email" type="email" autoComplete="email" placeholder="you@example.com" required/></label><label>Password<input name="password" type="password" autoComplete="current-password" required/></label></>}
   {step==='two-factor'&&<><label>Verification code<input name="code" inputMode="numeric" pattern="[0-9]{6}" autoComplete="one-time-code" maxLength={6} defaultValue={isDemo()?'246810':''} required/></label><label className="remember"><input name="remember" type="checkbox"/>Remember this device for 30 days</label></>}
   {step==='recovery'&&<label>Email address<input name="email" type="email" autoComplete="email" required/></label>}
-  {/* NOTHING IS OFFERED HERE (owner instruction, 2026-08). This step used to open
+  {/* IT IS "BETA ACCESS", NOT "EARLY ACCESS" (owner decision, 2026-08). The two
+      read the same and are not: games and SaaS sell early access, so the phrase
+      carries a commercial ring — you pay to get in first — and this site is
+      deliberately free of anything that reads as an inducement. "Beta" is a
+      statement about how finished the software is and promises nothing, which is
+      what somebody deciding whether to put their trading records in here needs
+      to know. It matters more than a word choice usually would: the owner is
+      registering as an investment adviser, and an adviser's public pages are
+      held to what they claim. "Pre-release" stays where it is — that describes
+      the SOFTWARE, which is a different statement from the programme's name.
+      The keys are untouched: `early-access` is still the step and the
+      `?screen=` value, because renaming a label is not renaming a key.
+
+      NOTHING IS OFFERED HERE (owner instruction, 2026-08). This step used to open
       with what a pre-release place "includes" — a free Max membership, three months
       free after launch — which is an inducement to hand over an email address, and it
       named tiers the terminal does not sell. It asks for an address and says what
@@ -61,7 +74,7 @@ export function PublicLogin({ initialStep = 'login', onVerified, onDemo, onClose
       <strong>What happens to this</strong>
       <p>
         We keep the email address you type here, and the note if you write one. It is used for one thing:
-        telling you when Early Access opens. It is not sold, not shared with anyone else, and not added
+        telling you when beta access opens. It is not sold, not shared with anyone else, and not added
         to a marketing list.
       </p>
       <p>
@@ -82,7 +95,7 @@ export function PublicLogin({ initialStep = 'login', onVerified, onDemo, onClose
     <button type="button" onClick={()=>{startDemo();onDemo()}}>Explore the demo</button>
   </div>
   <div className="vts-public-early-access">
-    <strong>Request early access</strong>
+    <strong>Request beta access</strong>
     <p>The public terminal is in pre-release and admission is by invitation. Ask to be told when a place opens.</p>
     <button type="button" onClick={()=>{setStep('early-access');setError('');setNotice('')}}>Request an invitation</button>
   </div></>}

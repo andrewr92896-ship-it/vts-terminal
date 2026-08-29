@@ -11,9 +11,16 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 7.70';
+export const APP_VERSION = 'Beta V 7.71';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 7.71',
+    date: '2026-08-29',
+    notes: [
+      'The public terminal asks for beta access rather than early access. Early access is what unfinished software is sold as; beta states what it is and promises nothing, which is the right footing for pages an investment adviser is associated with. "Pre-release" stays where it describes the software itself. The private terminal is unchanged.',
+    ],
+  },
   {
     version: 'Beta V 7.70',
     date: '2026-08-29',
