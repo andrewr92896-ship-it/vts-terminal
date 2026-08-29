@@ -11,9 +11,16 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 7.68';
+export const APP_VERSION = 'Beta V 7.69';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 7.69',
+    date: '2026-08-29',
+    notes: [
+      'The early-access form now says what happens to the address it asks for \u2014 what is kept, that it is used only to tell you when Early Access opens, that it is never sold or shared, and how to have it deleted. It stands on its own rather than pointing at the pre-release Privacy Policy, which says of itself that it is not the operative document.',
+    ],
+  },
   {
     version: 'Beta V 7.68',
     date: '2026-08-29',

@@ -28,7 +28,12 @@ const ALLOWED_PORTAL_IMPORTS=[
   /^\.\/((Public(App|ClockTile|LiveWall|Login|Runtime|Sidebar|TopBar|Screens|AccountPages)|publicNav))$/,
   /^\.\.\/demo\/demo(Store|Seed)$/,
   /^\.\/demo(Seed|Store|Questions)$/,
-  /^\.\.\/(api\/client|auth\/AuthContext|theme\/(tokens|themes))$/,
+  // `legal/content` is one of the ADAPTER SEAMS — the public build replaces it
+  // with publicLegal.ts, so importing it here gets the public company details
+  // and never the portal's. It is allowed so the support address has ONE home:
+  // the sign-in card's data-collection notice names it, and a second hardcoded
+  // copy is a copy that drifts the day the address changes.
+  /^\.\.\/(api\/client|auth\/AuthContext|theme\/(tokens|themes)|legal\/content)$/,
   /^\.\.\/workspaces\/(trading\/(MarketData|TradeLog|FundedScreen|DeletedTrades|TradingTodo|MarketNews|notesFormat)|news\/GeneralNews|studies\/(StudyCreation|StudyLibrary|StudyGameHub|FlashcardsHub|StudyGuides)|help\/(HelpScreens|LegalScreens)|myportal\/(Preferences|NetWorth)|finances\/Budget|investments)$/,
 
 ];

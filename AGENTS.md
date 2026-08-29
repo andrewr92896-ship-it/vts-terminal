@@ -403,6 +403,27 @@ private terminal changed.
   terminal's own rules forbid, and a placeholder says "preview slot" rather than
   "unconfirmed" — the latter would imply we looked and could not tell.
 
+### The early-access form says what happens to the address
+
+The Privacy Policy on the public terminal is a pre-release SUMMARY and opens by
+disclaiming itself — honest about a document nobody has written yet, and no use
+whatever to somebody deciding whether to type their email in. But the form takes
+real personal data from a real person and keeps a row for it forever.
+
+So the binding statement lives **at the point of collection**
+(`.vts-public-collect` in `PublicLogin.tsx`): what is kept, that it is used only
+to say when Early Access opens, that it is never sold or shared, and how to have
+it deleted. It is written to stand on its own whatever the summary says about
+itself, and the live-account suite asserts it is on screen — a notice that can be
+quietly dropped is not a commitment.
+
+Styled slate rather than gold or amber on purpose: the blocks either side of it
+are an offer and a warning, and this is neither.
+
+`legal/content` is imported for the support address rather than hardcoding it, so
+there is one home for it; that is why the module is on the public import
+allowlist, and the build seam swaps it for `publicLegal.ts` as usual.
+
 ### The screenshot reader shows a worked EXAMPLE (`ScreenshotExample.tsx`)
 
 The import panel asks somebody to hand over a picture of their trade history

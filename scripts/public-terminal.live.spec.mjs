@@ -254,6 +254,18 @@ test('a visitor with no account can ask for early access', async ({ browser }) =
   page.on('pageerror', (error) => errors.push(String(error)));
 
   await page.goto(`${base}/?screen=early-access`, { waitUntil: 'networkidle' });
+
+  // WHAT HAPPENS TO THE ADDRESS IS SAID BEFORE IT IS ASKED FOR, on the form
+  // itself. The Privacy Policy here is a pre-release summary that disclaims
+  // itself in its own banner, which is honest and no use at all to somebody
+  // deciding whether to type their email in — so the binding statement lives at
+  // the point of collection, and it is asserted here because a notice that can
+  // be quietly dropped is not a commitment.
+  const card = page.locator('.vts-public-auth-card');
+  await expect(card).toContainText('not sold, not shared');
+  await expect(card).toContainText(/delete it at any time/i);
+  await expect(card).toContainText('support@vitalistradingsystems.com');
+
   await page.getByPlaceholder('you@example.com').fill(`visitor-${Date.now()}@example.com`);
   await page.getByRole('button', { name: 'Send request' }).click();
 
