@@ -247,7 +247,7 @@ test('the demo can post an announcement and publish a patch note', async ({ page
     await page.goto('about:blank');
     await page.goto(`${base}/?demo=1&device=desktop#hp_news`, { waitUntil: 'networkidle' });
     await page.getByPlaceholder('Title').fill('Doors open Monday');
-    await page.getByPlaceholder('Message').fill('A first wave of Early Access invitations goes out.');
+    await page.getByPlaceholder('Message').fill('A first wave of beta invitations goes out.');
     await page.getByRole('button', { name: 'Post', exact: true }).click();
     await expect(page.getByText('Doors open Monday')).toBeVisible();
 

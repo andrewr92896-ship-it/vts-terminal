@@ -7,7 +7,7 @@
 // launched creates obligations against a product that is still changing, so the owner
 // does not want the operative text out yet. What is published instead is, for every
 // subsection the real documents will carry, a plain line saying HOW IT WILL WORK. That
-// keeps the pages useful to a visitor deciding whether to ask for Early Access, and it
+// keeps the pages useful to a visitor deciding whether to ask for beta access, and it
 // keeps the pre-release honest: nothing here claims to be the binding agreement.
 //
 // LEGAL_STATUS is the banner the screens draw above all three documents. It is what
@@ -39,7 +39,7 @@ export const TERMS:LegalDoc={
   {note:'Trading foreign exchange, derivatives, crypto-assets and securities carries a high level of risk and is not suitable for everybody. You can lose more than you deposit. Past performance does not indicate future results.'},
   {p:'How this will work: the Terms will require you to acknowledge this risk statement before the account is usable, and it will remain reachable from every screen that displays a result.'}]},
  {heading:'Eligibility and your account',blocks:[
-  {p:'Accounts are for individuals of legal age in their jurisdiction, used personally, and are not to be shared. Access during pre-release is by Early Access invitation only.'},
+  {p:'Accounts are for individuals of legal age in their jurisdiction, used personally, and are not to be shared. Access during pre-release is by beta invitation only.'},
   {p:'How this will work: the Terms will set the minimum age, require accurate registration details, make you responsible for keeping your credentials secure, and require you to tell us promptly about unauthorised use.'}]},
  {heading:'Your records and your content',blocks:[
   {p:'Everything you enter — trades, notes, budgets, holdings, study material — stays yours. We do not sell it, and we do not use it to make recommendations to other users.'},
