@@ -11,9 +11,17 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 7.67';
+export const APP_VERSION = 'Beta V 7.68';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 7.68',
+    date: '2026-08-29',
+    notes: [
+      'The public Live Wall can size its own workspace, the same way the private board does \u2014 unlock the frame with the pencil, then drag a side or step the width. Wider means more room, not thinner tiles.',
+      'The watchlist on the default board shows every symbol on its own row instead of a scrolling tape squeezed into a narrow tile, where it was clipping its own quotes.',
+    ],
+  },
   {
     version: 'Beta V 7.67',
     date: '2026-08-28',

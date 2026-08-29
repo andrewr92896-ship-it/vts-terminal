@@ -295,6 +295,47 @@ flushed on unmount — a drag fires a layout change per frame, and leaving
 mid-arrangement is when the write matters most. A phone renders one column and
 never writes that back, the same rule the private board follows.
 
+### The public board's WORKSPACE is sizable, and it is the private setup
+
+Ported from `ChartBoard.tsx` rather than re-invented (owner instruction,
+2026-08): the constants, the clamps and the lock-before-you-size behaviour are
+the same, because each of those rules cost a shipped bug to arrive at.
+
+- **A column is a fixed slice of width, not a fraction of a fixed board.** Twelve
+  columns is `baseWidth`, so eighteen asks the screen for half again as much
+  room — the dotted box GROWS and the tiles keep their size. The private board
+  shipped the opposite once: columns added *inside* a fixed width, so every extra
+  column made all the others thinner and the whole board shrank. The browser test
+  asserts the tiles' width holds while the box grows, and was proved failing
+  against exactly that mistake.
+- **`availWidth` is measured OUTSIDE the capped wall.** A board can never report
+  space it is not allowed to occupy, so measuring inside the cap would make the
+  ceiling the cap itself and the workspace could never pass twelve columns.
+- **The workspace is LOCKED even in edit mode**; the pencil on the frame's corner
+  is the only way in, and while it is unlocked the tiles freeze (`ws-sizing`).
+  Escape locks the workspace before it leaves edit mode.
+- **Growing the left inserts columns and shifts every tile right; shrinking only
+  ever removes EMPTY columns**, clamped against the geometry recorded at
+  pointer-down so a burst of moves cannot double-apply.
+- **Phones never reach it** — the board flattens to one column and returns before
+  any of this renders.
+- The width is saved with the tiles: the stored wall is `{cols,tiles}`. A bare
+  array from before the setting existed reads as twelve columns, which is the
+  canvas every board was built on.
+
+### The watchlist tile has TWO widgets, and the tile's SHAPE picks one
+
+`scroll` is TradingView's ticker tape — a wide, short strip. `static` is the
+market-quotes list, every symbol visible at once, one per row. The default board
+had the tape in a tall narrow tile, where it clipped its own quotes at both edges
+and scrolled the rest out of sight.
+
+So the desktop board's watchlist is **static** and the stacked board's — full
+width and short — is **the tape**, and `PUBLIC_TILES` carries the mode as a tile
+default so a freshly added one lands correctly too. Asserted on the CONFIG the
+tile hands the widget: TradingView's script does not load in CI at all, so a test
+waiting for their iframe would prove nothing either way.
+
 ### The demo asks which device it is on, and there are TWO default boards
 
 Owner instruction, 2026-08. Before the demo draws the terminal it asks one

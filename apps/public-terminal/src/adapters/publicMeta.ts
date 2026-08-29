@@ -2,8 +2,12 @@ export interface PatchNote{version:string;date:string;notes:string[]}
 // The public terminal's own version and its historical archive. Separate from the
 // private terminal's `meta/version` (replaced at the build seam) because they are
 // different products on different release trains.
-export const APP_VERSION='Public Candidate V 1.5';
+export const APP_VERSION='Public Candidate V 1.6';
 export const PATCH_NOTES:PatchNote[]=[
+ {version:'Public Candidate V 1.6',date:'August 29, 2026',notes:[
+  'The Live Wall can size its own workspace: unlock the frame with the pencil on its corner, then drag a side or step the width. Wider means more room rather than thinner tiles, and it stops before the page has to scroll sideways.',
+  'The watchlist shows every symbol on its own row instead of a scrolling tape squeezed into a narrow tile, where it was clipping its own quotes.',
+ ]},
  {version:'Public Candidate V 1.5',date:'August 28, 2026',notes:[
   'The demo asks whether you are on a desktop or a phone before it opens, and lays the Live Wall out to match \u2014 side by side, or one tile per row to scroll. Both are available from the wall at any time.',
   'The top bar is cleaned up on a phone: one row, the section you are on, and the time.',

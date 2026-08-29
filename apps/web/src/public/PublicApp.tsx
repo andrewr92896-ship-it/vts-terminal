@@ -22,7 +22,7 @@ const allowed=new Set(PUBLIC_NAV.flatMap((workspace)=>workspace.sections.map((se
 // WHAT A DEVICE ANSWER MEANS, in one place, because it is given two ways — the
 // card at the door, and `?device=` in the URL. Two copies of "mobile means the
 // stacked board and a closed sidebar" is two answers that drift.
-const deviceLayout=(device:DemoDevice)=>JSON.stringify(presetTiles(device==='mobile'?'stacked':'desktop'));
+const deviceLayout=(device:DemoDevice)=>JSON.stringify({cols:12,tiles:presetTiles(device==='mobile'?'stacked':'desktop')});
 
 // `?device=desktop|mobile` pre-answers the question, the same way `?sidebar=`
 // already pre-answers the rail — so a link can open straight into a layout, and

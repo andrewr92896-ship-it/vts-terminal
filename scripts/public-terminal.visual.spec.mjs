@@ -262,6 +262,96 @@ test('the phone drawer opens with labels, not a column of icons', async ({ page 
 // and the answer picks one of the two default board layouts. Every other test
 // here answers it in the URL (`?device=desktop`) so it can reach a screen; this
 // one goes through the door, which is the only way to know the door works.
+// The workspace resizer, ported from the private board. The assertion that
+// matters is NOT that a number goes up — it is that the BOX grows while the
+// TILES keep their size. The private board shipped the other way round once:
+// columns were added inside a fixed width, so every extra column made all the
+// others thinner and the whole board shrank, which is the opposite of what
+// widening is for.
+test('the workspace can be resized, and widening grows the box rather than thinning the tiles', async ({ page }) => {
+  const errors = [];
+  const record = (error) => errors.push(String(error));
+  page.on('pageerror', record);
+  try {
+    await page.setViewportSize({ width: 1920, height: 1000 });
+    await page.goto('about:blank');
+    await page.goto(`${base}/?demo=1&device=desktop#live`, { waitUntil: 'networkidle' });
+
+    const grid = page.locator('.react-grid-layout').first();
+    const gridWidth = async () => Math.round((await grid.boundingBox()).width);
+    const firstTileWidth = async () => Math.round((await page.locator('.wall-cell').first().boundingBox()).width);
+
+    await page.getByRole('button', { name: 'Edit layout' }).click();
+    // LOCKED even in edit mode: the frame is drawn, and the only way to size it
+    // is the pencil. A drag meant for a tile must never move the canvas.
+    await expect(page.getByRole('button', { name: 'Add a column' })).toHaveCount(0);
+
+    await page.getByRole('button', { name: 'Resize the workspace' }).click();
+    // While the workspace is unlocked the tiles freeze — the mirror of the
+    // workspace being locked while tiles are arranged.
+    await expect(page.locator('.react-grid-item').first()).toHaveCSS('pointer-events', 'none');
+
+    // BASELINE TAKEN AFTER UNLOCKING, deliberately. Unlocking pulls the board in
+    // by a 44px gutter each side so the frame's handles are reachable, which
+    // narrows the columns on its own. Measuring before it would fold that into
+    // the comparison and test two things at once; the property under test is
+    // only what happens when a COLUMN IS ADDED.
+    const beforeGrid = await gridWidth();
+    const beforeTile = await firstTileWidth();
+
+    const plus = page.getByRole('button', { name: 'Add a column' });
+    let grew = 0;
+    while (!(await plus.isDisabled()) && grew < 40) { await plus.click(); grew += 1; }
+    expect(grew, 'the workspace could not grow at all on a 1920px screen').toBeGreaterThan(0);
+
+    expect(await gridWidth(), 'the box did not grow').toBeGreaterThan(beforeGrid);
+    // The tiles keep their size. A column is a fixed slice of width, so adding
+    // three of them must not make the existing ones thinner — this is the whole
+    // point of the feature and the half that was wrong the first time.
+    expect(Math.abs((await firstTileWidth()) - beforeTile), 'the tiles were resized by adding columns').toBeLessThan(12);
+    // And it stops before anything has to scroll sideways.
+    expect(await page.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth)).toBe(false);
+
+    const shrunk = await gridWidth();
+    await page.getByRole('button', { name: 'Remove a column' }).click();
+    expect(await gridWidth(), 'removing a column did not narrow the box').toBeLessThan(shrunk);
+
+    // Escape locks the workspace FIRST and stays in edit mode, so the two states
+    // unwind in the order they were entered.
+    await page.keyboard.press('Escape');
+    await expect(page.getByRole('button', { name: 'Add a column' })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Done' })).toBeVisible();
+  } finally {
+    page.off('pageerror', record);
+  }
+  expect(errors, 'resizing the workspace threw').toEqual([]);
+});
+
+// The watchlist has two widgets behind it and the right one depends on the
+// tile's SHAPE. The default board had the scrolling tape in a tall narrow tile,
+// where it clipped its own quotes at both edges. Asserted on the config the tile
+// hands the widget, because TradingView's script does not load in CI at all —
+// and a test that waits for their iframe would prove nothing here either way.
+test('the watchlist uses the widget that fits the tile it is in', async ({ page }) => {
+  const configs = async () =>
+    page.evaluate(() =>
+      [...document.querySelectorAll('.tradingview-widget-container script')]
+        .map((s) => s.textContent ?? '')
+        .filter((t) => t.includes('symbolsGroups') || t.includes('proName')),
+    );
+
+  await page.setViewportSize({ width: 1600, height: 1000 });
+  await page.goto('about:blank');
+  await page.goto(`${base}/?demo=1&device=desktop#live`, { waitUntil: 'networkidle' });
+  // Tall and narrow: the STATIC quote list, which shows every symbol at once.
+  expect((await configs()).some((c) => c.includes('symbolsGroups')), 'the desktop watchlist is not the static list').toBe(true);
+
+  await page.goto('about:blank');
+  await page.goto(`${base}/?demo=1&device=mobile#live`, { waitUntil: 'networkidle' });
+  // Full width and short: the scrolling tape, which is the strip it was built for.
+  expect((await configs()).some((c) => c.includes('proName')), 'the stacked watchlist is not the tape').toBe(true);
+});
+
 test('the demo asks which device it is on, and the answer picks the layout', async ({ page }) => {
   const errors = [];
   const record = (error) => errors.push(String(error));
