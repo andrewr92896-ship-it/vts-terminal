@@ -41,6 +41,11 @@ export class PostgresPublicStore implements PublicStore {
   async consumeRateLimit(bucket:string,key:string,limit:number,windowMs:number):Promise<RateLimitResult>{const r=await this.pool.query(`insert into public_rate_limits(bucket,key_hash,window_started,count) values($1,$2,now(),1) on conflict(bucket,key_hash) do update set window_started=case when public_rate_limits.window_started < now()-($3::text||' milliseconds')::interval then now() else public_rate_limits.window_started end,count=case when public_rate_limits.window_started < now()-($3::text||' milliseconds')::interval then 1 else public_rate_limits.count+1 end returning count,greatest(1,ceil(extract(epoch from (window_started+($3::text||' milliseconds')::interval-now()))))::int as retry`,[bucket,key,windowMs]);return {allowed:Number(r.rows[0].count)<=limit,retryAfterSeconds:Number(r.rows[0].retry)}}
   async getLayout(id:string){const r=await this.pool.query('select layout from public_market_layouts where account_id=$1',[id]);return r.rows[0]?.layout}
   async saveLayout(id:string,layout:unknown){await this.pool.query('insert into public_market_layouts(account_id,layout) values($1,$2) on conflict(account_id) do update set layout=excluded.layout,updated_at=now()',[id,layout])}
+  // An account that has never saved a preference has no row, and that reads back
+  // as an empty object rather than as undefined: every caller wants "what is set",
+  // and a missing row means nothing is.
+  async getPreferences(id:string){const r=await this.pool.query('select preferences from public_preferences where account_id=$1',[id]);return (r.rows[0]?.preferences??{}) as Record<string,unknown>}
+  async savePreferences(id:string,preferences:Record<string,unknown>){await this.pool.query('insert into public_preferences(account_id,preferences) values($1,$2) on conflict(account_id) do update set preferences=excluded.preferences,updated_at=now()',[id,JSON.stringify(preferences)])}
   async recordEarlyAccessRequest(email:string,note:string|null){await this.pool.query(`insert into public_early_access_requests(email,note) values($1,$2) on conflict(lower(email)) do update set note=coalesce(excluded.note,public_early_access_requests.note),status='new',handled_at=null,created_at=now()`,[email,note])}
   // ---- budget ---------------------------------------------------------------
   //

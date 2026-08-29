@@ -1,0 +1,17 @@
+-- My Terminal becomes a customizable workspace (owner instruction, 2026-08):
+-- sections from anywhere else in the terminal can be pinned onto it, and its own
+-- rows can be taken off.
+--
+-- WHAT IS STORED IS A DIFF, NOT A LIST, and that is the whole point of the
+-- column. The Sidebar Layout editor removed in 2026-08 stored a complete
+-- ordering, so a code change to the nav silently lost to the stored one and
+-- looked like it had not deployed. Here `NAV` still decides the order of every
+-- workspace and of every section inside one; the only thing recorded is what
+-- this account CHANGED — `{"add":[...],"hide":[...]}` — so a section added to
+-- the nav in a later deploy appears for everybody, customized or not.
+--
+-- Deliberately not validated here, for the same reason `home_workspace` is not:
+-- what an account can reach depends on roles, opt-ins and membership, all of
+-- which move after this is written, so the check happens on every read. NULL
+-- means "never customized", which is the default board.
+ALTER TABLE `users` ADD `my_terminal_sections` text;

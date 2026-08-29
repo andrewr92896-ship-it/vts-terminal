@@ -557,6 +557,29 @@ export async function handleRequest(req:IncomingMessage,res:ServerResponse,depen
     if(method==='GET'&&path==='/public/v1/market-news'){await authenticatedAccount(req,authService);return json(res,200,await dependencies.market.marketNews())}
     if(method==='GET'&&path==='/public/v1/market-data/layout'){const id=await authenticatedAccount(req,authService);return json(res,200,{layout:await dependencies.store.getLayout(id)??{pinned:[],hidden:[],custom:[]}})}
     if(method==='PUT'&&path==='/public/v1/market-data/layout'){const id=await authenticatedAccount(req,authService);const body=await readBody(req);await dependencies.store.saveLayout(id,body);return json(res,200,{layout:body})}
+    // ---- display preferences -------------------------------------------------
+    //
+    // The account's own display settings — the clock it reads times on, whether
+    // it appears on the study leaderboards, the screen the terminal opens on,
+    // and My Terminal's customization. Resolved from the SESSION like every
+    // other route here; there is no "whose" parameter and no way to ask for
+    // anybody else's.
+    //
+    // A PATCH rather than a PUT, and the server MERGES: the public terminal is a
+    // cached bundle, so an older one saves the subset of settings it knows about
+    // — and that must never blank a setting it has never heard of. Same rule the
+    // private terminal's trade-event preferences follow.
+    if(method==='GET'&&path==='/public/v1/preferences'){const id=await authenticatedAccount(req,authService);return json(res,200,{preferences:await dependencies.store.getPreferences(id)})}
+    if(method==='PATCH'&&path==='/public/v1/preferences'){
+      const id=await authenticatedAccount(req,authService);const body=await readBody(req);
+      const patch=(body&&typeof body==='object'&&!Array.isArray(body))?body as Record<string,unknown>:{};
+      const merged={...await dependencies.store.getPreferences(id),...patch};
+      // A key set to null is CLEARED rather than stored as a null, so "never
+      // chosen" and "chosen and then cleared" are one state with one meaning.
+      for(const [key,value] of Object.entries(merged)) if(value===null) delete merged[key];
+      await dependencies.store.savePreferences(id,merged);
+      return json(res,200,{preferences:merged});
+    }
     // ---- budget -------------------------------------------------------------
     //
     // Every route resolves the account from the SESSION and passes that id to

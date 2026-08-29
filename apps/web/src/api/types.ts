@@ -112,6 +112,11 @@ export interface User {
   // the choice was stored, so an unreachable home falls back.
   homeWorkspace: string | null;
   homeScreen: string | null;
+  // My Terminal's customization, as raw JSON — `{"add":[...],"hide":[...]}`, a
+  // diff against theme/nav.ts rather than a section list, so a nav change in a
+  // later deploy still reaches a customized account. Null = never customized.
+  // Parsed by theme/myTerminal.ts, which is also where the rules live.
+  myTerminalSections: string | null;
   // The trading team the user belongs to (or null). Scopes the Studies
   // leaderboards to teammates; the Trading workspace itself stays shared.
   teamId: string | null;
@@ -1671,6 +1676,14 @@ export interface StreamChannel {
   // site can show it. The tile says so and links out instead of rendering
   // YouTube's bare "Video unavailable", which looks like a fault and is not one.
   embedBlocked?: boolean;
+  // NO PLAYER IS MOUNTED FOR THIS CHANNEL — draw the slot and say what would be
+  // in it. Set only by the public terminal, which has no YouTube key and does
+  // not embed a third party's video into a showcase; the private API never sets
+  // it, so nothing on the private terminal changes. It is deliberately a fact
+  // about the CHANNEL rather than a mode read from somewhere else, so the two
+  // render sites (the Market News wall and the Live Wall's stream tile) reach
+  // the same answer from the same field.
+  placeholder?: boolean;
   // True once the server has actually read this channel's live state. Absent
   // means "not looked at yet", which is why the tile still falls back to the
   // optimistic embed rather than claiming the channel is dark.

@@ -154,6 +154,20 @@ const profileSchema = z
     // to the default, which is two nulls.
     homeWorkspace: z.string().trim().max(40).nullable().optional(),
     homeScreen: z.string().trim().max(40).nullable().optional(),
+    // My Terminal's customization: which of its own rows are off, and which
+    // sections from elsewhere are pinned on. Opaque section KEYS, for the same
+    // reason the home screen above is — the server has no business knowing the
+    // client's nav shape, and what this account can reach is resolved at render
+    // anyway. Null clears it back to the default board. Bounded so a hand-rolled
+    // request cannot store an unbounded list, and de-duplicated so a repeated
+    // key cannot make one either.
+    myTerminalSections: z
+      .object({
+        add: z.array(z.string().trim().min(1).max(40)).max(60),
+        hide: z.array(z.string().trim().min(1).max(40)).max(60),
+      })
+      .nullable()
+      .optional(),
   })
   .refine(
     (v) =>
@@ -164,6 +178,7 @@ const profileSchema = z
       v.displayTimezone != null ||
       v.homeWorkspace !== undefined ||
       v.homeScreen !== undefined ||
+      v.myTerminalSections !== undefined ||
       v.hideFromLeaderboards != null,
     { message: 'Nothing to update' },
   );
@@ -528,6 +543,7 @@ export async function authRoutes(app: FastifyInstance, options: AuthRouteOptions
       displayTimezone?: string;
       homeWorkspace?: string | null;
       homeScreen?: string | null;
+      myTerminalSections?: string | null;
       hideFromLeaderboards?: boolean;
       updatedAt: Date;
     } = {
@@ -551,6 +567,17 @@ export async function authRoutes(app: FastifyInstance, options: AuthRouteOptions
     }
     if (parsed.data.homeScreen !== undefined) {
       patch.homeScreen = parsed.data.homeScreen || null;
+    }
+
+    // Stored as the JSON the client sent, de-duplicated. A default board is
+    // stored as NULL rather than as two empty arrays, so "never customized" and
+    // "customized back to the default" are the same row — there is nothing a
+    // second state could mean.
+    if (parsed.data.myTerminalSections !== undefined) {
+      const value = parsed.data.myTerminalSections;
+      const add = value ? [...new Set(value.add)] : [];
+      const hide = value ? [...new Set(value.hide)] : [];
+      patch.myTerminalSections = add.length || hide.length ? JSON.stringify({ add, hide }) : null;
     }
 
     if (parsed.data.username != null) {

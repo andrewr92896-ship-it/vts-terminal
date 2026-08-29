@@ -11,9 +11,71 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 7.63';
+export const APP_VERSION = 'Beta V 7.70';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 7.70',
+    date: '2026-08-29',
+    notes: [
+      'Nothing is offered anywhere on the public terminal or the marketing page. The early-access form, the sign-in card and the landing page no longer promise a free membership or months of free access after launch — the form asks for an address, says what happens to it, and stops.',
+      'The public terminal\u2019s Premium Features screen is now \u201cWhat\u2019s Included\u201d: what it does, what it deliberately does not, and a plain statement that nothing there is sold. The private terminal is unchanged.',
+    ],
+  },
+  {
+    version: 'Beta V 7.69',
+    date: '2026-08-29',
+    notes: [
+      'The early-access form now says what happens to the address it asks for \u2014 what is kept, that it is used only to tell you when Early Access opens, that it is never sold or shared, and how to have it deleted. It stands on its own rather than pointing at the pre-release Privacy Policy, which says of itself that it is not the operative document.',
+    ],
+  },
+  {
+    version: 'Beta V 7.68',
+    date: '2026-08-29',
+    notes: [
+      'The public Live Wall can size its own workspace, the same way the private board does \u2014 unlock the frame with the pencil, then drag a side or step the width. Wider means more room, not thinner tiles.',
+      'The watchlist on the default board shows every symbol on its own row instead of a scrolling tape squeezed into a narrow tile, where it was clipping its own quotes.',
+    ],
+  },
+  {
+    version: 'Beta V 7.67',
+    date: '2026-08-28',
+    notes: [
+      'The demo now asks whether you are on a desktop or a phone before it opens, and lays the Live Wall out to match. Both layouts are available from the wall at any time.',
+      'The public terminal\u2019s top bar is cleaned up on a phone: one row, the section you are on, and the time \u2014 no wrapped breadcrumb and no three-line clock.',
+      'Removed the notifications bell from the public terminal. It had never done anything, and there are no notifications on that side to open.',
+      'The account circle in the public top bar opens Settings. It was labelled that and did nothing.',
+    ],
+  },
+  {
+    version: 'Beta V 7.66',
+    date: '2026-08-28',
+    notes: [
+      'Fixed on the public terminal: on a phone, tapping a workspace closed the navigation drawer, so you had to reopen it to pick the section you were going for. It stays open now and closes when you pick a section.',
+    ],
+  },
+  {
+    version: 'Beta V 7.65',
+    date: '2026-08-28',
+    notes: [
+      'Fixed on the public terminal: the sidebar opened on a phone as a column of unlabelled icons. It is a slide-over drawer at that width, and a drawer has to carry its labels.',
+      'Fixed: the hamburger button on a phone was drawing a blank square — the icon it asked for did not exist.',
+    ],
+  },
+  {
+    version: 'Beta V 7.64',
+    date: '2026-08-28',
+    notes: [
+      'Settings is its own workspace now, with Preferences under it and Premium Features beside them. My Terminal keeps the rows that are yours.',
+      'My Terminal is customizable: put any section of the terminal on it, and take off the ones you do not use. A section you add is a second way in — it stays in its own workspace too.',
+      'Public demo: the Live Wall is a real board — add, move, resize and remove tiles.',
+      'Public demo: Premium Features no longer lists tiers. Early Access members have full access during pre-release.',
+      'Public demo: Terms, Privacy and Rules & Conduct now say plainly that they are pre-release summaries, and each subsection says how the finished document will work.',
+      'Public demo: announcements and patch notes can be posted from the screens they appear on, suggestions send and say what happens to them, and the How-to guides were rewritten to say what to do rather than what a screen is.',
+      'Fixed: picking a time zone or opting off the leaderboards on the public terminal did nothing — there was no route behind it.',
+      'Fixed: five private section names were readable in the public JavaScript, pulled in by a shared module.',
+    ],
+  },
   {
     version: 'Beta V 7.63',
     date: '2026-08-28',

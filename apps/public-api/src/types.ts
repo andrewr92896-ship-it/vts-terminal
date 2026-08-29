@@ -119,6 +119,10 @@ export interface PublicStore {
   consumeRateLimit(bucket:string,keyHash:string,limit:number,windowMs:number):Promise<RateLimitResult>;
   getLayout(accountId:string):Promise<unknown|undefined>;
   saveLayout(accountId:string,layout:unknown):Promise<void>;
+  // The account's own display settings, as one blob (migration 0013). Read and
+  // written together by one screen; never queried across accounts.
+  getPreferences(accountId:string):Promise<Record<string,unknown>>;
+  savePreferences(accountId:string,preferences:Record<string,unknown>):Promise<void>;
   recordEarlyAccessRequest(email:string,note:string|null):Promise<void>;
   // Budget. Every one of these takes the account id and filters on it — there is
   // no "whose" parameter anywhere, and no version of this feature where somebody

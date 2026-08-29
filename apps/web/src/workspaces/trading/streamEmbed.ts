@@ -30,6 +30,17 @@ export function liveKnown(c: StreamChannel): boolean {
   return c.liveChecked === true;
 }
 
+// What a placeholder slot says. One string, exported, because the Market News
+// wall and the Live Wall's stream tile both draw it and two copies of a sentence
+// is two sentences that drift.
+export const STREAM_PLACEHOLDER_TEXT = 'Live stream plays here';
+
+// A channel with no player behind it. Checked BEFORE everything else in
+// `shouldPlay`, so no code path can mount an embed for one.
+export function isPlaceholder(c: StreamChannel): boolean {
+  return c.placeholder === true;
+}
+
 // Whether to mount the player at all.
 //
 // The embedded player is the one authority on whether a stream is on: it plays
@@ -41,6 +52,7 @@ export function liveKnown(c: StreamChannel): boolean {
 // regardless: letting the guess win once replaced a visibly-broadcasting 24/7
 // channel with "not live right now".
 export function shouldPlay(c: StreamChannel): boolean {
+  if (isPlaceholder(c)) return false;
   if (c.embedBlocked) return false;
   if (c.alwaysOn) return true;
   if (!liveKnown(c)) return true;

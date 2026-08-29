@@ -26,6 +26,18 @@ The rule that matters is unchanged: **write every instruction here**, not in
 `CLAUDE.md`. Two instruction files drift within a month, and whichever one is
 stale then gets followed confidently.
 
+## THERE IS AN OPEN WORK ORDER FOR THE PUBLIC DEMO
+
+**`docs/implementation/demo-work-order.md` is the owner's own brief, transcribed
+with a checkbox per item, and it is not finished.** It was written down rather
+than left in a chat because it is long and a context window is not a place to
+keep instructions. Read it before doing any work on the public demo, and tick an
+item only when the change is built and verified.
+
+It also carries an explicit instruction about how to FINISH: when every item is
+done, say so in capitals and stop, and ask the owner to type an acknowledgement
+rather than letting them press continue past it.
+
 ## Before you touch anything: confirm this is the live checkout
 
 The terminal is worked on from **more than one machine**, and the single most
@@ -256,6 +268,190 @@ both the demo and real accounts.
 leaves the root dead for every later hash navigation, so one broken screen
 blanks every capture after it. That is not hypothetical: it shipped, and eight
 screens were blank behind a passing test.
+
+### The public Live Wall is a board (`apps/web/src/public/PublicBoard.tsx`)
+
+**Editable exactly as the private one is** (owner instruction, 2026-08): add,
+move, resize and remove tiles. It was five fixed panels.
+
+**IT IS NOT `ChartBoard.tsx`, AND THAT IS A BUNDLE DECISION.** That component
+maps every tile kind there is through `tiles/index.tsx`, so importing it would
+pull the order ticket, the desk tiles and the broker panels into a bundle served
+to the public. What IS shared is everything that decides how a board looks and
+behaves while it is being arranged — `BOARD_GRID_CSS` (extracted to
+`workspaces/trading/boardGridCss.ts` for exactly this), the portal's own tile
+components, `useContentWidth` — so this is the portal's board with a shorter list
+of tiles rather than a second board.
+
+**What is absent is absent by not being listed.** `PublicBoard` names the
+fourteen kinds it can draw and imports only `MarketTiles` and `PersonalTiles`;
+the desk tiles, the ticket and the team tiles live in their own files and are
+never imported. There is no render-time filter to get wrong.
+
+**Where the arrangement lives depends on who is looking**: a signed-in account
+keeps it in the preferences blob; the demo keeps it for the visit and says so
+rather than drawing a Save that would do nothing. The write is debounced and
+flushed on unmount — a drag fires a layout change per frame, and leaving
+mid-arrangement is when the write matters most. A phone renders one column and
+never writes that back, the same rule the private board follows.
+
+### The public board's WORKSPACE is sizable, and it is the private setup
+
+Ported from `ChartBoard.tsx` rather than re-invented (owner instruction,
+2026-08): the constants, the clamps and the lock-before-you-size behaviour are
+the same, because each of those rules cost a shipped bug to arrive at.
+
+- **A column is a fixed slice of width, not a fraction of a fixed board.** Twelve
+  columns is `baseWidth`, so eighteen asks the screen for half again as much
+  room — the dotted box GROWS and the tiles keep their size. The private board
+  shipped the opposite once: columns added *inside* a fixed width, so every extra
+  column made all the others thinner and the whole board shrank. The browser test
+  asserts the tiles' width holds while the box grows, and was proved failing
+  against exactly that mistake.
+- **`availWidth` is measured OUTSIDE the capped wall.** A board can never report
+  space it is not allowed to occupy, so measuring inside the cap would make the
+  ceiling the cap itself and the workspace could never pass twelve columns.
+- **The workspace is LOCKED even in edit mode**; the pencil on the frame's corner
+  is the only way in, and while it is unlocked the tiles freeze (`ws-sizing`).
+  Escape locks the workspace before it leaves edit mode.
+- **Growing the left inserts columns and shifts every tile right; shrinking only
+  ever removes EMPTY columns**, clamped against the geometry recorded at
+  pointer-down so a burst of moves cannot double-apply.
+- **Phones never reach it** — the board flattens to one column and returns before
+  any of this renders.
+- The width is saved with the tiles: the stored wall is `{cols,tiles}`. A bare
+  array from before the setting existed reads as twelve columns, which is the
+  canvas every board was built on.
+
+### The watchlist tile has TWO widgets, and the tile's SHAPE picks one
+
+`scroll` is TradingView's ticker tape — a wide, short strip. `static` is the
+market-quotes list, every symbol visible at once, one per row. The default board
+had the tape in a tall narrow tile, where it clipped its own quotes at both edges
+and scrolled the rest out of sight.
+
+So the desktop board's watchlist is **static** and the stacked board's — full
+width and short — is **the tape**, and `PUBLIC_TILES` carries the mode as a tile
+default so a freshly added one lands correctly too. Asserted on the CONFIG the
+tile hands the widget: TradingView's script does not load in CI at all, so a test
+waiting for their iframe would prove nothing either way.
+
+### The demo asks which device it is on, and there are TWO default boards
+
+Owner instruction, 2026-08. Before the demo draws the terminal it asks one
+question — desktop, or phone/tablet — and the answer picks the Live Wall layout
+and whether the sidebar starts open. `PublicDeviceCard`, gated in `PublicApp`.
+
+- **It is a QUESTION, not a measurement.** The viewport only decides which answer
+  is marked as recommended. Somebody on a laptop showing the phone layout is a
+  real thing to want, and that is also why `STACKED_BOARD` is a real
+  **arrangement** — every tile twelve columns wide, one under another — rather
+  than a narrow-screen rendering mode. A mode would only apply below a
+  breakpoint, so the desktop visitor who asked for it would not get it.
+- **It is a GATE, not a modal over the board.** The wall reads its tiles in a
+  state initialiser, so a layout chosen after it mounted would never reach it.
+- **`?device=desktop|mobile` answers it in the URL**, the same way `?sidebar=`
+  already pre-answers the rail — a link opens straight into a layout, and the
+  browser suites reach a screen without clicking through the door. `deviceLayout`
+  is the one place an answer is turned into a board, so the URL and the card
+  cannot mean different things. **A capture suite that forgets it does not fail
+  fast**: `#root` is visible at the door, so the run just spends its budget
+  waiting for a main column that is not there — five minutes instead of twenty
+  seconds, naming nothing. That is why the page-family read is bounded.
+- **Both layouts stay reachable** from the wall's own toolbar (`BOARD_PRESETS`),
+  so the answer is a starting point rather than a setting.
+- **The choice is module state and a real account is never asked.** Leaving is
+  the reset, like everything else the demo holds; an account has a saved board
+  and a saved sidebar, and a question at sign-in that overwrote them would be
+  worse than unhelpful.
+
+### The public top bar sizes itself in the COMPONENT, not in `public.css`
+
+The shell is styled inline, so a rule in the stylesheet loses to the inline
+value. The first phone pass put the bar's padding and its icon-only Help button
+in a media query; neither applied, the row overflowed 390px, and flex compressed
+the Help button to the width of its icon while the account chip hung off the
+right edge. `PublicTopBar` reads `useResponsive` and branches its own styles, at
+the same 768 the stylesheet uses for the drawer. **Only `.vts-clock-date` is left
+in CSS** — the one element with no inline `display` to beat.
+
+What the phone drops is either duplicated a tap away or was never readable in a
+64px bar: the workspace half of the breadcrumb (it wrapped and squeezed the
+SECTION name to an ellipsis, and it is the highlighted row in the drawer), the
+search box, the clock's date line and its seconds, and the profile name.
+
+**Two dead controls were fixed rather than hidden.** The notifications bell had
+no handler and never did — the public terminal delivers no notifications at all,
+so there was nothing for it to open, and it is **removed**. The account chip was
+labelled "Account settings" and also had no handler; there is a settings screen,
+so it now goes there. Both reached the shell the way the Help button does, by
+event, because the bar sits above the router.
+
+### Live streams show the SLOT in the public terminal
+
+`StreamChannel.placeholder` (`api/types.ts`) means **no player is mounted for
+this channel — draw the slot and say what would be in it**. Set only by the
+public terminal, which has no YouTube key and does not embed a third party's
+broadcast into a showcase; the private API never sets it, so nothing on the
+private terminal changed.
+
+- **`streamEmbed.ts` owns it**: `isPlaceholder` is checked first in `shouldPlay`,
+  so no code path can mount an embed for one, and `STREAM_PLACEHOLDER_TEXT`
+  ("Live stream plays here") is one string read by both render sites — the
+  Market News wall (including its mini player) and the Live Wall's stream tile.
+- **Nothing is marked `live`.** A fabricated live reading is the thing the
+  terminal's own rules forbid, and a placeholder says "preview slot" rather than
+  "unconfirmed" — the latter would imply we looked and could not tell.
+
+### The early-access form says what happens to the address
+
+The Privacy Policy on the public terminal is a pre-release SUMMARY and opens by
+disclaiming itself — honest about a document nobody has written yet, and no use
+whatever to somebody deciding whether to type their email in. But the form takes
+real personal data from a real person and keeps a row for it forever.
+
+So the binding statement lives **at the point of collection**
+(`.vts-public-collect` in `PublicLogin.tsx`): what is kept, that it is used only
+to say when Early Access opens, that it is never sold or shared, and how to have
+it deleted. It is written to stand on its own whatever the summary says about
+itself, and the live-account suite asserts it is on screen — a notice that can be
+quietly dropped is not a commitment.
+
+Styled slate rather than gold or amber on purpose: the blocks either side of it
+are an offer and a warning, and this is neither.
+
+`legal/content` is imported for the support address rather than hardcoding it, so
+there is one home for it; that is why the module is on the public import
+allowlist, and the build seam swaps it for `publicLegal.ts` as usual.
+
+### The screenshot reader shows a worked EXAMPLE (`ScreenshotExample.tsx`)
+
+The import panel asks somebody to hand over a picture of their trade history
+before it will say what happens to it. "See an example" answers that first: a
+drawn screenshot, the rows that come out of it, and what lands on the account —
+**running no AI and calling no route on either terminal**. That is what makes it
+usable in the public terminal, where AI fails closed until the provider
+migration, and it is why an import refused with **501 opens it automatically**
+rather than ending on "switched off". The example set is deliberately not
+flattering: a loser, a scratch, and a duplicate shown as skipped rather than
+quietly dropped.
+
+### Admin editing inside the demo, without an Admin workspace
+
+Owner instruction, 2026-08. The public terminal has **no Admin workspace and must
+not gain one** — administration code is absent from the public bundle by
+construction. So what is demonstrated is the administrative ACT, on the very
+screens the notice appears on: post an announcement on Announcements, publish a
+note on Patch notes. The screens are the portal's own.
+
+- Both composers are gated on **`canManage` from the payload**. The private API
+  sends it for announcements (admins) and does not send it at all for patch
+  notes, which are published from Admin ▸ Patch Notes there — so the private
+  Site Help is unchanged. The public API answers **false**: there is no public
+  administrator, and a composer a visitor could post through is one anybody could
+  post through.
+- `publishPatchNote` is therefore **demo-only by construction** and is named in
+  `verify:demo-coverage`'s `DEMO_ONLY` with that reason.
 
 ### What the public terminal does not have
 
@@ -2477,14 +2673,30 @@ workspaces list** (see `theme/nav.ts` order).
   - `npm run verify:investments` checks the portfolio math offline against
     hand-computed fixtures (same spirit as `verify:market-macro`). Run it after
     touching `math.ts` or `limits.ts`.
-- **My Terminal** (emerald) — **the Live Wall LEFT for Advanced Trading** (owner
-  instruction, 2026-08), where it now leads that workspace; Net Worth left for
-  Finances and Market News for News. Every one of those keys still resolves, so
-  in-app links and the `howto` wording are unaffected. What is left stacks
-  Max → Premium → free like every other workspace, and `DEFAULT_SCREEN.myportal`
-  is now **Premium Features** (`my_access`) — memberships and the per-user
-  opt-ins, including the Advanced Trading switch the wall now sits behind — plus
-  one personal roll-up section:
+- **Settings** (slate, key `settings`) — **its own workspace** (owner
+  instruction, 2026-08), holding the three rows that were inside My Terminal:
+  **Settings** (`my_settings`), **Preferences** (`my_prefs`) underneath it as
+  instructed, and **Premium Features** (`my_access`). Every key is unchanged —
+  rename a label, never a key — so `howto.*`, the home-screen picker and every
+  in-app link still resolve. Last in the sidebar, under Site Help.
+  - **The split against Site Help is the thing to keep straight: Settings is
+    what YOU can change; Site Help is what the terminal tells YOU.** So the
+    legal documents, the announcements, the patch notes and the two intake forms
+    all stay in Site Help — none of them is a setting — and nothing that changes
+    the account's behaviour lives there.
+  - **Site Rules (`my_rules`) stayed on My Terminal** rather than moving here. It
+    is the same Rules & Conduct document Site Help carries, surfaced a second
+    time by an owner decision; it is a document, not a setting, and My Terminal
+    is customizable now, so anybody who does not want it can take it off.
+- **My Terminal** (emerald) — **THE ONE CUSTOMIZABLE WORKSPACE** (owner
+  instruction, 2026-08). Sections from anywhere else in the terminal can be
+  pinned onto it and its own rows taken off — see its own section below. The
+  Live Wall left for Advanced Trading, Net Worth for Finances, Market News for
+  News, and Premium Features / Preferences / Settings for the Settings
+  workspace; every one of those keys still resolves, so in-app links and the
+  `howto` wording are unaffected. `DEFAULT_SCREEN.myportal` is **To Do**
+  (`td_trading`) — the one remaining row every account can reach. Plus one
+  personal roll-up section:
   - **Removed: Investment Holdings** (`my_holdings`). Owner decision, 2026-08 —
     the Investments workspace already tracks the portfolio, so a second screen
     saying the same thing was duplication rather than a roll-up. The screen, its
@@ -3849,6 +4061,91 @@ account" rather than hiding them, so the screen reads as the whole picture.
   `Sidebar.tsx`); clicking it opens Premium Features instead of the workspace.
   Keep that — discoverability is the point, and it is where a paid tier would
   surface later.
+
+### My Terminal is customizable (`theme/myTerminal.ts`)
+
+**Sections from anywhere else in the terminal can be pinned onto My Terminal, and
+its own rows taken off** (owner instruction, 2026-08 — "put Closed Trades &
+Metrics on it if you want it there, and take it off again"). Per user, stored on
+the account (`users.my_terminal_sections`, migration `0138`), so the personal
+board follows somebody between their phone and their desk.
+
+**THIS IS NOT A NAV ORDER OVERRIDE, and the stored shape is what makes that
+true.** AGENTS.md already records why the Developer Terminal's Sidebar Layout
+editor was removed and must not come back: it stored a complete ordering
+install-wide, so a code change to the nav silently lost to the stored one and
+looked like it had not deployed. Nothing here can do that:
+
+- `NAV` still decides the order of every workspace and of every section inside
+  one, My Terminal's own rows included.
+- **What is stored is only what the account CHANGED** — `{add:[…],hide:[…]}`,
+  a diff. `add` is section keys pinned from elsewhere, in the order they were
+  added (the only order the user themselves chose); `hide` is My Terminal's own
+  rows taken off.
+- **So a section added to `NAV` in a later deploy APPEARS**, for everybody,
+  customized or not, because nothing stored claims to be the whole list.
+- An empty diff is stored as **NULL**, so "never customized" and "customized
+  back to the default" are one row with one meaning.
+
+**A pin is a SECOND entry point, never a move.** The section keeps its home in
+its own workspace, so taking it off My Terminal can never make it unreachable —
+and that is why two navigation rules exist, neither of which is visible from the
+editor:
+
+- **`selectScreen` must not resolve the pinned key's owning workspace.** It
+  normally does, which is right for an in-app link; on My Terminal it would jump
+  the reader to Advanced Trading the moment they clicked the row they had
+  deliberately put on their own board.
+- **The effect that keeps workspace and screen consistent must accept a pinned
+  row.** It tests `nav.sections`, and a pinned key is not in My Terminal's, so
+  without the exception it bounces straight back off and the pin appears to do
+  nothing.
+
+Both read the same `myTerminalKeys` set Portal computes once, from the same
+function the Sidebar uses, so the three cannot disagree.
+
+**MY TERMINAL MAY NEVER BE EMPTIED** (`canApplyMyTerminal`). A workspace with no
+rows draws a heading over nothing, and the control that emptied it lives under
+that list. The rule is about the RESULT, so it holds however the two lists are
+edited.
+
+**The section filters MIRROR `Sidebar.tsx` exactly** — the Funded opt-in and the
+Trading Teams grant — which is the same rule `homeScreen.ts` follows for the home
+picker: a row hidden in the sidebar must not be offerable here, and a row pinned
+here must not be one the sidebar would refuse to draw. A pin whose section no
+longer exists is **dropped on read**, like the Market Data layout, so a nav
+change never strands a board.
+
+**EVERY FUNCTION TAKES THE NAV IT IS WORKING ON.** The private terminal passes
+`NAV`; the public terminal passes its own compile-time allowlist, which is a
+deliberately narrower list. One set of rules over two navs — a second copy for
+the public shell is how the two come to disagree about what "customized" means.
+`MyTerminalCustomizer` takes `nav` as a **required** prop for the same reason: a
+default would be the private array, and this component ships in the public
+bundle.
+
+**`theme/navGates.ts` EXISTS FOR THE BUNDLE, NOT FOR TIDINESS.**
+`FUNDED_ONLY_SECTIONS` and `TEAM_ONLY_SECTIONS` moved out of `nav.ts` because
+`myTerminal.ts` needs them and importing them from `nav.ts` pulls the **entire
+private `NAV` array** into the public bundle with them. That shipped: "Live
+Trades", "Funded Trades", "Strategy Sessions", "Alert Settings" and "Developer
+Terminal" were all readable in the public JavaScript while no public screen could
+reach any of them. `nav.ts` re-exports both, so every existing importer is
+unchanged, and `verify:public-imports` now denies those labels **as nav labels**
+(`label:"…"`) rather than as loose prose — "Market hours, strategy sessions and
+the Fed schedule stay on Eastern Time" is a real sentence on the Preferences
+screen, and a guard that fails on it is one people widen until it catches
+nothing.
+
+**The public side stores it too** (`public_preferences`, migration `0013`) — one
+jsonb blob per account holding the time zone, the leaderboard opt-out, the home
+screen and this. `PATCH /public/v1/preferences` **merges**, because the public
+terminal is a cached bundle and an older one saves the subset of settings it
+knows about; a key set to null is cleared rather than stored as a null. It rides
+`/auth/session` so the shell has it before it draws anything. That route is also
+what finally made **Preferences work publicly at all**: `Preferences.tsx` reads
+`updateProfile` off `useAuth()` and the public adapter did not provide one, so
+picking a time zone threw, silently, on the one screen whose job is changing it.
 
 ### The Live Wall — one centralized board (`live`)
 

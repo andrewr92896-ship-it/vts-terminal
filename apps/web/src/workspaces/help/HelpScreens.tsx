@@ -134,16 +134,43 @@ export function HelpPatchNotes({ theme }: { theme: Theme }) {
   // Admin-published notes come first (newest releases); the bundled PATCH_NOTES
   // fill in the historical archive for versions that predate the DB store.
   const [published, setPublished] = useState<PatchNoteEntry[] | null>(null);
+  // Whether this reader may publish a note FROM HERE. The private terminal does
+  // not send it — notes are published from Admin ▸ Patch Notes there — so this
+  // stays false and the screen is exactly what it was.
+  const [canManage, setCanManage] = useState(false);
+  const [version, setVersion] = useState('');
+  const [dateLabel, setDateLabel] = useState('');
+  const [lines, setLines] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   useEffect(() => {
     let alive = true;
     api
       .patchNotes()
-      .then((r) => alive && setPublished(r.notes))
+      .then((r) => alive && (setPublished(r.notes), setCanManage(!!r.canManage)))
       .catch(() => alive && setPublished([]));
     return () => {
       alive = false;
     };
   }, []);
+
+  async function publish() {
+    const notes = lines.split('\n').map((l) => l.trim()).filter(Boolean);
+    if (!version.trim() || notes.length === 0 || busy) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const r = await api.publishPatchNote(version.trim(), dateLabel.trim(), notes);
+      setPublished(r.notes);
+      setVersion('');
+      setDateLabel('');
+      setLines('');
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message : 'Could not publish');
+    } finally {
+      setBusy(false);
+    }
+  }
 
   const dbNotes: DisplayNote[] = (published ?? []).map((p) => ({
     key: `db:${p.id}`,
@@ -166,6 +193,29 @@ export function HelpPatchNotes({ theme }: { theme: Theme }) {
         title={"Patch notes"}
         subtitle={"What changed in each release of the terminal."}
       />
+      {canManage && (
+        <div style={{ ...panel(theme), marginBottom: 16 }}>
+          <div style={{ fontSize: 11, letterSpacing: '0.5px', textTransform: 'uppercase', color: '#7488b5', marginBottom: 8 }}>
+            {"Publish a patch note"}
+          </div>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <input value={version} onChange={(e) => setVersion(e.target.value)} placeholder="Beta V 7.70" maxLength={40} style={inputStyle} />
+            <input value={dateLabel} onChange={(e) => setDateLabel(e.target.value)} placeholder="August 28, 2026" maxLength={40} style={inputStyle} />
+          </div>
+          <textarea
+            value={lines}
+            onChange={(e) => setLines(e.target.value)}
+            placeholder={'One change per line'}
+            rows={3}
+            maxLength={4000}
+            style={{ ...inputStyle, marginTop: 8, resize: 'vertical', fontFamily: 'inherit' }}
+          />
+          <button onClick={() => void publish()} disabled={busy || !version.trim() || !lines.trim()} style={{ ...primaryBtn(theme, busy || !version.trim() || !lines.trim()), marginTop: 10 }}>
+            {busy ? 'Publishing…' : "Publish"}
+          </button>
+        </div>
+      )}
+      {error && <div style={errorBanner}>{error}</div>}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
         {all.map((p) => (
           <div key={p.key} style={panel(theme)}>
@@ -532,9 +582,9 @@ export function HelpSuggestion({ theme, user }: { theme: Theme; user: User }) {
     setBusy(true);
     setMsg(null);
     try {
-      await api.sendSuggestion(text);
+      const res = await api.sendSuggestion(text);
       setBody('');
-      setMsg({ ok: true, text: 'Thanks! Your suggestion was sent to the admins.' });
+      setMsg({ ok: true, text: res.notice ?? 'Thanks! Your suggestion was sent to the admins.' });
     } catch (e) {
       setMsg({ ok: false, text: e instanceof ApiError ? e.message : 'Could not send suggestion' });
     } finally {

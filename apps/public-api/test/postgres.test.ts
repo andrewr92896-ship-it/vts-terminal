@@ -514,6 +514,36 @@ if (!url) {
     assert.equal((rows[0] as { n: number }).n, 1, 'asking twice made two rows');
   });
 
+  test('a preference is stored, merged rather than replaced, and rides the session', async () => {
+    // The public terminal is a cached bundle, so an older one PATCHes only the
+    // settings it knows about — and that must never blank one it has never heard
+    // of. The merge is the whole reason this is a PATCH, and nothing but a real
+    // round trip can say the jsonb upsert actually does it.
+    const first = await ok('PATCH', '/public/v1/preferences', { displayTimezone: 'America/Chicago' });
+    assert.equal(first.preferences.displayTimezone, 'America/Chicago');
+
+    const second = await ok('PATCH', '/public/v1/preferences', {
+      myTerminalSections: JSON.stringify({ add: ['desk'], hide: ['my_rules'] }),
+    });
+    assert.equal(second.preferences.displayTimezone, 'America/Chicago', 'a partial save blanked a setting it did not send');
+    assert.equal(second.preferences.myTerminalSections, '{"add":["desk"],"hide":["my_rules"]}');
+
+    // Null CLEARS rather than storing a null, so "never chosen" and "chosen and
+    // then cleared" are one state — the client resolves a missing key as the
+    // default and there is nothing a stored null could additionally mean.
+    const cleared = await ok('PATCH', '/public/v1/preferences', { myTerminalSections: null });
+    assert.equal('myTerminalSections' in cleared.preferences, false);
+    assert.equal(cleared.preferences.displayTimezone, 'America/Chicago');
+
+    assert.deepEqual((await ok('GET', '/public/v1/preferences')).preferences, cleared.preferences);
+
+    // The shell needs these BEFORE it draws anything — the time zone every stamp
+    // renders in, and the customized My Terminal board — so they ride the session
+    // rather than needing a second request that would paint the default first.
+    const session = await ok('GET', '/public/v1/auth/session');
+    assert.equal(session.preferences.displayTimezone, 'America/Chicago');
+  });
+
   test('contributions, dividends and performance read back what was written', async () => {
     // Three screens read these and nothing served them, so on a real account
     // each was permanently empty while the demo showed them full — the worst

@@ -960,6 +960,13 @@
       "when": 1787692200000,
       "tag": "0137_terminal_email_2fa",
       "breakpoints": true
+    },
+    {
+      "idx": 137,
+      "version": "6",
+      "when": 1787692300000,
+      "tag": "0138_my_terminal_sections",
+      "breakpoints": true
     }
   ]
 }

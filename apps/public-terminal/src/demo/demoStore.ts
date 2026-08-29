@@ -183,6 +183,21 @@ const DEMO_PRICE_ALERTS: any[] = [];
 const DEMO_BUG_REPORTS: any[] = [];
 const DEMO_SUGGESTIONS: any[] = [];
 
+// ADMIN EDITING, INSIDE THE DEMO (owner instruction, 2026-08). The public
+// terminal has no Admin workspace and must not gain one — administration code is
+// absent from the public bundle by construction, not hidden — so what is
+// demonstrated instead is the ADMINISTRATIVE ACT, on the very screens the notice
+// appears on: post an announcement on Announcements, publish a note on Patch
+// notes. The screens are the portal's own; all that changes is that the demo
+// answers `canManage: true` and then answers the writes.
+const DEMO_ANNOUNCEMENTS: any[] = [
+  { id: 'demo-ann-1', title: 'Early Access is opening in waves', body: 'We are letting people in a handful at a time so support stays answerable. If you have asked, you are on the list.', author: 'VTS', createdAt: Date.now() - 26 * 3600_000 },
+  { id: 'demo-ann-2', title: 'Market Data now covers the Treasury curve', body: 'Two-year through thirty-year, with the 2s10s and 3m10y spreads derived from the rows beside them rather than read separately.', author: 'VTS', createdAt: Date.now() - 5 * 86400_000 },
+];
+const DEMO_PATCH_NOTES: any[] = [
+  { id: 'demo-pn-1', version: 'Beta V 7.64', dateLabel: 'August 28, 2026', notes: ['My Terminal is customizable — pin any section onto it.', 'Settings became its own workspace.', 'The Live Wall is editable here.'], publishedAt: Date.now() - 3600_000 },
+];
+
 // ---- Writes -----------------------------------------------------------------
 //
 // Each one mutates module state and returns the same payload its read returns,
@@ -471,10 +486,39 @@ const writes: Record<string, (args: any[]) => unknown> = {
     }
     return { report: clone(report ?? { id, author: 'Demo Trader', status: 'open', summary: '', createdAt: Date.now(), updatedAt: Date.now(), messages: [] }) };
   },
+  announcements: () => ({ announcements: DEMO_ANNOUNCEMENTS.map(clone), canManage: true }),
+  addAnnouncement: ([title, body]) => {
+    DEMO_ANNOUNCEMENTS.unshift({ id: nextId('demo-ann'), title: String(title ?? ''), body: String(body ?? ''), author: 'Demo Trader', createdAt: Date.now() });
+    return { announcements: DEMO_ANNOUNCEMENTS.map(clone), canManage: true };
+  },
+  removeAnnouncement: ([id]) => {
+    const at = DEMO_ANNOUNCEMENTS.findIndex((a) => a.id === id);
+    if (at >= 0) DEMO_ANNOUNCEMENTS.splice(at, 1);
+    return { announcements: DEMO_ANNOUNCEMENTS.map(clone), canManage: true };
+  },
+  patchNotes: () => ({ notes: DEMO_PATCH_NOTES.map(clone), canManage: true }),
+  publishPatchNote: ([version, dateLabel, notes]) => {
+    DEMO_PATCH_NOTES.unshift({
+      id: nextId('demo-pn'),
+      version: String(version ?? ''),
+      // An empty date is left EMPTY rather than filled in with today: the screen
+      // renders whatever it is given, and inventing a date on a note somebody
+      // deliberately left undated is the terminal making something up.
+      dateLabel: String(dateLabel ?? ''),
+      notes: Array.isArray(notes) ? notes.map((n: unknown) => String(n)) : [],
+      publishedAt: Date.now(),
+    });
+    return { notes: DEMO_PATCH_NOTES.map(clone), canManage: true };
+  },
   sendSuggestion: ([body]) => {
     const suggestion = { id: nextId('demo-sug'), body: String(body ?? ''), author: 'Demo Trader', status: 'new', createdAt: Date.now() };
     DEMO_SUGGESTIONS.unshift(suggestion);
-    return { suggestion: clone(suggestion) };
+    // The send genuinely worked — the suggestion is in demo state and is listed back.
+    // What it did NOT do is reach anybody, and the visitor has to be told that outright.
+    return {
+      suggestion: clone(suggestion),
+      notice: 'Sent — for demonstration purposes only. Nothing here reaches us, and it resets when you leave.',
+    };
   },
   createNote: ([input]) => {
     demoState.notes.unshift({

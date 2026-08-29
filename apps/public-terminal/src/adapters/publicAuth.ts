@@ -1,5 +1,5 @@
 import { useSyncExternalStore } from 'react';
-import { isDemo, publicAuth, readPublicUser, watchPublicUser } from '../../../web/src/public/PublicRuntime';
+import { isDemo, publicAuth, readPublicUser, setPublicUser, watchPublicUser, type PublicPreferences } from '../../../web/src/public/PublicRuntime';
 
 // Public replacement for the private terminal's auth context.
 //
@@ -53,7 +53,29 @@ async function signOut(){
   window.location.assign(window.location.pathname);
 }
 
+// SAVING A PREFERENCE HAD TO EXIST, because the shared screens already call it.
+// `Preferences` reads `updateProfile` straight off useAuth() and the public
+// adapter did not provide one — so picking a time zone, opting off the
+// leaderboards or customizing My Terminal threw, silently, on the one screen
+// whose entire job is changing those settings. A control that appears and does
+// nothing is worse than one that is missing.
+//
+// The identity is updated FIRST and unconditionally, so the screen responds at
+// once and the demo — which reaches no service at all — behaves exactly like a
+// real account. The write follows for a signed-in visitor; a failed one leaves
+// the setting on screen, which is the honest outcome of a save that did not
+// land, and the next session read restores what is actually stored.
+async function updateProfile(patch:PublicPreferences&{displayName?:string}){
+  const next={...readPublicUser(),...patch};
+  setPublicUser(next);
+  if(!isDemo()){
+    const {displayName:_ignored,...preferences}=patch;
+    if(Object.keys(preferences).length)await publicAuth.savePreferences(preferences).catch(()=>{});
+  }
+  return {user:next};
+}
+
 export function useAuth(){
   const current=useSyncExternalStore(watchPublicUser,snapshot,snapshot);
-  return {user:current,loading:false,refreshUser:async()=>current,logout:signOut};
+  return {user:current,loading:false,refreshUser:async()=>current,logout:signOut,updateProfile};
 }

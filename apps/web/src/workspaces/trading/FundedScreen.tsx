@@ -5,6 +5,7 @@ import { usePrivacy } from '../../privacy/privacy';
 import { readClipboardImage } from '../../lib/clipboard';
 import { FundedManager } from './Funded';
 import type { FundedAccount } from '../../api/types';
+import { ScreenshotExample } from './ScreenshotExample';
 
 const GOLD = '#EBCB74';
 const GREEN = '#35c47b';
@@ -67,6 +68,7 @@ function FundedImportPanel({ onClose }: { onClose: () => void }) {
   const [newName, setNewName] = useState('');
   const [source, setSource] = useState('');
   const [busy, setBusy] = useState(false);
+  const [example, setExample] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement | null>(null);
@@ -129,6 +131,11 @@ function FundedImportPanel({ onClose }: { onClose: () => void }) {
       setMsg(`${parts.join(' · ')} — added to the account below.`);
     } catch (e) {
       setError(e instanceof ApiError ? e.message : 'Import failed');
+      // Where the reader is switched off entirely — the public terminal, until
+      // the AI provider migration — an error alone leaves somebody looking at a
+      // feature they cannot see the shape of. Open the worked example instead of
+      // ending on "switched off".
+      if (e instanceof ApiError && e.status === 501) setExample(true);
     } finally {
       setBusy(false);
     }
@@ -168,10 +175,16 @@ function FundedImportPanel({ onClose }: { onClose: () => void }) {
           {busy ? "Reading…" : "Upload screenshot"}
         </button>
         <input ref={fileRef} type="file" accept="image/*" onChange={(e) => { void handleFile(e.target.files?.[0]); e.currentTarget.value = ''; }} style={{ display: 'none' }} />
+        {/* Offered BEFORE the upload, deliberately. This panel asks somebody to
+            hand over a picture of their account before it says what happens to
+            it; the example answers that first, and it is also the whole of what
+            the public terminal can show while AI is switched off there. */}
+        <button onClick={() => setExample((v) => !v)} style={ghostBtn}>{example ? "Hide example" : "See an example"}</button>
         <button onClick={onClose} style={ghostBtn}>{"Done"}</button>
       </div>
       {msg && <div style={{ fontSize: 12, color: GREEN, marginTop: 10 }}>{msg}</div>}
       {error && <div style={{ fontSize: 12, color: '#ffb4ab', marginTop: 10 }}>{error}</div>}
+      {example && <ScreenshotExample onClose={() => setExample(false)} />}
     </div>
   );
 }

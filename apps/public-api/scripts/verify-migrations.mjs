@@ -29,7 +29,11 @@ for (const forbidden of ['users ', 'sessions ', 'broker_connections', 'trading_o
 // EVERY public table is prefixed, which is what makes a migration run against
 // the wrong database recoverable: it can only ever have created tables whose
 // names say where they belong.
-for (const [, name] of sql.matchAll(/create table\s+([a-z_]+)/gi)) {
+// `if not exists` is a legitimate spelling and must not be read as the table's
+// name — done that way the guard reports "creates a non-public table: IF", which
+// is a guard crying wolf about correct SQL, and a guard people learn to work
+// around stops catching the thing it exists for.
+for (const [, name] of sql.matchAll(/create table\s+(?:if\s+not\s+exists\s+)?([a-z_]+)/gi)) {
   if (!name.startsWith('public_')) throw new Error(`Public migration creates a non-public table: ${name}`);
 }
 // A file added but not named in sequence is a file the runner applies in an

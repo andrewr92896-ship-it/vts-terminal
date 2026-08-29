@@ -94,7 +94,12 @@ export class PublicAuthService {
 
   async session(token:string|undefined) {
     const {account}=await this.accountForSession(token);
-    return {user:{id:account.id,email:account.email,displayName:account.displayName},passwordChangeRequired:account.forcePasswordChange,privateGroupWarning:account.privateGroupWarning};
+    // The display settings ride the session rather than needing a second
+    // request: the shell has to know the time zone and the customized My
+    // Terminal board BEFORE it draws anything, and a screen that renders on the
+    // default and then jumps is worse than one that waits for one request.
+    const preferences=await this.store.getPreferences(account.id);
+    return {user:{id:account.id,email:account.email,displayName:account.displayName},preferences,passwordChangeRequired:account.forcePasswordChange,privateGroupWarning:account.privateGroupWarning};
   }
 
   async changePassword(token:string|undefined,currentPassword:string,newPassword:string) {

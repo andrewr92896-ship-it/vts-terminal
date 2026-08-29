@@ -72,6 +72,12 @@ export const users = sqliteTable('users', {
   // this is written, so the check happens on every read (migration 0122).
   homeWorkspace: text('home_workspace'),
   homeScreen: text('home_screen'),
+  // My Terminal's customization, as JSON `{"add":[...],"hide":[...]}` — a DIFF
+  // against theme/nav.ts rather than a section list, so a nav change in a later
+  // deploy still reaches an account that has customized (migration 0138). Null =
+  // never customized. Validated on read, like home_workspace above, because what
+  // an account can reach moves after this is written.
+  myTerminalSections: text('my_terminal_sections'),
   // Brokerage balances are hidden by default. This flag is the dedicated
   // grant required to view balances and account detail (Stage 2 onward).
   viewBrokerage: integer('view_brokerage', { mode: 'boolean' })

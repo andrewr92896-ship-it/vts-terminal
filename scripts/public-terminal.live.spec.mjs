@@ -192,6 +192,37 @@ test('a write made through the UI lands, and survives a reload', async ({ page }
   expect(after).toEqual([]);
 });
 
+test('a preference and a customized My Terminal are kept on the account', async ({ page }) => {
+  // NOTHING PUBLIC COULD SAVE A PREFERENCE AT ALL until the preferences route
+  // existed: `Preferences` reads `updateProfile` off useAuth(), the public
+  // adapter did not provide one, and picking a time zone threw — silently, on
+  // the one screen whose whole job is changing it. A reload is what separates a
+  // setting that was stored from one that was only rendered.
+  let errors = await open(page, 'my_prefs');
+  await page.locator('select').first().selectOption('America/Chicago');
+  await expect(page.locator('select').first()).toHaveValue('America/Chicago');
+  expect(errors, 'the preferences screen threw while saving').toEqual([]);
+
+  errors = await open(page, 'my_prefs');
+  await expect(page.locator('select').first()).toHaveValue('America/Chicago');
+  expect(errors).toEqual([]);
+
+  // The customized board is the same storage and the same question: it is stored
+  // as a DIFF against the nav, so a stored value that came back unparsed would
+  // read as "never customized" rather than as an error.
+  errors = await open(page, 'td_trading');
+  const sidebar = page.locator('aside');
+  await sidebar.getByRole('button', { name: 'Customize' }).click();
+  await page.getByRole('dialog').getByRole('button', { name: /^Closed Trades & Metrics/ }).click();
+  await page.getByRole('dialog').getByRole('button', { name: 'Save', exact: true }).click();
+  await expect(sidebar.getByRole('button', { name: 'Closed Trades & Metrics' })).toBeVisible();
+  expect(errors, 'customizing threw').toEqual([]);
+
+  errors = await open(page, 'td_trading');
+  await expect(page.locator('aside').getByRole('button', { name: 'Closed Trades & Metrics' })).toBeVisible();
+  expect(errors).toEqual([]);
+});
+
 test('the compliance disclaimers are actually on the screens that must carry them', async ({ page }) => {
   // Written down, reviewed, and then rendered by a component behind a
   // conditional is a disclaimer that is not there. Nothing else checks that
@@ -223,6 +254,25 @@ test('a visitor with no account can ask for early access', async ({ browser }) =
   page.on('pageerror', (error) => errors.push(String(error)));
 
   await page.goto(`${base}/?screen=early-access`, { waitUntil: 'networkidle' });
+
+  // WHAT HAPPENS TO THE ADDRESS IS SAID BEFORE IT IS ASKED FOR, on the form
+  // itself. The Privacy Policy here is a pre-release summary that disclaims
+  // itself in its own banner, which is honest and no use at all to somebody
+  // deciding whether to type their email in — so the binding statement lives at
+  // the point of collection, and it is asserted here because a notice that can
+  // be quietly dropped is not a commitment.
+  const card = page.locator('.vts-public-auth-card');
+  await expect(card).toContainText('not sold, not shared');
+  await expect(card).toContainText(/delete it at any time/i);
+  await expect(card).toContainText('support@vitalistradingsystems.com');
+
+  // AND NOTHING IS OFFERED IN EXCHANGE FOR IT (owner instruction, 2026-08). The
+  // form used to lead with a free Max membership and three months free after
+  // launch — an inducement to hand over an address, naming tiers the terminal
+  // does not sell. Asserted as an absence because that is the only way a promise
+  // quietly reappearing gets caught.
+  await expect(card).not.toContainText(/free (max|premium)|months of free|membership/i);
+
   await page.getByPlaceholder('you@example.com').fill(`visitor-${Date.now()}@example.com`);
   await page.getByRole('button', { name: 'Send request' }).click();
 

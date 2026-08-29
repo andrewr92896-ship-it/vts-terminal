@@ -212,6 +212,9 @@ export interface PublicUser {
   // and falls back when the stored screen is out of reach.
   homeWorkspace: string | null;
   homeScreen: string | null;
+  // My Terminal's own section list, as the raw JSON diff the client parses. Null
+  // when the account has never customized, which is the default board.
+  myTerminalSections: string | null;
   // Off the public study leaderboards. The board still shows them their own
   // row — opting out hides you from other people, not from yourself.
   hideFromLeaderboards: boolean;
@@ -310,6 +313,7 @@ export function toPublicUser(
     displayTimezone: u.displayTimezone ?? DEFAULT_DISPLAY_TIMEZONE,
     homeWorkspace: u.homeWorkspace ?? null,
     homeScreen: u.homeScreen ?? null,
+    myTerminalSections: u.myTerminalSections ?? null,
     hideFromLeaderboards: u.hideFromLeaderboards,
     teamId: u.teamId ?? null,
     teamName: teamName ?? null,

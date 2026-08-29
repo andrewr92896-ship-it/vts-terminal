@@ -23,6 +23,8 @@ import { useResponsive } from '../hooks/useMediaQuery';
 import { AlertSoundProvider } from '../sound/alertSound';
 import { LiveAlertBanner } from './LiveAlertBanner';
 import { FounderTradeModal } from './FounderTradeModal';
+import { MyTerminalCustomizer } from './MyTerminalCustomizer';
+import { MY_TERMINAL_WORKSPACE, myTerminalSections, parseMyTerminal, type MyTerminalLayout } from '../theme/myTerminal';
 import { AlertSoundWatcher } from '../sound/AlertSoundWatcher';
 import { DemoTour } from './DemoTour';
 import { ErrorBoundary } from './ErrorBoundary';
@@ -268,6 +270,12 @@ function sectionLabelFor(workspace: WorkspaceKey, screen: string): string {
   const nav = navFor(workspace);
   const match = nav?.sections.find((s) => s.key === screen);
   if (match) return match.label;
+  // A section PINNED onto My Terminal is drawn in its list while still belonging
+  // to its own workspace, so the label has to be looked up across the whole nav
+  // — otherwise the top bar reads "To Do" while Closed Trades & Metrics is on
+  // screen. Falls back to the workspace's first row, as it always did.
+  const pinned = NAV.flatMap((w) => w.sections).find((s) => s.key === screen);
+  if (pinned) return pinned.label;
   return nav?.sections[0]?.label ?? '';
 }
 
@@ -297,6 +305,33 @@ export function Portal() {
         (Object.keys(OPT_IN_WORKSPACES) as WorkspaceKey[]).filter((ws) => !allowed.includes(ws)),
       ),
     [allowed],
+  );
+
+  // The nested Funded Account opt-in. Never revealed to the demo.
+  const canFunded = !user!.isDemo && canAccessFunded(features);
+  // The Trading Teams grant. Not a role, not an opt-in, not a membership — a
+  // software developer hands it out from Admin ▸ Users. Every team surface in
+  // the terminal is hidden behind it; the server enforces the same on each
+  // /api/my-portal/team* route.
+  const canTeams = !!features.tradingTeams;
+
+  // The section keys currently ON My Terminal — its own rows minus the ones this
+  // account took off, plus the ones it pinned from elsewhere. Declared HERE,
+  // above the navigation callbacks, because two of them need it: clicking a
+  // pinned row must not jump to the workspace the section came from, and the
+  // effect that keeps workspace and screen consistent must not bounce a pinned
+  // row straight back off. The Sidebar derives the same list from the same
+  // function and the same inputs, so the two cannot disagree.
+  const myTerminalKeys = useMemo(
+    () =>
+      new Set(
+        myTerminalSections(NAV, parseMyTerminal(user?.myTerminalSections ?? null), {
+          workspaces: allowed,
+          canFunded,
+          canTeams,
+        }).map((s) => s.key),
+      ),
+    [user?.myTerminalSections, allowed, canFunded, canTeams],
   );
 
   // Where this launch lands: the home page the user chose in My Terminal ▸
@@ -487,14 +522,20 @@ export function Portal() {
       // the wall now lives in Advanced Trading, so without this they land
       // nowhere. From the sidebar, where the key always belongs to the
       // workspace already open, this is a no-op.
+      // A section PINNED onto My Terminal is drawn in its list while still
+      // belonging to its own workspace, so resolving the owner here would jump
+      // the reader to Advanced Trading the moment they clicked the row they had
+      // deliberately put on their own board. Standing on My Terminal, a key that
+      // is on My Terminal stays there.
+      const stay = workspace === MY_TERMINAL_WORKSPACE && myTerminalKeys.has(scr);
       const owner = NAV.find((w) => w.sections.some((sec) => sec.key === scr));
-      if (owner && owner.key !== workspace) setWorkspace(owner.key);
+      if (!stay && owner && owner.key !== workspace) setWorkspace(owner.key);
       setScreen(scr);
       setNavOpen(false);
       if (scr in SECTION_ACTIVITY) markAdminSectionSeen(scr);
       resetScroll();
     },
-    [workspace, resetScroll, markAdminSectionSeen],
+    [workspace, resetScroll, markAdminSectionSeen, myTerminalKeys],
   );
 
   // Demo mode: a one-click, read-only showcase with a guided tour.
@@ -545,6 +586,26 @@ export function Portal() {
     }
   }
 
+  // My Terminal's customizer. Saved through the ordinary profile PATCH — the
+  // same route the display time zone and the home screen already use — so there
+  // is one write path for "settings that live on the account", and the answer
+  // comes back through refreshUser() rather than a second copy in local state.
+  const [customizing, setCustomizing] = useState(false);
+  const [savingSections, setSavingSections] = useState(false);
+  async function saveMyTerminal(next: MyTerminalLayout) {
+    setSavingSections(true);
+    try {
+      await api.updateProfile({ myTerminalSections: next });
+      await refreshUser();
+      setCustomizing(false);
+    } catch {
+      // The board on screen is unchanged, which is the honest outcome of a
+      // failed save; the editor stays open so the work is not lost.
+    } finally {
+      setSavingSections(false);
+    }
+  }
+
   /**
    * Enter, change or leave the developer tier preview.
    *
@@ -567,14 +628,6 @@ export function Portal() {
     setActingRole(null);
     await refreshUser();
   }
-
-  // The nested Funded Account opt-in. Never revealed to the demo.
-  const canFunded = !user!.isDemo && canAccessFunded(features);
-  // The Trading Teams grant. Not a role, not an opt-in, not a membership — a
-  // software developer hands it out from Admin ▸ Users. Every team surface in
-  // the terminal is hidden behind it; the server enforces the same on each
-  // /api/my-portal/team* route.
-  const canTeams = !!features.tradingTeams;
 
   // The Employee Portal row above the workspaces list. Needs the `employee` role
   // AND a company-domain sign-in email; follows the same "view as role" preview
@@ -599,10 +652,18 @@ export function Portal() {
     // Trading Teams is granted, not chosen. Bounce off the screen if the grant
     // is not held — covers a revoked grant leaving somebody parked on it.
     const teamLocked = TEAM_ONLY_SECTIONS.has(screen) && !canTeams;
-    if (!nav.sections.some((s) => s.key === screen) || fundedLocked || teamLocked) {
+    // My Terminal's list is not `nav.sections` — it is that list customized (see
+    // theme/myTerminal.ts), so a pinned row is valid there even though the NAV
+    // entry lives in another workspace. Without this the bounce fires the moment
+    // a pinned row is opened and the pin appears to do nothing.
+    const onBoard =
+      workspace === MY_TERMINAL_WORKSPACE
+        ? myTerminalKeys.has(screen)
+        : nav.sections.some((s) => s.key === screen);
+    if (!onBoard || fundedLocked || teamLocked) {
       setScreen(DEFAULT_SCREEN[workspace]);
     }
-  }, [workspace, screen, canFunded, canTeams, allowed]);
+  }, [workspace, screen, canFunded, canTeams, allowed, myTerminalKeys]);
 
   // Screens that need the live user or the acting-role controls (which the
   // stateless renderScreen doesn't have): the Site Help workspace and the Admin
@@ -676,6 +737,7 @@ export function Portal() {
       onToggle={isPhone ? () => setNavOpen(false) : toggleCollapsed}
       onSelectWorkspace={selectWorkspace}
       onSelectScreen={selectScreen}
+      onCustomizeMyTerminal={() => setCustomizing(true)}
     />
   );
 
@@ -871,6 +933,19 @@ export function Portal() {
               primary decision is made — the modal does not depend on that
               working, so navigating away or a failed route never loses it. */}
           <FounderTradeModal onGoFunded={() => goToSection('prop')} />
+          {/* My Terminal's own section list, edited in place. Mounted here rather
+              than on a screen because the control that opens it is a sidebar row —
+              the workspace is customized from the list being customized. */}
+          {customizing && (
+            <MyTerminalCustomizer
+              nav={NAV}
+              layout={parseMyTerminal(user?.myTerminalSections ?? null)}
+              reach={{ workspaces: allowed, canFunded, canTeams: !!user?.access.features.tradingTeams }}
+              busy={savingSections}
+              onClose={() => setCustomizing(false)}
+              onSave={saveMyTerminal}
+            />
+          )}
       </AlertSoundProvider>
       </BadgesProvider>
     </PrivacyProvider>

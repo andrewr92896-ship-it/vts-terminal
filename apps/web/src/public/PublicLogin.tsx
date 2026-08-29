@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from 'react';
 import { C } from '../theme/tokens';
 import { publicAuth, isDemo, startDemo } from './PublicRuntime';
+import { COMPANY } from '../legal/content';
 
 type Step='login'|'two-factor'|'recovery'|'change-password'|'early-access';
 export function PublicLogin({ initialStep = 'login', onVerified, onDemo, onClose }: { initialStep?:Step; onVerified:()=>void; onDemo:()=>void; onClose?:()=>void }) {
@@ -36,17 +37,39 @@ export function PublicLogin({ initialStep = 'login', onVerified, onDemo, onClose
   {step==='login'&&<><label>Email address<input name="email" type="email" autoComplete="email" placeholder="you@example.com" required/></label><label>Password<input name="password" type="password" autoComplete="current-password" required/></label></>}
   {step==='two-factor'&&<><label>Verification code<input name="code" inputMode="numeric" pattern="[0-9]{6}" autoComplete="one-time-code" maxLength={6} defaultValue={isDemo()?'246810':''} required/></label><label className="remember"><input name="remember" type="checkbox"/>Remember this device for 30 days</label></>}
   {step==='recovery'&&<label>Email address<input name="email" type="email" autoComplete="email" required/></label>}
+  {/* NOTHING IS OFFERED HERE (owner instruction, 2026-08). This step used to open
+      with what a pre-release place "includes" — a free Max membership, three months
+      free after launch — which is an inducement to hand over an email address, and it
+      named tiers the terminal does not sell. It asks for an address and says what
+      happens to it, and nothing else. Do not put an offer back on this form. */}
   {step==='early-access'&&<>
-    <div className="vts-public-early-terms">
-      <strong>What a pre-release place includes</strong>
-      <ul>
-        <li>A <em>free Max membership</em> for as long as the terminal is in pre-release.</li>
-        <li>At least <em>three months of free Max</em> after the official launch.</li>
-        <li>Early sight of features, and a direct line for reporting what does not work.</li>
-      </ul>
-    </div>
     <label>Email address<input name="email" type="email" autoComplete="email" placeholder="you@example.com" required/></label>
     <label>Anything you want us to know <span>optional</span><textarea name="note" rows={3} placeholder="What you trade or study, and what you are hoping the terminal does for you."/></label>
+    {/* THE ONE BINDING STATEMENT ON THIS PAGE, and it is here rather than in the
+        Privacy Policy on purpose.
+        
+        That document is a pre-release SUMMARY and says so in its own banner —
+        it disclaims itself, which is honest about a document that has not been
+        written yet and useless to somebody deciding whether to type their
+        address in. This form takes real personal data from a real person and
+        keeps it, so what happens to it has to be said at the point of
+        collection, in terms that stand on their own whatever the summary says.
+        
+        Everything below is a commitment. Keep it short, keep it true, and if
+        what the form does ever changes, change this first. */}
+    <div className="vts-public-collect">
+      <strong>What happens to this</strong>
+      <p>
+        We keep the email address you type here, and the note if you write one. It is used for one thing:
+        telling you when Early Access opens. It is not sold, not shared with anyone else, and not added
+        to a marketing list.
+      </p>
+      <p>
+        Ask us to delete it at any time — write to <em>{COMPANY.contactEmail}</em> and it is removed.
+        This paragraph is what we do with it, and applies whatever the pre-release Privacy Policy says
+        about itself.
+      </p>
+    </div>
   </>}
   {step==='change-password'&&<><label>Temporary password<input name="currentPassword" type="password" autoComplete="current-password" required/></label><label>New password<input name="newPassword" type="password" autoComplete="new-password" minLength={12} required/></label><label>Confirm new password<input name="confirmPassword" type="password" autoComplete="new-password" minLength={12} required/></label></>}
   <button disabled={busy} type="submit">{busy?'Please wait…':step==='login'?'Continue':step==='two-factor'?'Verify & continue':step==='recovery'?'Send recovery email':step==='early-access'?'Send request':'Change password & continue'}</button>
@@ -60,7 +83,7 @@ export function PublicLogin({ initialStep = 'login', onVerified, onDemo, onClose
   </div>
   <div className="vts-public-early-access">
     <strong>Request early access</strong>
-    <p>Pre-release invitations include a <em>free Max membership</em> for the whole pre-release, and at least <em>three months of free Max</em> after launch.</p>
+    <p>The public terminal is in pre-release and admission is by invitation. Ask to be told when a place opens.</p>
     <button type="button" onClick={()=>{setStep('early-access');setError('');setNotice('')}}>Request an invitation</button>
   </div></>}
   <div className="vts-public-warning" role="note">

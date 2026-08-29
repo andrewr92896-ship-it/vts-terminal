@@ -15,6 +15,10 @@ export type WorkspaceKey =
   | 'news'
   | 'studies'
   | 'myportal'
+  // Account settings, preferences and what the account holds. Its own workspace
+  // rather than two rows inside My Terminal (owner instruction, 2026-08), which
+  // is what lets My Terminal become the personal, customizable board it is now.
+  | 'settings'
   | 'help'
   | 'admin'
   | 'founder';
@@ -128,6 +132,19 @@ export const THEMES: Record<WorkspaceKey, Theme> = {
     accent2: '#12a374',
     accentText: '#052018',
   },
+  // Settings: a cool, deliberately unexcited slate. It is the one workspace that
+  // is about the terminal rather than about markets, so it signals with the
+  // quietest accent in the set — nothing here should compete with a P/L figure.
+  settings: {
+    pageBg: 'radial-gradient(1200px 600px at 70% -10%,#131c2c 0%,#0a0f18 60%)',
+    headerBg: 'linear-gradient(90deg,#121b2a 0%,#1a2438 100%)',
+    headerBorder: '#2b3956',
+    navBg: '#0e1626',
+    navBorder: '#1e2a41',
+    accent: '#93A7C9',
+    accent2: '#6E82A6',
+    accentText: '#0a0f18',
+  },
   // Founder Terminal: a distinguished amber accent that signals the elevated,
   // founder-only area sitting above Admin.
   founder: {
@@ -159,7 +176,12 @@ export const DEFAULT_SCREEN: Record<WorkspaceKey, string> = {
   // My Terminal opens on Premium Features now the wall has left it: it is the
   // one row here that states what the account holds and what it can switch on,
   // which includes the Advanced Trading opt-in the wall now sits behind.
-  myportal: 'my_access',
+  // My Terminal opens on To Do — the one row every account can reach now that
+  // Premium Features, Preferences and Settings have left for the Settings
+  // workspace. It is also the row a customized My Terminal is least likely to
+  // have removed, and an unreachable default falls back through resolveHome.
+  myportal: 'td_trading',
+  settings: 'my_settings',
   admin: 'ad_users',
   founder: 'ad_ai',
   help: 'hp_howto',
@@ -172,6 +194,7 @@ export const WORKSPACE_LABELS: Record<WorkspaceKey, string> = {
   news: 'News',
   studies: 'Studies',
   myportal: 'My Terminal',
+  settings: 'Settings',
   admin: 'Admin Terminal',
   founder: 'Developer Terminal',
   help: 'Site Help',

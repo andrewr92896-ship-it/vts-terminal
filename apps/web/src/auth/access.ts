@@ -129,6 +129,9 @@ export const ALL_WORKSPACES: WorkspaceKey[] = [
   'news',
   'studies',
   'myportal',
+  // Account settings, preferences and memberships — included with every account,
+  // like My Terminal and Site Help.
+  'settings',
   'help',
   'admin',
   'founder',

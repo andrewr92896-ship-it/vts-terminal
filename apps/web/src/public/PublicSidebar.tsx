@@ -11,12 +11,23 @@ interface PublicSidebarProps {
   onToggle: () => void;
   onSelectWorkspace: (workspace: PublicWorkspaceKey) => void;
   onSelectScreen: (screen: PublicScreenKey) => void;
+  // My Terminal's customized section list, when that is the open workspace.
+  // Absent means "the workspace's own rows", which is every other workspace.
+  sections?: readonly PublicScreenKey[];
+  // Opens the customizer. Drawn as the last row of the list it edits.
+  onCustomize?: () => void;
 }
 
 const label: CSSProperties = { fontSize: 10.5, letterSpacing: '1.4px', textTransform: 'uppercase', color: C.faint, fontWeight: 600, padding: '0 10px', marginBottom: 8 };
 
 export function PublicSidebar(props: PublicSidebarProps) {
   const current = publicNavFor(props.workspace);
+  // A pinned row belongs to another workspace, so its label and icon are looked
+  // up across the whole nav rather than in the workspace being drawn.
+  const everySection = PUBLIC_NAV.flatMap((w) => w.sections);
+  const rows = props.sections
+    ? props.sections.map((key) => everySection.find((s) => s.key === key)).filter((s): s is (typeof everySection)[number] => !!s)
+    : current.sections;
   return (
     <aside style={{ background: C.side, borderRight: `1px solid ${C.line}`, padding: props.collapsed ? '18px 12px' : '22px 16px 18px', display: 'flex', flexDirection: 'column', gap: props.collapsed ? 18 : 22, overflowY: 'auto', overflowX: 'hidden', height: '100%' }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: props.collapsed ? 'center' : 'space-between', gap: 8, padding: props.collapsed ? 0 : '2px 4px 0', minHeight: 30 }}>
@@ -30,7 +41,8 @@ export function PublicSidebar(props: PublicSidebarProps) {
       </nav>
       <nav>
         {props.collapsed ? <div style={divider} /> : <div style={label}>{current.group}</div>}
-        {current.sections.map((section) => <NavRow key={section.key} collapsed={props.collapsed} active={section.key === props.screen} icon={section.icon} label={section.label} accent={current.accent} onClick={() => props.onSelectScreen(section.key)} />)}
+        {rows.map((section) => <NavRow key={section.key} collapsed={props.collapsed} active={section.key === props.screen} icon={section.icon} label={section.label} accent={current.accent} onClick={() => props.onSelectScreen(section.key)} />)}
+        {props.onCustomize && <NavRow collapsed={props.collapsed} active={false} icon="list-tree" label="Customize" accent={current.accent} onClick={props.onCustomize} />}
       </nav>
       <div style={{ marginTop: 'auto', display: 'flex', alignItems: 'center', justifyContent: props.collapsed ? 'center' : 'space-between', gap: 8, padding: '12px 8px 0', borderTop: `1px solid ${C.line}`, color: C.faint, fontFamily: C.mono, fontSize: 9.5 }}>
         {!props.collapsed && <span>VTS Public</span>}<span style={{ border: `1px solid ${tint(C.gold,.35)}`, borderRadius: 4, padding: '2px 5px', color: C.gold }}>{isDemo() ? 'Demo' : 'Candidate'}</span>

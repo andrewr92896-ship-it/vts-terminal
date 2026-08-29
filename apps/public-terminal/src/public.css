@@ -51,10 +51,13 @@
 }
 @media (max-width: 768px) {
   .vts-public-menu { display:grid!important; }
-  .vts-public-profile-copy { display:none; }
-  .vts-public-column > header label { display:none!important; }
-  .vts-public-ai { width:38px!important; padding:0!important; justify-content:center; }
-  .vts-public-ai span { display:none; }
+  /* The TOP BAR sizes itself in PublicTopBar.tsx, not here: the shell is styled
+     inline, so a rule in this file loses to the inline value. Rules that tried
+     to set its padding and shrink the Help button silently did nothing, the row
+     overflowed, and flex crushed that button to the width of its icon. The one
+     thing left here is the clock's date line, which carries no inline display. */
+  .vts-clock-date { display:none; }
+  .vts-clock-time { font-size:11.5px; }
   .vts-public-shell { display:block; }
   .vts-public-shell > aside { position:fixed!important; inset:0 auto 0 0; width:min(310px,86vw); z-index:80; transform:translateX(-105%); transition:transform .2s ease; }
   .vts-public-shell[data-mobile-open='true'] > aside { transform:none; }
@@ -116,15 +119,20 @@
   width: 100%; margin: 0; padding: 8px 14px; border: 1px solid #1c3a7a; border-radius: 7px;
   background: transparent; color: #9fb0d6; text-align: center; font-weight: 600; font-size: 12.5px; cursor: pointer;
 }
-.vts-public-early-terms {
-  margin: 4px 0 14px; padding: 13px 14px; border-radius: 9px;
-  border: 1px solid rgba(235, 203, 116, .3); background: rgba(235, 203, 116, .06);
-  color: #cbd7ef; font-size: 12px; line-height: 1.6;
+/* The data-collection notice under the early-access fields. Deliberately QUIET
+   and slate rather than gold or amber: it is not another banner to skim past but
+   the plain, binding
+   statement of what happens to the address somebody just typed. Styled to read
+   as fact, not as another banner to skim past. */
+.vts-public-collect {
+  margin: 2px 0 16px; padding: 12px 14px; border-radius: 9px;
+  border: 1px solid #1c3a7a; background: rgba(9, 22, 51, .55);
+  color: #aebcd8; font-size: 11.5px; line-height: 1.6;
 }
-.vts-public-early-terms strong { display: block; margin-bottom: 7px; color: #EBCB74; font-size: 12.5px; }
-.vts-public-early-terms ul { margin: 0; padding-left: 17px; }
-.vts-public-early-terms li { margin-bottom: 4px; }
-.vts-public-early-terms em { color: #eef3ff; font-style: normal; font-weight: 700; }
+.vts-public-collect strong { display: block; margin-bottom: 6px; color: #dfe7fa; font-size: 12px; }
+.vts-public-collect p { margin: 0 0 8px; }
+.vts-public-collect p:last-child { margin-bottom: 0; }
+.vts-public-collect em { color: #EBCB74; font-style: normal; font-weight: 600; }
 .vts-public-auth-card label span { color: #6f84b0; font-weight: 400; text-transform: none; letter-spacing: 0; }
 .vts-public-auth-card textarea {
   width: 100%; background: #091633; border: 1px solid #1c3a7a; border-radius: 8px;

@@ -8,7 +8,7 @@ import { zoneAbbr, zoneFmt } from '../../../lib/timezone';
 import type { MarketSeries, StreamChannel } from '../../../api/types';
 import { BORDER2, FAINT, GOLD, GREEN, MONO, MUTED, RED, TEXT } from '../tvChart';
 import { clockLabel, etClock, sessionOpen } from '../etClock';
-import { embedSrc, liveKnown, shouldPlay } from '../streamEmbed';
+import { STREAM_PLACEHOLDER_TEXT, embedSrc, isPlaceholder, liveKnown, shouldPlay } from '../streamEmbed';
 import { HIDDEN, TileFrame, TileMessage, TileSelect, useTileData } from './TileFrame';
 import type { TileProps } from './PersonalTiles';
 
@@ -184,12 +184,31 @@ export function StreamTile({ tile, editing, onChange, onRemove }: TileProps) {
           style={{ border: 'none', width: '100%', height: '100%', display: 'block', background: '#000' }}
         />
       )}
-      {chosen && !chosen.embedBlocked && !shouldPlay(chosen) && (
+      {chosen && isPlaceholder(chosen) && (
+        // The slot, drawn as though something were in it, with nothing playing.
+        // Not an error state and not "offline" — there is no player behind this
+        // channel at all, which is a different fact and reads differently.
+        <div style={streamSlot}>
+          <span style={{ fontSize: 12.5, color: TEXT, fontWeight: 600 }}>{STREAM_PLACEHOLDER_TEXT}</span>
+          <span style={{ fontSize: 11, color: FAINT }}>{chosen.name}</span>
+        </div>
+      )}
+      {chosen && !isPlaceholder(chosen) && !chosen.embedBlocked && !shouldPlay(chosen) && (
         <TileMessage>{chosen.name} is not broadcasting right now.</TileMessage>
       )}
     </TileFrame>
   );
 }
+
+// A stream slot with no player behind it: the 16:9 black box a video would be
+// in, with a line saying so. Deliberately the same shape as the real player so
+// the board reads as the board rather than as a gap.
+const streamSlot: CSSProperties = {
+  width: '100%', height: '100%', display: 'flex', flexDirection: 'column',
+  alignItems: 'center', justifyContent: 'center', gap: 6,
+  background: 'linear-gradient(180deg,#0a1226,#060c18)',
+  border: `1px dashed ${BORDER2}`, borderRadius: 8,
+};
 
 // ---- Market clock --------------------------------------------------------
 //

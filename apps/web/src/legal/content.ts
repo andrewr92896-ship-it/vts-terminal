@@ -15,6 +15,13 @@
 export const LEGAL_VERSION = '2026-08-04.1';
 export const LEGAL_EFFECTIVE_DATE = 'August 4, 2026';
 
+// A standing banner drawn above every legal document when it is set. It exists for
+// the PUBLIC build, whose documents are summaries pending the real ones at launch —
+// see apps/public-terminal/src/adapters/publicLegal.ts, which replaces this module at
+// the build seam. The private portal's documents are the operative ones, so this is
+// null here and no banner is drawn.
+export const LEGAL_STATUS: string | null = null;
+
 export const COMPANY = {
   entity: 'Vitalis Trading Systems LLC',
   short: 'Vitalis Trading Systems',
