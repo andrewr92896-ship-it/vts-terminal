@@ -269,6 +269,27 @@ leaves the root dead for every later hash navigation, so one broken screen
 blanks every capture after it. That is not hypothetical: it shipped, and eight
 screens were blank behind a passing test.
 
+**IT BLOCKS TRADINGVIEW AND YOUTUBE OUTRIGHT, AND THAT IS A CORRECTNESS RULE
+RATHER THAN A SPEED ONE.** The suite is usually written and run in an agent
+sandbox with **no outbound access**, where those hosts simply fail — so it was
+hermetic by accident, and two things silently depended on that. `waitUntil:
+'networkidle'` settled only because nothing was ever connecting: on CI, which
+*does* have outbound access, an embed holds its connection open, the page never
+goes idle, and one navigation ate the whole 300s test budget while naming
+nothing. And the watchlist case reads the config the tile hands TradingView —
+when their script really loads it takes the container over and that config goes
+with it, so the read came back empty and the test reported the wrong widget.
+- **The consequence is the part worth remembering: the job was red in CI for
+  four commits while every local run said 11/11 passed.** A green run in a
+  network-blocked sandbox is not evidence about CI, and "it passes locally" is
+  not a report that a suite is passing. Check the workflow run.
+- So the hosts are named and aborted in a `beforeEach`, the capture loop waits
+  for the screen to have painted rather than for idle (a screen that stays empty
+  is what the blank list is for, and it names its route), and anything read
+  straight after a state change — the workspace's own width — is **polled**, not
+  read once. **Add a new embed's host to that list** rather than letting a third
+  party decide whether the run passes.
+
 ### The public Live Wall is a board (`apps/web/src/public/PublicBoard.tsx`)
 
 **Editable exactly as the private one is** (owner instruction, 2026-08): add,
