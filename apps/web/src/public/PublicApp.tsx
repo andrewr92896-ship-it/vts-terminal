@@ -3,7 +3,9 @@ import { PublicLogin } from './PublicLogin';
 import { PublicSidebar } from './PublicSidebar';
 import { PublicTopBar } from './PublicTopBar';
 import { PublicScreen } from './PublicScreens';
-import { publicAuth, isDemo, startDemo, setPublicUser, readPublicUser } from './PublicRuntime';
+import { publicAuth, isDemo, startDemo, setPublicUser, readPublicUser, readDemoDevice, setDemoDevice, type DemoDevice } from './PublicRuntime';
+import { PublicDeviceCard } from './PublicDeviceCard';
+import { presetTiles } from './PublicBoard';
 import { useResponsive } from '../hooks/useMediaQuery';
 import { MyTerminalCustomizer } from '../components/MyTerminalCustomizer';
 import { MY_TERMINAL_WORKSPACE, myTerminalSections, parseMyTerminal, type MyTerminalLayout, type NavLike } from '../theme/myTerminal';
@@ -16,9 +18,23 @@ import { PUBLIC_NAV,publicNavFor,publicWorkspaceFor,type PublicScreenKey,type Pu
 const PUBLIC_REACH={workspaces:PUBLIC_NAV.map((w)=>w.key),canFunded:false,canTeams:false};
 const query=new URLSearchParams(location.search);const evidence=isDemo();const first=(location.hash.slice(1)||'live') as PublicScreenKey;
 const allowed=new Set(PUBLIC_NAV.flatMap((workspace)=>workspace.sections.map((section)=>section.key)));
+
+// WHAT A DEVICE ANSWER MEANS, in one place, because it is given two ways — the
+// card at the door, and `?device=` in the URL. Two copies of "mobile means the
+// stacked board and a closed sidebar" is two answers that drift.
+const deviceLayout=(device:DemoDevice)=>JSON.stringify(presetTiles(device==='mobile'?'stacked':'desktop'));
+
+// `?device=desktop|mobile` pre-answers the question, the same way `?sidebar=`
+// already pre-answers the rail — so a link can open straight into a layout, and
+// a browser test does not have to click through the door to reach a screen.
+// Applied here at module scope, before anything renders, for the same reason the
+// card is a GATE rather than a modal: the Live Wall reads its tiles in a state
+// initialiser, so a layout written after it mounted would never reach it.
+const urlDevice:DemoDevice|null=query.get('device')==='mobile'?'mobile':query.get('device')==='desktop'?'desktop':null;
+if(urlDevice){setDemoDevice(urlDevice);setPublicUser({...readPublicUser(),wallLayout:deviceLayout(urlDevice)})}
 export function PublicApp(){
  const initial=allowed.has(first)?first:'live';const [verified,setVerified]=useState(evidence);const [checking,setChecking]=useState(!evidence);const [passwordChangeRequired,setPasswordChangeRequired]=useState(false);const [authStep,setAuthStep]=useState<'login'|'early-access'|null>(null);const [screen,setScreen]=useState<PublicScreenKey>(initial);
- const [collapsed,setCollapsed]=useState(query.get('sidebar')==='collapsed'||(!query.has('sidebar')&&innerWidth<=1024));const [mobileOpen,setMobileOpen]=useState(query.get('sidebar')==='expanded'&&innerWidth<=768);
+ const [collapsed,setCollapsed]=useState(urlDevice?urlDevice==='mobile':(query.get('sidebar')==='collapsed'||(!query.has('sidebar')&&innerWidth<=1024)));const [mobileOpen,setMobileOpen]=useState(query.get('sidebar')==='expanded'&&innerWidth<=768);
  // BELOW 768 THE SIDEBAR IS A DRAWER, AND A DRAWER MUST NEVER BE COLLAPSED.
  // `collapsed` initialises true on anything narrower than 1024, which is right
  // for a laptop and wrong for the one place the sidebar is not a rail: the CSS
@@ -29,6 +45,13 @@ export function PublicApp(){
  // different numbers would leave a band where the drawer is a rail again.
  const { isTablet }=useResponsive();
  const drawer=isTablet;
+ const [device,setDevice]=useState<DemoDevice|null>(readDemoDevice);
+ const pickDevice=(next:DemoDevice)=>{
+  setDemoDevice(next);
+  setPublicUser({...readPublicUser(),wallLayout:deviceLayout(next)});
+  setCollapsed(next==='mobile');
+  setDevice(next);
+ };
  // My Terminal is customizable here exactly as it is on the private terminal, and
  // the SAME module decides what is on it (theme/myTerminal.ts) — over this nav
  // rather than the private one. Two copies of those rules is how the two shells
@@ -45,7 +68,12 @@ export function PublicApp(){
  useEffect(()=>{if(evidence){setPublicUser({id:'demo-user',username:'demo',displayName:'Demo',isDemo:true});return}publicAuth.session().then((value)=>{const prefs=value.preferences??{};setPublicUser({id:value.user.id,username:value.user.email.split('@')[0]??'public',displayName:value.user.displayName,email:value.user.email,...prefs});setSections(prefs.myTerminalSections??null);setPasswordChangeRequired(value.passwordChangeRequired);setVerified(!value.passwordChangeRequired)}).catch(()=>setVerified(false)).finally(()=>setChecking(false))},[]);
  useEffect(()=>{const onHash=()=>{const next=location.hash.slice(1) as PublicScreenKey;if(allowed.has(next))setScreen(next)};addEventListener('hashchange',onHash);return()=>removeEventListener('hashchange',onHash)},[]);
  useEffect(()=>{const onAi=()=>{location.hash='hp_howto'};addEventListener('vts-public-ai',onAi);return()=>removeEventListener('vts-public-ai',onAi)},[]);
- if(checking)return null;if(!verified||authStep)return <PublicLogin initialStep={authStep==='early-access'||query.get('screen')==='early-access'?'early-access':passwordChangeRequired?'change-password':query.get('screen')==='two-factor'?'two-factor':'login'} onVerified={()=>{setAuthStep(null);setPasswordChangeRequired(false);setVerified(true)}} onDemo={()=>{setAuthStep(null);startDemo();setPublicUser({id:'demo-user',username:'demo',displayName:'Demo',isDemo:true});setVerified(true)}} onClose={authStep&&verified?()=>setAuthStep(null):undefined}/>;
+ useEffect(()=>{const onAccount=()=>{location.hash='my_settings'};addEventListener('vts-public-account',onAccount);return()=>removeEventListener('vts-public-account',onAccount)},[]);
+ if(checking)return null;
+ if(!verified||authStep)return <PublicLogin initialStep={authStep==='early-access'||query.get('screen')==='early-access'?'early-access':passwordChangeRequired?'change-password':query.get('screen')==='two-factor'?'two-factor':'login'} onVerified={()=>{setAuthStep(null);setPasswordChangeRequired(false);setVerified(true)}} onDemo={()=>{setAuthStep(null);startDemo();setPublicUser({id:'demo-user',username:'demo',displayName:'Demo',isDemo:true});setVerified(true)}} onClose={authStep&&verified?()=>setAuthStep(null):undefined}/>;
+ // Only the demo, and only once per visit. A signed-in account has a saved board
+ // and a saved sidebar of its own, and answering this would overwrite both.
+ if(isDemo()&&!device)return <PublicDeviceCard likely={isTablet?'mobile':'desktop'} onPick={pickDevice}/>;
  const select=(next:PublicScreenKey)=>{
   if(!allowed.has(next))return;
   // Standing on My Terminal, a key that is ON My Terminal stays there.
@@ -77,7 +105,7 @@ export function PublicApp(){
  // A section pinned from another workspace keeps its own label, so the top bar
  // has to look it up across the whole nav rather than only in this workspace.
  const selected=PUBLIC_NAV.flatMap((w)=>w.sections).find((section)=>section.key===screen)??workspaceNav.sections[0];
- return <div className="vts-public-shell" data-collapsed={collapsed} data-mobile-open={mobileOpen}><PublicSidebar workspace={workspaceNav.key} screen={screen} collapsed={drawer?false:collapsed} onToggle={drawer?()=>setMobileOpen(false):()=>setCollapsed((value)=>!value)} onSelectWorkspace={selectWorkspace} onSelectScreen={select} sections={workspace===MY_TERMINAL_WORKSPACE?[...myTerminalKeys] as PublicScreenKey[]:undefined} onCustomize={workspace===MY_TERMINAL_WORKSPACE?()=>setCustomizing(true):undefined}/><section className="vts-public-column"><PublicTopBar workspaceLabel={workspaceNav.label} sectionLabel={selected?.label??workspaceNav.label} accent={workspaceNav.accent} onOpenNav={()=>setMobileOpen(true)}/><main className="vts-public-main">{isDemo()&&<div className="vts-public-demo-bar"><strong>DEMO</strong><span>Sample data. Nothing is saved, and everything resets when you leave. Informational only — not investment advice. Features become available on the release of Early Access.</span><button onClick={()=>setAuthStep('early-access')}>Request early access</button></div>}<PublicScreen screen={screen} workspace={workspaceNav.key} onNavigate={select}/></main><footer className="vts-public-footer"><span>VTS Public Terminal · Informational use only</span><span><a href="#hp_terms">Terms</a> · <a href="#hp_privacy">Privacy</a> · <a href="#hp_howto">Help</a></span></footer></section>{mobileOpen&&<button aria-label="Close navigation" onClick={()=>setMobileOpen(false)} style={{position:'fixed',inset:0,zIndex:70,background:'rgba(0,0,0,.55)',border:0}}/>}{customizing&&<MyTerminalCustomizer nav={PUBLIC_NAV as unknown as NavLike} layout={parseMyTerminal(sections)} reach={PUBLIC_REACH} busy={saving} onClose={()=>setCustomizing(false)} onSave={(next)=>{void saveSections(next)}}/>}</div>;
+ return <div className="vts-public-shell" data-collapsed={drawer?false:collapsed} data-mobile-open={mobileOpen}><PublicSidebar workspace={workspaceNav.key} screen={screen} collapsed={drawer?false:collapsed} onToggle={drawer?()=>setMobileOpen(false):()=>setCollapsed((value)=>!value)} onSelectWorkspace={selectWorkspace} onSelectScreen={select} sections={workspace===MY_TERMINAL_WORKSPACE?[...myTerminalKeys] as PublicScreenKey[]:undefined} onCustomize={workspace===MY_TERMINAL_WORKSPACE?()=>setCustomizing(true):undefined}/><section className="vts-public-column"><PublicTopBar workspaceLabel={workspaceNav.label} sectionLabel={selected?.label??workspaceNav.label} accent={workspaceNav.accent} onOpenNav={()=>setMobileOpen(true)}/><main className="vts-public-main">{isDemo()&&<div className="vts-public-demo-bar"><strong>DEMO</strong><span>Sample data. Nothing is saved, and everything resets when you leave. Informational only — not investment advice. Features become available on the release of Early Access.</span><button onClick={()=>setAuthStep('early-access')}>Request early access</button></div>}<PublicScreen screen={screen} workspace={workspaceNav.key} onNavigate={select}/></main><footer className="vts-public-footer"><span>VTS Public Terminal · Informational use only</span><span><a href="#hp_terms">Terms</a> · <a href="#hp_privacy">Privacy</a> · <a href="#hp_howto">Help</a></span></footer></section>{mobileOpen&&<button aria-label="Close navigation" onClick={()=>setMobileOpen(false)} style={{position:'fixed',inset:0,zIndex:70,background:'rgba(0,0,0,.55)',border:0}}/>}{customizing&&<MyTerminalCustomizer nav={PUBLIC_NAV as unknown as NavLike} layout={parseMyTerminal(sections)} reach={PUBLIC_REACH} busy={saving} onClose={()=>setCustomizing(false)} onSave={(next)=>{void saveSections(next)}}/>}</div>;
 }
 declare global{interface Window{__VTS_PUBLIC_BOUNDARY__?:{routes:readonly string[];sessionCookie:string;evidence:boolean}}}
 window.__VTS_PUBLIC_BOUNDARY__={routes:[...allowed],sessionCookie:'vts_public_session_v1',evidence};

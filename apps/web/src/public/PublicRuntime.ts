@@ -47,5 +47,22 @@ export type PublicIdentity={id:string;username:string;displayName:string;email?:
 let identity:PublicIdentity={id:'public-user',username:'public',displayName:'Public account'};
 const identityListeners=new Set<()=>void>();
 export function setPublicUser(next:PublicIdentity){identity=next;for(const listener of identityListeners)listener()}
+
+// WHICH DEVICE THE DEMO WAS OPENED ON, as answered by the visitor rather than
+// sniffed from the viewport. It decides two things at the door: which of the two
+// default Live Wall layouts is loaded, and whether the sidebar starts open.
+//
+// Module state, deliberately — same as everything else the demo holds. Leaving
+// the page is the reset, so a returning visitor is asked again rather than being
+// held to an answer they gave on a different device. There is nothing here worth
+// a cookie, and the demo's whole contract is that it stores nothing.
+//
+// A REAL ACCOUNT IS NEVER ASKED. It has a saved board and a saved sidebar state
+// of its own, and a question at sign-in that overwrites them would be worse than
+// unhelpful.
+export type DemoDevice='desktop'|'mobile';
+let demoDevice:DemoDevice|null=null;
+export const readDemoDevice=()=>demoDevice;
+export function setDemoDevice(next:DemoDevice){demoDevice=next}
 export function readPublicUser(){return identity}
 export function watchPublicUser(listener:()=>void){identityListeners.add(listener);return()=>{identityListeners.delete(listener)}}

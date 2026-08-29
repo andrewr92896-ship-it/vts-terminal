@@ -2,8 +2,14 @@ export interface PatchNote{version:string;date:string;notes:string[]}
 // The public terminal's own version and its historical archive. Separate from the
 // private terminal's `meta/version` (replaced at the build seam) because they are
 // different products on different release trains.
-export const APP_VERSION='Public Candidate V 1.4';
+export const APP_VERSION='Public Candidate V 1.5';
 export const PATCH_NOTES:PatchNote[]=[
+ {version:'Public Candidate V 1.5',date:'August 28, 2026',notes:[
+  'The demo asks whether you are on a desktop or a phone before it opens, and lays the Live Wall out to match \u2014 side by side, or one tile per row to scroll. Both are available from the wall at any time.',
+  'The top bar is cleaned up on a phone: one row, the section you are on, and the time.',
+  'Removed the notifications bell. It had never done anything, and there are no notifications here to open.',
+  'The account circle opens Settings. It was labelled that and did nothing.',
+ ]},
  {version:'Public Candidate V 1.4',date:'August 28, 2026',notes:[
   'Fixed: on a phone, tapping a workspace closed the navigation drawer, so you had to reopen it to pick the section you were going for. It stays open now, and closes when you pick a section.',
  ]},

@@ -295,6 +295,57 @@ flushed on unmount — a drag fires a layout change per frame, and leaving
 mid-arrangement is when the write matters most. A phone renders one column and
 never writes that back, the same rule the private board follows.
 
+### The demo asks which device it is on, and there are TWO default boards
+
+Owner instruction, 2026-08. Before the demo draws the terminal it asks one
+question — desktop, or phone/tablet — and the answer picks the Live Wall layout
+and whether the sidebar starts open. `PublicDeviceCard`, gated in `PublicApp`.
+
+- **It is a QUESTION, not a measurement.** The viewport only decides which answer
+  is marked as recommended. Somebody on a laptop showing the phone layout is a
+  real thing to want, and that is also why `STACKED_BOARD` is a real
+  **arrangement** — every tile twelve columns wide, one under another — rather
+  than a narrow-screen rendering mode. A mode would only apply below a
+  breakpoint, so the desktop visitor who asked for it would not get it.
+- **It is a GATE, not a modal over the board.** The wall reads its tiles in a
+  state initialiser, so a layout chosen after it mounted would never reach it.
+- **`?device=desktop|mobile` answers it in the URL**, the same way `?sidebar=`
+  already pre-answers the rail — a link opens straight into a layout, and the
+  browser suites reach a screen without clicking through the door. `deviceLayout`
+  is the one place an answer is turned into a board, so the URL and the card
+  cannot mean different things. **A capture suite that forgets it does not fail
+  fast**: `#root` is visible at the door, so the run just spends its budget
+  waiting for a main column that is not there — five minutes instead of twenty
+  seconds, naming nothing. That is why the page-family read is bounded.
+- **Both layouts stay reachable** from the wall's own toolbar (`BOARD_PRESETS`),
+  so the answer is a starting point rather than a setting.
+- **The choice is module state and a real account is never asked.** Leaving is
+  the reset, like everything else the demo holds; an account has a saved board
+  and a saved sidebar, and a question at sign-in that overwrote them would be
+  worse than unhelpful.
+
+### The public top bar sizes itself in the COMPONENT, not in `public.css`
+
+The shell is styled inline, so a rule in the stylesheet loses to the inline
+value. The first phone pass put the bar's padding and its icon-only Help button
+in a media query; neither applied, the row overflowed 390px, and flex compressed
+the Help button to the width of its icon while the account chip hung off the
+right edge. `PublicTopBar` reads `useResponsive` and branches its own styles, at
+the same 768 the stylesheet uses for the drawer. **Only `.vts-clock-date` is left
+in CSS** — the one element with no inline `display` to beat.
+
+What the phone drops is either duplicated a tap away or was never readable in a
+64px bar: the workspace half of the breadcrumb (it wrapped and squeezed the
+SECTION name to an ellipsis, and it is the highlighted row in the drawer), the
+search box, the clock's date line and its seconds, and the profile name.
+
+**Two dead controls were fixed rather than hidden.** The notifications bell had
+no handler and never did — the public terminal delivers no notifications at all,
+so there was nothing for it to open, and it is **removed**. The account chip was
+labelled "Account settings" and also had no handler; there is a settings screen,
+so it now goes there. Both reached the shell the way the Help button does, by
+event, because the bar sits above the router.
+
 ### Live streams show the SLOT in the public terminal
 
 `StreamChannel.placeholder` (`api/types.ts`) means **no player is mounted for

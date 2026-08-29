@@ -45,8 +45,16 @@ test('candidate page-family evidence', async ({ page }) => {
   const broken = [];
   for (const width of [1440, 768, 390]) {
     for (const route of routes) {
-      const errors = await capture(page, `${route}-${width}`, width, `/?evidence=1&sidebar=expanded#${route}`);
-      const text = await page.locator('.vts-public-main').innerText().catch(() => '');
+      // `device=desktop` answers the demo's device question in the URL. Without
+      // it every capture sits at that door: `#root` IS visible there, so nothing
+      // fails fast — the run just spends its whole budget waiting for a main
+      // column that is not on screen yet.
+      const errors = await capture(page, `${route}-${width}`, width, `/?evidence=1&device=desktop&sidebar=expanded#${route}`);
+      // A short timeout deliberately. This read is allowed to fail — a page with
+      // no main column counts as blank and is reported — but without a bound it
+      // waits out the whole test instead, and 117 captures turn a 20-second run
+      // into a five-minute timeout that names nothing.
+      const text = await page.locator('.vts-public-main').innerText({ timeout: 2000 }).catch(() => '');
       if (errors.length) broken.push(`${route}@${width}: ${errors[0].split('\n')[0]}`);
       if (text.replace(/\s+/g, ' ').trim().length < MIN_CONTENT) blank.push(`${route}@${width}`);
     }
@@ -80,7 +88,7 @@ test('the demo can add things, on the screens that used to hide the controls', a
     // `about:blank` first: navigating to the hash the page is already on is a
     // same-document navigation the browser does not reload for.
     await page.goto('about:blank');
-    await page.goto(`${base}/?demo=1#${screen}`, { waitUntil: 'networkidle' });
+    await page.goto(`${base}/?demo=1&device=desktop#${screen}`, { waitUntil: 'networkidle' });
     await page.getByRole('button', { name: open }).first().click();
     await page.getByPlaceholder(placeholder).fill(value);
     if (screen === 'inv_holdings') await page.getByPlaceholder('12.345').fill('5');
@@ -103,7 +111,7 @@ test('My Terminal can be customized, and a pinned section opens on it', async ({
   page.on('pageerror', record);
   try {
     await page.goto('about:blank');
-    await page.goto(`${base}/?demo=1#td_trading`, { waitUntil: 'networkidle' });
+    await page.goto(`${base}/?demo=1&device=desktop#td_trading`, { waitUntil: 'networkidle' });
 
     const sidebar = page.locator('aside');
     await expect(sidebar.getByRole('button', { name: 'Closed Trades & Metrics' })).toHaveCount(0);
@@ -143,7 +151,7 @@ test('the Live Wall can be edited in the demo', async ({ page }) => {
   page.on('pageerror', record);
   try {
     await page.goto('about:blank');
-    await page.goto(`${base}/?demo=1#live`, { waitUntil: 'networkidle' });
+    await page.goto(`${base}/?demo=1&device=desktop#live`, { waitUntil: 'networkidle' });
 
     const before = await page.locator('.wall-cell').count();
     expect(before, 'the wall opened on an empty board').toBeGreaterThan(0);
@@ -176,7 +184,7 @@ test('the demo shows what reading a screenshot produces, without reading one', a
   page.on('pageerror', record);
   try {
     await page.goto('about:blank');
-    await page.goto(`${base}/?demo=1#funded`, { waitUntil: 'networkidle' });
+    await page.goto(`${base}/?demo=1&device=desktop#funded`, { waitUntil: 'networkidle' });
     await page.getByRole('button', { name: 'Import from screenshot' }).click();
     await page.getByRole('button', { name: 'See an example' }).click();
     const main = page.locator('.vts-public-main');
@@ -198,14 +206,14 @@ test('the demo can post an announcement and publish a patch note', async ({ page
   page.on('pageerror', record);
   try {
     await page.goto('about:blank');
-    await page.goto(`${base}/?demo=1#hp_news`, { waitUntil: 'networkidle' });
+    await page.goto(`${base}/?demo=1&device=desktop#hp_news`, { waitUntil: 'networkidle' });
     await page.getByPlaceholder('Title').fill('Doors open Monday');
     await page.getByPlaceholder('Message').fill('A first wave of Early Access invitations goes out.');
     await page.getByRole('button', { name: 'Post', exact: true }).click();
     await expect(page.getByText('Doors open Monday')).toBeVisible();
 
     await page.goto('about:blank');
-    await page.goto(`${base}/?demo=1#hp_notes`, { waitUntil: 'networkidle' });
+    await page.goto(`${base}/?demo=1&device=desktop#hp_notes`, { waitUntil: 'networkidle' });
     await page.getByPlaceholder('Beta V 7.70').fill('Beta V 9.99');
     await page.getByPlaceholder('One change per line').fill('A change made in the demo');
     await page.getByRole('button', { name: 'Publish', exact: true }).click();
@@ -224,7 +232,7 @@ test('the demo can post an announcement and publish a patch note', async ({ page
 test('the phone drawer opens with labels, not a column of icons', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 780 });
   await page.goto('about:blank');
-  await page.goto(`${base}/?demo=1#live`, { waitUntil: 'networkidle' });
+  await page.goto(`${base}/?demo=1&device=desktop#live`, { waitUntil: 'networkidle' });
 
   await page.getByRole('button', { name: 'Open navigation' }).click();
   const sidebar = page.locator('aside');
@@ -250,10 +258,51 @@ test('the phone drawer opens with labels, not a column of icons', async ({ page 
   await expect(sidebar).not.toBeInViewport();
 });
 
+// The demo asks which device it is being shown on before it draws the terminal,
+// and the answer picks one of the two default board layouts. Every other test
+// here answers it in the URL (`?device=desktop`) so it can reach a screen; this
+// one goes through the door, which is the only way to know the door works.
+test('the demo asks which device it is on, and the answer picks the layout', async ({ page }) => {
+  const errors = [];
+  const record = (error) => errors.push(String(error));
+  page.on('pageerror', record);
+  try {
+    // Asked on a WIDE screen too, and the wide answer is the recommended one —
+    // this is a question rather than a measurement, so that somebody on a laptop
+    // can show the phone layout.
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.goto('about:blank');
+    await page.goto(`${base}/?demo=1`, { waitUntil: 'networkidle' });
+    await expect(page.getByText('How are you looking at this?')).toBeVisible();
+
+    await page.getByRole('button', { name: /Phone or tablet/ }).click();
+    await expect(page.locator('.wall-cell').first()).toBeVisible();
+
+    // Stacked means every tile the full width of the board, ON A DESKTOP — it is
+    // a real arrangement, not a narrow-screen rendering, which is the whole
+    // reason a desktop visitor can be shown it at all.
+    const widths = await page.locator('.wall-cell').evaluateAll((els) => els.map((el) => Math.round(el.getBoundingClientRect().width)));
+    expect(widths.length).toBeGreaterThan(1);
+    expect(new Set(widths).size, `stacked tiles were not all one width: ${widths}`).toBe(1);
+    // And the sidebar starts out of the way, which is the other half of the answer.
+    await expect(page.locator('.vts-public-shell')).toHaveAttribute('data-collapsed', 'true');
+
+    // Both layouts stay reachable afterwards, so the answer is a starting point
+    // rather than a setting.
+    await page.getByRole('button', { name: 'Edit layout' }).click();
+    await page.getByRole('button', { name: 'Desktop layout' }).click();
+    const after = await page.locator('.wall-cell').evaluateAll((els) => els.map((el) => Math.round(el.getBoundingClientRect().width)));
+    expect(new Set(after).size, 'the desktop layout came back stacked').toBeGreaterThan(1);
+  } finally {
+    page.off('pageerror', record);
+  }
+  expect(errors, 'the device door threw').toEqual([]);
+});
+
 test('the demo reaches no service and leaves nothing behind', async ({ page, context }) => {
   const requests = [];
   page.on('request', (request) => requests.push(request.url()));
-  await page.goto(base + '/?demo=1#notes', { waitUntil: 'networkidle' });
+  await page.goto(base + '/?demo=1&device=desktop#notes', { waitUntil: 'networkidle' });
 
   const contract = await page.evaluate(() => window.__VTS_PUBLIC_BOUNDARY__);
   expect(contract.routes).toEqual(expect.arrayContaining(routes));

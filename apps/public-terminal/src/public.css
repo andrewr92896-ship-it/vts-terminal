@@ -51,10 +51,13 @@
 }
 @media (max-width: 768px) {
   .vts-public-menu { display:grid!important; }
-  .vts-public-profile-copy { display:none; }
-  .vts-public-column > header label { display:none!important; }
-  .vts-public-ai { width:38px!important; padding:0!important; justify-content:center; }
-  .vts-public-ai span { display:none; }
+  /* The TOP BAR sizes itself in PublicTopBar.tsx, not here: the shell is styled
+     inline, so a rule in this file loses to the inline value. Rules that tried
+     to set its padding and shrink the Help button silently did nothing, the row
+     overflowed, and flex crushed that button to the width of its icon. The one
+     thing left here is the clock's date line, which carries no inline display. */
+  .vts-clock-date { display:none; }
+  .vts-clock-time { font-size:11.5px; }
   .vts-public-shell { display:block; }
   .vts-public-shell > aside { position:fixed!important; inset:0 auto 0 0; width:min(310px,86vw); z-index:80; transform:translateX(-105%); transition:transform .2s ease; }
   .vts-public-shell[data-mobile-open='true'] > aside { transform:none; }

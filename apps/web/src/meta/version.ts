@@ -11,9 +11,19 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 7.66';
+export const APP_VERSION = 'Beta V 7.67';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 7.67',
+    date: '2026-08-28',
+    notes: [
+      'The demo now asks whether you are on a desktop or a phone before it opens, and lays the Live Wall out to match. Both layouts are available from the wall at any time.',
+      'The public terminal\u2019s top bar is cleaned up on a phone: one row, the section you are on, and the time \u2014 no wrapped breadcrumb and no three-line clock.',
+      'Removed the notifications bell from the public terminal. It had never done anything, and there are no notifications on that side to open.',
+      'The account circle in the public top bar opens Settings. It was labelled that and did nothing.',
+    ],
+  },
   {
     version: 'Beta V 7.66',
     date: '2026-08-28',

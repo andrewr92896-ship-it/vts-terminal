@@ -76,9 +76,16 @@ export const PUBLIC_TILES: PublicTileDef[] = [
 
 const DEF = new Map(PUBLIC_TILES.map((t) => [t.kind, t]));
 
-// The board a visitor lands on. Deliberately a working board rather than an
-// empty grid: an empty one reads as a broken screen, and the demo exists to show
-// a working site.
+// THE TWO DEFAULT LAYOUTS. Both are working boards rather than empty grids: an
+// empty one reads as a broken screen, and the demo exists to show a working
+// site. They are pickable at any time from the wall's own toolbar, and the demo
+// asks which one to start on at the door.
+//
+// `stacked` is a real ARRANGEMENT — every tile a full twelve columns wide, one
+// under another — not a rendering mode. That distinction is the whole point: a
+// mode would only apply on a narrow screen, and somebody on a desktop who asked
+// for the phone layout would not get it. As an arrangement it reads the same
+// everywhere, which is what makes it demonstrable.
 export const DEFAULT_BOARD: BoardTile[] = [
   { id: 'w-chart', kind: 'chart', title: 'EUR/USD', symbol: 'OANDA:EURUSD', interval: '60', x: 0, y: 0, w: 6, h: 10 },
   { id: 'w-watch', kind: 'watchlist', title: 'Watchlist', symbols: ['OANDA:EURUSD', 'OANDA:GBPUSD', 'OANDA:XAUUSD', 'NASDAQ:NDX'], watchlistMode: 'scroll', x: 6, y: 0, w: 3, h: 10 },
@@ -90,6 +97,39 @@ export const DEFAULT_BOARD: BoardTile[] = [
   // nobody sees.
   { id: 'w-stream', kind: 'streams', title: 'Live Streams', x: 8, y: 10, w: 4, h: 8 },
 ] as unknown as BoardTile[];
+
+// One column, in reading order: what is moving, the chart, then the things you
+// scroll to. Heights are generous because a phone shows one tile at a time and a
+// cramped tile is worse than a scroll.
+export const STACKED_BOARD: BoardTile[] = (() => {
+  const rows: [string, string, string, number][] = [
+    ['s-watch', 'watchlist', 'Watchlist', 5],
+    ['s-chart', 'chart', 'EUR/USD', 10],
+    ['s-news', 'news', 'Market News', 9],
+    ['s-cal', 'calendar', 'Economic Calendar', 8],
+    ['s-stream', 'streams', 'Live Streams', 8],
+    ['s-clock', 'clock', 'Market Clock', 7],
+  ];
+  let y = 0;
+  return rows.map(([id, kind, title, h]) => {
+    const tile = { id, kind, title, x: 0, y, w: COLS, h } as Record<string, unknown>;
+    if (kind === 'chart') { tile.symbol = 'OANDA:EURUSD'; tile.interval = '60'; }
+    if (kind === 'watchlist') { tile.symbols = ['OANDA:EURUSD', 'OANDA:GBPUSD', 'OANDA:XAUUSD', 'NASDAQ:NDX']; tile.watchlistMode = 'scroll'; }
+    if (kind === 'news') tile.newsFeedKeys = ['all'];
+    if (kind === 'calendar') tile.calendarImpact = 'medhigh';
+    y += h;
+    return tile as unknown as BoardTile;
+  });
+})();
+
+export type BoardPresetKey = 'desktop' | 'stacked';
+export const BOARD_PRESETS: { key: BoardPresetKey; label: string; hint: string; tiles: BoardTile[] }[] = [
+  { key: 'desktop', label: 'Desktop', hint: 'Tiles side by side, arranged across the width.', tiles: DEFAULT_BOARD },
+  { key: 'stacked', label: 'Stacked', hint: 'One tile per row, top to bottom — built for a phone.', tiles: STACKED_BOARD },
+];
+export function presetTiles(key: BoardPresetKey): BoardTile[] {
+  return (BOARD_PRESETS.find((p) => p.key === key) ?? BOARD_PRESETS[0]!).tiles.map((t) => ({ ...t }));
+}
 
 function renderTile(tile: BoardTile, editing: boolean, onChange: (patch: Partial<BoardTile>) => void, onRemove: () => void) {
   const props = { tile, editing, onChange, onRemove };
@@ -193,11 +233,17 @@ export function PublicBoard({
             <Icon name="plus" size={13} />Add a tile
           </button>
         )}
-        {editing && tiles.length > 0 && (
-          <button style={btn()} onClick={() => onChange(DEFAULT_BOARD.map((t) => ({ ...t })))}>
-            <Icon name="refresh-cw" size={13} />Reset layout
+        {/* THE TWO DEFAULT LAYOUTS, reachable at any time rather than only at the
+            door. The demo asks which to start on; this is what makes the answer
+            changeable, and what makes somebody on a desktop able to see the
+            phone layout at all. Both replace the arrangement outright — there is
+            nothing to lose that the other button does not put back in one
+            press. */}
+        {editing && BOARD_PRESETS.map((preset) => (
+          <button key={preset.key} style={btn()} title={preset.hint} onClick={() => onChange(presetTiles(preset.key))}>
+            <Icon name={preset.key === 'stacked' ? 'smartphone' : 'monitor'} size={13} />{preset.label} layout
           </button>
-        )}
+        ))}
         <span style={{ marginLeft: 'auto', color: FAINT, fontSize: 11.5 }}>{canSave ? '' : saveNote}</span>
       </div>
 
