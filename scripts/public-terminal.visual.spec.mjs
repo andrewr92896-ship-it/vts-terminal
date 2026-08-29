@@ -2,6 +2,31 @@ import { test, expect } from '@playwright/test';
 import { mkdir } from 'node:fs/promises';
 
 const base = 'http://127.0.0.1:4173';
+
+// THE THIRD-PARTY EMBEDS ARE BLOCKED FOR THIS WHOLE SUITE, AND THAT IS THE FIX
+// FOR A REAL FAILURE RATHER THAN A CONVENIENCE.
+//
+// The wall carries TradingView's chart and watchlist and a YouTube stream slot.
+// This file was written in a sandbox with no outbound access, where those hosts
+// simply fail — so the suite was hermetic by accident, and two things quietly
+// depended on it:
+//
+//  - `waitUntil: 'networkidle'` settled, because nothing was ever connecting.
+//    On a runner WITH outbound access a widget holds the connection open, the
+//    page never goes idle, and the page-family capture spent its entire 300s
+//    budget on one navigation and named nothing.
+//  - the watchlist assertion reads the config TradingView is handed. When their
+//    script actually loads it consumes that container — config script and all —
+//    so the read came back empty and the test reported the wrong widget.
+//
+// Blocking them here makes the intent true instead of accidental: this suite is
+// about the terminal's own screens, and it must not depend on somebody else's
+// CDN being reachable. Keep it blocked, and add a host here rather than letting
+// a new embed decide whether the run passes.
+const THIRD_PARTY = /(^|\.)((s3\.)?tradingview\.com|youtube(-nocookie)?\.com|ytimg\.com|googlevideo\.com)/;
+test.beforeEach(async ({ page }) => {
+  await page.route((url) => THIRD_PARTY.test(url.hostname), (route) => route.abort());
+});
 const out = 'test-results/public-terminal-update-existing-pages-v1';
 await mkdir(out, { recursive: true });
 
@@ -32,15 +57,29 @@ async function capture(page, name, width, url) {
   const onError = (error) => errors.push(String(error));
   page.on('pageerror', onError);
   await page.setViewportSize({ width, height: Math.max(720, Math.round(width * 0.56)) });
-  await page.goto(base + url, { waitUntil: 'networkidle' });
+  // NOT `networkidle`. With the embeds above blocked there is no third party
+  // left to wait for — every screen here is served from module memory — and a
+  // navigation that cannot reach idle must show up as a blank or broken capture
+  // naming its route, never as a timeout that names nothing.
+  await page.goto(base + url, { waitUntil: 'domcontentloaded' });
   await expect(page.locator('#root')).toBeVisible();
+  // Wait for the screen to have painted something before the shutter, but never
+  // for long: a page that stays empty is exactly what the blank list is for, and
+  // 117 captures make every second here cost two minutes.
+  await page
+    .waitForFunction(
+      (min) => (document.querySelector('.vts-public-main')?.innerText ?? '').replace(/\s+/g, ' ').trim().length >= min,
+      MIN_CONTENT,
+      { timeout: 2500 },
+    )
+    .catch(() => {});
   await page.screenshot({ path: `${out}/${name}.png`, fullPage: false, animations: 'disabled' });
   page.off('pageerror', onError);
   return errors;
 }
 
 test('candidate page-family evidence', async ({ page }) => {
-  test.setTimeout(300_000);
+  test.setTimeout(420_000);
   const blank = [];
   const broken = [];
   for (const width of [1440, 768, 390]) {
@@ -304,17 +343,22 @@ test('the workspace can be resized, and widening grows the box rather than thinn
     while (!(await plus.isDisabled()) && grew < 40) { await plus.click(); grew += 1; }
     expect(grew, 'the workspace could not grow at all on a 1920px screen').toBeGreaterThan(0);
 
-    expect(await gridWidth(), 'the box did not grow').toBeGreaterThan(beforeGrid);
+    // POLLED, not read once. A column is added by a state change and the box is
+    // re-laid out after it, so a single read taken the instant the click returns
+    // is a race — it passed on an idle machine and failed in a full run.
+    await expect.poll(gridWidth, { message: 'the box did not grow', timeout: 5000 }).toBeGreaterThan(beforeGrid);
     // The tiles keep their size. A column is a fixed slice of width, so adding
     // three of them must not make the existing ones thinner — this is the whole
     // point of the feature and the half that was wrong the first time.
-    expect(Math.abs((await firstTileWidth()) - beforeTile), 'the tiles were resized by adding columns').toBeLessThan(12);
+    await expect
+      .poll(async () => Math.abs((await firstTileWidth()) - beforeTile), { message: 'the tiles were resized by adding columns', timeout: 5000 })
+      .toBeLessThan(12);
     // And it stops before anything has to scroll sideways.
     expect(await page.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth)).toBe(false);
 
     const shrunk = await gridWidth();
     await page.getByRole('button', { name: 'Remove a column' }).click();
-    expect(await gridWidth(), 'removing a column did not narrow the box').toBeLessThan(shrunk);
+    await expect.poll(gridWidth, { message: 'removing a column did not narrow the box', timeout: 5000 }).toBeLessThan(shrunk);
 
     // Escape locks the workspace FIRST and stays in edit mode, so the two states
     // unwind in the order they were entered.
@@ -330,8 +374,11 @@ test('the workspace can be resized, and widening grows the box rather than thinn
 // The watchlist has two widgets behind it and the right one depends on the
 // tile's SHAPE. The default board had the scrolling tape in a tall narrow tile,
 // where it clipped its own quotes at both edges. Asserted on the config the tile
-// hands the widget, because TradingView's script does not load in CI at all —
-// and a test that waits for their iframe would prove nothing here either way.
+// hands the widget rather than on their iframe, which would prove nothing about
+// which widget was chosen. Their script is blocked at the top of this file, so
+// the config stays in the DOM where this can read it — without that it loads,
+// consumes the container, and this reads an empty list on any runner with
+// outbound access.
 test('the watchlist uses the widget that fits the tile it is in', async ({ page }) => {
   const configs = async () =>
     page.evaluate(() =>
