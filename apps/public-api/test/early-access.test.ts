@@ -38,12 +38,12 @@ function call(body: unknown, over: Record<string, unknown> = {}) {
 }
 
 test('a request is recorded and answered the same way whether or not it is new', async () => {
-  const first = await call({ email: 'Person@Example.com', note: '  I trade forex part time  ' });
+  const first = await call({ email: 'Person@Example.com' });
   assert.equal(first.status, 202);
   assert.equal(first.store.earlyAccess.size, 1);
   // Stored lower-cased so a second submission from the same person updates the
   // one lead rather than queueing another for somebody to work twice.
-  assert.deepEqual(first.store.earlyAccess.get('person@example.com'), { email: 'person@example.com', note: 'I trade forex part time' });
+  assert.deepEqual(first.store.earlyAccess.get('person@example.com'), { email: 'person@example.com', note: null });
 });
 
 test('a malformed address is refused before anything is stored', async () => {
@@ -63,8 +63,28 @@ test('the route is refused without the public origin and CSRF header', async () 
   assert.equal(noCsrf.status, 403);
 });
 
-test('the note is bounded rather than stored at whatever length arrives', async () => {
+// THE ADDRESS IS ALL THAT IS COLLECTED (owner decision, 2026-08). There was an
+// optional note, bounded at 1,000 characters — but a free-text box on a form
+// that mentions trading invites somebody to volunteer their broker, their
+// account size and their financial situation, which is personal data nobody
+// asked for and then has to hold, describe and delete. The field is gone from
+// the form; this asserts the ROUTE ignores one anyway, because the form is not
+// the enforcer and a hand-rolled request is the case that matters.
+test('a note is ignored even when one is sent', async () => {
   const result = await call({ email: 'person@example.com', note: 'z'.repeat(5000) });
   assert.equal(result.status, 202);
-  assert.equal(result.store.earlyAccess.get('person@example.com')!.note!.length, 1000);
+  assert.equal(result.store.earlyAccess.get('person@example.com')!.note, null);
+});
+
+// The IP reaches the rate limiter as a keyed hash, like every authentication
+// route. It used to arrive raw, so the column named `key_hash` held a real
+// address on this path alone — kept forever, for a limiter that only needs to
+// know it has seen the same caller five times this hour.
+test('the rate-limit key is hashed, so no raw address is stored', async () => {
+  const result = await call({ email: 'person@example.com' });
+  assert.equal(result.status, 202);
+  const keys = [...result.store.rates.keys()].filter((k) => k.startsWith('early_access'));
+  assert.equal(keys.length, 1);
+  const key = keys[0] ?? '';
+  assert.ok(!key.includes('203.0.113.7'), `the raw address is in the key: ${key}`);
 });

@@ -4,6 +4,7 @@ import { pathToFileURL } from 'node:url';
 import { loadPublicConfig } from './config.js';
 import { PublicAuthService, AuthError } from './auth.js';
 import { PostgresPublicStore } from './postgresStore.js';
+import { keyedHash } from './security.js';
 import { HttpPublicMarketProvider, SmtpPublicMailer } from './adapters.js';
 import type { BudgetKind, FlashcardSetDetail, FlashcardSetRow, NetWorthCategory, NetWorthKind, PublicMarketProvider, PublicStore, StudyDeckDetail, StudyDeckRow, StudyGuideDetail, StudyGuideRow, TodoItemRow } from './types.js';
 import { NET_WORTH_CATEGORIES } from './types.js';
@@ -537,11 +538,22 @@ export async function handleRequest(req:IncomingMessage,res:ServerResponse,depen
     if(method==='POST'&&path==='/public/v1/early-access'){
       const body=await readBody(req);
       const email=String(body.email||'').trim().toLowerCase();
-      const note=typeof body.note==='string'&&body.note.trim()?body.note.trim().slice(0,1000):null;
       if(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)||email.length>320)throw new AuthError(400,'Enter a valid email address.');
-      const limit=await dependencies.store.consumeRateLimit('early_access',ip(req),5,60*60*1000);
+      // THE IP IS HASHED BEFORE IT IS STORED, like every other rate-limited
+      // route. This one passed `ip(req)` in raw, so the column named `key_hash`
+      // held a real address on this path alone — a stranger's IP, kept forever,
+      // for a form that only needs to know it has seen them five times this
+      // hour. `keyedHash` is the same HMAC the auth paths use, so the limit
+      // still counts per address without the address being readable.
+      const limit=await dependencies.store.consumeRateLimit('early_access',keyedHash(config.challengePepper,ip(req)),5,60*60*1000);
       if(!limit.allowed)throw new AuthError(429,'Too many requests. Try again later.');
-      await dependencies.store.recordEarlyAccessRequest(email,note);
+      // NOTHING BUT THE ADDRESS IS COLLECTED (owner decision, 2026-08). There
+      // was an optional "anything you want us to know" note, and a free-text
+      // box on a form that mentions trading invites people to volunteer their
+      // broker, their account size and their financial situation — personal
+      // data nobody asked for, held forever, in a service that has no need of
+      // it. The column stays for the rows already written; nothing writes to it.
+      await dependencies.store.recordEarlyAccessRequest(email,null);
       await dependencies.store.audit('early_access.requested',undefined,{});
       // The same answer either way, so this cannot be used to learn whether an
       // address is already on the list.

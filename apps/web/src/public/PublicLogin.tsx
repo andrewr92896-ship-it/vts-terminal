@@ -20,7 +20,7 @@ export function PublicLogin({ initialStep = 'login', onVerified, onDemo, onClose
         const result=await publicAuth.verify(challengeId,String(form.get('code')??''),form.get('remember')==='on');
         if(result.passwordChangeRequired)setStep('change-password');else onVerified();
       } else if(step==='early-access'){
-        setNotice((await publicAuth.earlyAccess(String(form.get('email')??''),String(form.get('note')??''))).message);
+        setNotice((await publicAuth.earlyAccess(String(form.get('email')??''),'')).message);
       } else if(step==='recovery'){
         const message=isDemo()?'If a public account matches that email, recovery instructions will be sent shortly.':(await publicAuth.recover(String(form.get('email')??''))).message;
         setNotice(message);
@@ -57,7 +57,6 @@ export function PublicLogin({ initialStep = 'login', onVerified, onDemo, onClose
       happens to it, and nothing else. Do not put an offer back on this form. */}
   {step==='early-access'&&<>
     <label>Email address<input name="email" type="email" autoComplete="email" placeholder="you@example.com" required/></label>
-    <label>Anything you want us to know <span>optional</span><textarea name="note" rows={3} placeholder="What you trade or study, and what you are hoping the terminal does for you."/></label>
     {/* THE ONE BINDING STATEMENT ON THIS PAGE, and it is here rather than in the
         Privacy Policy on purpose.
         
@@ -73,9 +72,9 @@ export function PublicLogin({ initialStep = 'login', onVerified, onDemo, onClose
     <div className="vts-public-collect">
       <strong>What happens to this</strong>
       <p>
-        We keep the email address you type here, and the note if you write one. It is used for one thing:
-        telling you when beta access opens. It is not sold, not shared with anyone else, and not added
-        to a marketing list.
+        The email address is all we keep, and it is used for one thing: telling you when beta access
+        opens. It is not sold, not shared with anyone else, and not added to a marketing list. We ask
+        for nothing else, so there is nothing else to keep.
       </p>
       <p>
         Ask us to delete it at any time — write to <em>{COMPANY.contactEmail}</em> and it is removed.

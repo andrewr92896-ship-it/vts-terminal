@@ -2,8 +2,12 @@ export interface PatchNote{version:string;date:string;notes:string[]}
 // The public terminal's own version and its historical archive. Separate from the
 // private terminal's `meta/version` (replaced at the build seam) because they are
 // different products on different release trains.
-export const APP_VERSION='Public Candidate V 1.9';
+export const APP_VERSION='Public Candidate V 2.0';
 export const PATCH_NOTES:PatchNote[]=[
+ {version:'Public Candidate V 2.0',date:'August 29, 2026',notes:[
+  'The beta-access form asks for an email address and nothing else. The optional note is gone \u2014 a free-text box on a form that mentions trading invites people to volunteer their broker and their account size, which is personal data nobody asked for.',
+  'The address you are asked for is the only thing kept. Your IP is no longer stored by that form.',
+ ]},
  {version:'Public Candidate V 1.9',date:'August 29, 2026',notes:[
   'The programme is called beta access rather than early access. Early access is what games and software are sold as before release; beta says what this actually is \u2014 unfinished software you are welcome to try \u2014 and promises nothing.',
  ]},

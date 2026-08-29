@@ -273,6 +273,13 @@ test('a visitor with no account can ask for early access', async ({ browser }) =
   // quietly reappearing gets caught.
   await expect(card).not.toContainText(/free (max|premium)|months of free|membership/i);
 
+  // AND THE ADDRESS IS ALL IT ASKS FOR. There was an optional free-text note,
+  // which on a form that mentions trading invites somebody to volunteer their
+  // broker and their account size — personal data never asked for and kept
+  // forever. Asserted as an absence, because a helpful-looking field is exactly
+  // the kind of thing that gets added back.
+  await expect(card.locator('textarea')).toHaveCount(0);
+
   await page.getByPlaceholder('you@example.com').fill(`visitor-${Date.now()}@example.com`);
   await page.getByRole('button', { name: 'Send request' }).click();
 
