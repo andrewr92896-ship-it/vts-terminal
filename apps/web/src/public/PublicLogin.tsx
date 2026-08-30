@@ -77,6 +77,10 @@ export function PublicLogin({ initialStep = 'login', onVerified, onDemo, onClose
         for nothing else, so there is nothing else to keep.
       </p>
       <p>
+        Beta access is for people aged 18 or over in the United States. If that is not you, please do
+        not send an address — we would only have to turn the request down and delete it.
+      </p>
+      <p>
         Ask us to delete it at any time — write to <em>{COMPANY.privacyEmail}</em> and it is removed.
         This paragraph is what we do with it, and applies whatever the pre-release Privacy Policy says
         about itself.

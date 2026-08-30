@@ -85,7 +85,7 @@ export const sha256Hex=(value:string)=>createHash('sha256').update(value,'utf8')
 // the statements become an agreement to be bound, ACKNOWLEDGEMENT_VERSION goes
 // to '2', and every account is re-prompted because the version they hold is no
 // longer the current one. Nothing else in the mechanism moves.
-export const ACKNOWLEDGEMENT_VERSION='1';
+export const ACKNOWLEDGEMENT_VERSION='2';
 export const ACKNOWLEDGEMENT_EFFECTIVE_DATE='August 30, 2026';
 export const ACKNOWLEDGEMENT_TITLE='Before you start';
 export const ACKNOWLEDGEMENT_STATEMENTS=[
@@ -93,8 +93,19 @@ export const ACKNOWLEDGEMENT_STATEMENTS=[
   'Trading foreign exchange, derivatives, crypto-assets and securities carries a high level of risk and is not suitable for everybody. You can lose more than you deposit, and past performance does not indicate future results.',
   'Vitalis Trading Systems LLC is not a broker, an exchange, an investment adviser or a custodian. The public terminal holds no money, places no orders, and connects to no brokerage account.',
   'Figures shown here are informational. Your broker’s and custodian’s own records are the authority on your account.',
+  // A REPRESENTATION, NOT A CHECK, and that is the point of it being here.
+  // Nothing in the terminal asks for a birthdate or a country — collecting a
+  // birthdate in order to enforce an age rule means collecting a birthdate,
+  // which is more personal data than the rule saves. Admission is manual, so
+  // the operator is the only enforcement there is. What this adds is a record
+  // that the person stated they were eligible, which is the difference between
+  // a rule and a wish. The documents must never imply it was verified.
+  'I am 18 or over and located in the United States.',
 ] as const;
-export const ACKNOWLEDGEMENT_CONFIRM='I have read the Terms of Service and the Privacy Policy, and I understand the four statements above.';
+// Deliberately does not count the statements: adding or removing one should
+// not require this line to be edited in step, which is the kind of mismatch
+// nobody notices until it is on screen.
+export const ACKNOWLEDGEMENT_CONFIRM='I have read the Terms of Service and the Privacy Policy, and I confirm the statements above are true.';
 
 // Hashed from its own content, by the same function, so the acknowledgement is
 // pinned exactly as the documents are — a reworded statement changes the hash
@@ -125,20 +136,19 @@ export const REQUIRED_DOCUMENTS:readonly LegalDocument[]=[
   {
     id:'terms',
     title:'Terms of Service',
-    version:'2026-08-30.1',
+    version:'2026-08-30.2',
     effectiveDate:'August 30, 2026',
-    // Unchanged text at a new version: the two documents share one version
-    // string in the terminal's header, so the Terms move with the Privacy
-    // Policy even when only the latter was edited. Slightly over-eager, and
-    // preferable to a header that names a version only one document is at.
-    sha256:'8faedfcca228159c068ec5be095977e3dcaa3860778a937f9b9db1e72720f946',
+    // The two documents share one version string in the terminal's header, so
+    // they move together even when only one was edited. Slightly over-eager,
+    // and preferable to a header naming a version only one document is at.
+    sha256:'c89d4be4e6bcf8a8a849863e4001f0e92bff80ce5cc9e1fb6fa2a95117883537',
   },
   {
     id:'privacy',
     title:'Privacy Policy',
-    version:'2026-08-30.1',
+    version:'2026-08-30.2',
     effectiveDate:'August 30, 2026',
-    sha256:'5657a38616562c7a1458b44869752ec9d9e1737a79e04952442759b9cfb46640',
+    sha256:'061b4420b9d4e3af43a8ba91f53d512ebcee4ccb770533ad9520721d1f1cbe1d',
   },
 ];
 

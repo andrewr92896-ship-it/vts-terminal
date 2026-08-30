@@ -1,0 +1,274 @@
+================================================================================
+PHASE 2 — ADVERSARIAL REVIEW OF THE PRIVACY POLICY AND TERMS DRAFTS
+Claude Code, checking every factual claim against the repository
+================================================================================
+
+Read from:  main @ 816a2c5 + working branch @ efe5030
+Version:    Beta V 7.72 / Public Candidate V 2.0
+Date:       29 August 2026
+
+My job here is to argue, not to approve. Everything below was checked against
+the code; where I could not check something I say so rather than guessing.
+
+The drafts are good. The legal structure is better than anything I could have
+produced, and three of the four open questions you raised were the right ones
+to raise. What follows is what is wrong with them, starting with what is wrong
+with MY fact sheet, because two of your errors are inherited from my errors.
+
+
+--------------------------------------------------------------------------------
+A. CORRECTIONS TO MY OWN FACT SHEET — my errors, fix these first
+--------------------------------------------------------------------------------
+
+A1. THE TABLE COUNT IS WRONG. I wrote "23 further tables". It is 27.
+    35 tables total, minus the 8 identity and authentication tables = 27.
+    Nothing in the drafts depends on the number, but the fact sheet was wrong
+    and you were entitled to rely on it.
+
+A2. THE AUDIT METADATA FIELD IS NOT ALWAYS EMPTY. I wrote "currently written
+    empty" and you carried that into the Privacy Policy as "The metadata field
+    is currently recorded empty." That sentence is FALSE.
+        apps/public-api/src/auth.ts:76 writes
+        audit('public.auth.challenge_verified', account.id, {remembered: <bool>})
+    Every other audit call writes {}. So one event records whether the person
+    ticked "remember this device". Harmless data, false statement.
+    SUGGESTED REPLACEMENT: "An audit event contains an event name, an account
+    identifier where applicable, a timestamp, and a metadata field. The metadata
+    currently recorded is limited to whether a trusted device was requested at
+    sign-in."
+
+A3. "NO SERVER REQUEST" WAS IMPRECISE AND YOUR CATCH IS CORRECT. I accept the
+    correction in full. The demo makes no request to the VTS application server;
+    it does request TradingView resources. Your wording is right and mine was
+    not.
+
+
+--------------------------------------------------------------------------------
+B. TWO ITEMS ON YOUR "NOT YET TRUE" LIST ARE NOW TRUE — they shipped
+--------------------------------------------------------------------------------
+
+Both went out after the fact sheet was written, in Beta V 7.72 / Public
+Candidate V 2.0, and are live on the public terminal now:
+
+  - "The beta-access form collects only your email address."
+        The optional note field is gone from the form, AND the route ignores a
+        note even when one is sent, because the form is not the enforcer. There
+        is a test asserting both.
+
+  - "VTS converts the Internet Protocol address ... into a keyed hash before
+    storage" / "VTS does not store the raw Internet Protocol address in the
+    beta-access rate-limit record."
+        The route now passes keyedHash(challengePepper, ip) exactly as every
+        authentication route already did. There is a test asserting no raw
+        address reaches the store, and I proved it fails against the old code.
+
+MOVE BOTH OUT of NOT YET TRUE. The existing column on the early-access table is
+retained for rows written before the change; nothing writes to it now.
+
+
+--------------------------------------------------------------------------------
+C. YOUR FOUR OPEN QUESTIONS, ANSWERED FROM THE CODE
+--------------------------------------------------------------------------------
+
+C1. THE LEADERBOARD — and this is the most important item in this review.
+
+    ANSWER: There is NO leaderboard in the public terminal. Every deck reports
+    hasLeaderboard:false, there is no board route, and the client hides the tab
+    rather than opening an empty one. Nothing about one user is visible to any
+    other user anywhere in the public build. You do NOT need an "information
+    visible to other users" section.
+
+    BUT THE APPLICATION CURRENTLY SAYS OTHERWISE, AND THAT IS A BLOCKER.
+    The public Preferences screen (reachable at my_prefs, in the public nav)
+    draws a "Public leaderboards" card that tells the visitor, verbatim:
+
+        "The terminal's built-in study games rank every player on one board.
+         Your display name and score are visible to anyone playing the same
+         game."
+
+    That is false in the public terminal. The screen is shared with the private
+    portal, where it is true, and it was never filtered out of the public build.
+
+    So the application is making an untrue statement about who can see a user's
+    data — the same class of problem as an aspirational privacy policy, pointed
+    the other way. Publishing a policy that correctly says nothing is shared,
+    while a settings screen says a stranger can see your name and score, is
+    worse than either alone.
+
+    I am removing that card from the public build. Treat this as a NOT YET TRUE
+    item in reverse: the policy's silence on user-to-user visibility is correct
+    and must not change, and the app has to stop contradicting it.
+
+C2. CAN A URL HANDED TO TRADINGVIEW CARRY AN ACCOUNT IDENTIFIER?
+
+    ANSWER: No. TvWidget appends a script whose src is a fixed TradingView URL
+    and whose body is a JSON config of symbols and display options. No account
+    id, no email, no user content is in it. The public terminal routes by URL
+    hash and its routes carry no identifiers, so the Referer TradingView sees is
+    a bare page URL with a screen name in the fragment.
+
+    Your Section 5.3 list is accurate as written and does not need widening.
+
+C3. DOES TRADINGVIEW DISPLAY REAL MARKET INFORMATION?
+
+    ANSWER: Yes, and your catch is correct. The chart and watchlist tiles are
+    live TradingView components showing TradingView's own market data, including
+    in the demo. "Every figure in the demo is fabricated" is true of VTS's own
+    account, trade, portfolio and performance figures and is NOT true of what
+    those two tiles render.
+
+    Your drafts already draw this distinction and I would keep the wording you
+    used. My fact sheet should have caught it.
+
+C4. WHAT ACCOUNT DELETION HAS TO REACH.
+
+    Better news than you assumed. Of the account-linked tables, 26 carry
+    "references public_accounts(id) on delete cascade" and 2 carry
+    "on delete set null". So deleting the account row removes the user's data
+    from 26 tables by database action rather than by application code
+    remembering to.
+
+    Two things are NOT covered and must be handled explicitly:
+      - public_early_access_requests has no foreign key to the account. This is
+        the row we agreed to delete by matching email address.
+      - public_rate_limits has no account column at all — it is keyed by bucket
+        and hash and holds nothing identifying now that the IP is hashed.
+
+    So the deletion route is: delete the early-access row by email, delete the
+    account row, let the cascade do the rest, all in one transaction. I will
+    verify it against the real database and report the row counts rather than
+    asserting it works.
+
+
+--------------------------------------------------------------------------------
+D. WHERE I DISAGREE WITH THE DRAFTING
+--------------------------------------------------------------------------------
+
+D1. THE 180-DAY RETENTION PROMISE IS THE MOST LIKELY SENTENCE IN EITHER DOCUMENT
+    TO BECOME FALSE.
+
+    You flagged this yourself and then wrote it into the policy as a positive
+    statement anyway. Nothing in the codebase deletes anything on a schedule
+    today — there is no cron, no sweep, no job runner in the public service at
+    all. A promise to delete automatically is not a wording choice, it is a
+    feature.
+
+    I am not arguing against the period. I am arguing that the sentence must not
+    exist until the job does. I will build the sweep in the same change as
+    deletion, and then the sentence is true and can stay exactly as you wrote it.
+
+D2. SECTION 8.3 IS HONEST AND I WOULD STILL RATHER DELETE IT.
+
+    "Expired authentication rows are not currently removed through an automatic
+    scheduled sweep" is accurate and I respect writing it down. But it publishes
+    a weakness to solve a problem that a small amount of code solves better.
+    Once the sweep in D1 exists, expiring authentication rows can ride the same
+    job and that sentence goes away.
+
+    If you disagree — if there is a reason to prefer disclosing it over fixing
+    it — say so and I will leave it.
+
+D3. THE CLICKWRAP ACCEPTANCE RECORD IS RIGHT AND I WOULD ADD NOTHING.
+
+    Storing a SHA-256 of the exact accepted text, append-only, versioned, with
+    no raw IP, is a better design than I would have specified. I will build it
+    as written.
+
+D4. AGE 18 AND UNITED-STATES-ONLY ARE NOT ENFORCED BY ANY CODE, AND SHOULD NOT
+    BE.
+
+    Nothing in the codebase asks for or checks a date of birth or a country, and
+    I would not add either — collecting a birthdate to enforce an age rule means
+    collecting a birthdate, which is more personal data than the rule saves.
+
+    Admission is entirely manual through the `admit` command, so Andrew IS the
+    enforcement mechanism. That is a real control, not an absent one, but it is
+    a control he has to actually apply. Your placement of these under NOT YET
+    TRUE is right for that reason, and the fix is a decision rather than a build.
+
+
+--------------------------------------------------------------------------------
+E. WHAT I CANNOT ANSWER
+--------------------------------------------------------------------------------
+
+E1. THE SMTP PROVIDER. It is whatever PUBLIC_SMTP_URL points at in the Railway
+    environment. That value is not in the repository — correctly, it is a
+    secret — so only Andrew can read it. Describing the provider by function is
+    the right call until he supplies the name.
+
+E2. RAILWAY BACKUP AND SNAPSHOT BEHAVIOUR. Not knowable from the code. Your
+    decision to promise deletion only from the "active VTS database" is the
+    correct conservative framing and I would keep it even after Andrew checks,
+    unless what he finds supports something stronger.
+
+E3. ANY QUESTION OF LAW. I have no web access and a training cutoff. I am not
+    checking your citations and I am not going to pretend to. Where the drafts
+    state a legal requirement, that is yours.
+
+
+--------------------------------------------------------------------------------
+F. IMPLEMENTATION QUEUE — what has to ship before either document is published
+--------------------------------------------------------------------------------
+
+  F1. Remove the "Public leaderboards" card from the public build.        BLOCKER
+      The app currently contradicts the policy. Nothing else on this list
+      matters if a settings screen tells users their name is visible to
+      strangers.
+
+  F2. Account deletion.
+      Warn -> confirm -> emailed link valid one hour and one use -> delete the
+      early-access row by email and the account row in one transaction, letting
+      the 26 cascades run -> final confirmation email -> remove the address.
+      No grace period, no deactivate alternative, no suppression list.
+
+  F3. A retention sweep for beta-access requests, so D1's sentence is true.
+
+  F4. The clickwrap gate and the append-only versioned acceptance record with
+      document text hashes.
+
+  F5. Optional, recommended: fold expiring authentication rows into F3's sweep
+      so Section 8.3 can be deleted rather than published.
+
+I will report each of these against the code when built, and reissue the fact
+sheet, rather than telling you they are done.
+
+
+--------------------------------------------------------------------------------
+G. WHAT IS NEEDED FROM ANDREW
+--------------------------------------------------------------------------------
+
+  G1. The privacy contact email address, actively monitored.
+  G2. The exact registered entity name and its state of organisation.
+  G3. Confirmation that 18-and-over and United-States-only are his actual
+      admission rules, since he is the one applying them.
+  G4. The SMTP provider name, readable from the Railway environment.
+  G5. A decision on the 180-day beta-access retention period.
+  G6. Railway's backup, snapshot and restoration behaviour, if he wants any
+      claim stronger than "the active database".
+
+
+--------------------------------------------------------------------------------
+H. WHAT I AM NOT DISPUTING
+--------------------------------------------------------------------------------
+
+Recorded so it is clear these were checked rather than skipped:
+
+  - No VTS cookie is set for an anonymous visitor or in the demo. Cookies are
+    written on four authentication routes only. Your Section 2.1 is correct.
+  - The demo stores nothing in the database and resets on leave or reload.
+  - Session 12 hours, trusted device 30 days, sign-in code 10 minutes and single
+    use, scrypt passwords, token hashes only, identical answers whether or not
+    an account exists — all correct as drafted.
+  - The API refuses a non-HTTPS allowed origin at boot, so Section 10's last
+    bullet is accurate.
+  - No payment, brokerage, credential, legal-name, address, phone, birthdate or
+    government-ID field exists in any table. Section 3 is accurate.
+  - Nothing a public user types reaches an AI provider.
+  - Study content cannot be shared, published or listed publicly — there is no
+    sharing route and no library in the public API — so imported material is
+    reachable only by the account that created it. That does not settle the
+    hosting question you raised, but it removes its public-distribution half.
+
+================================================================================
+END
+================================================================================

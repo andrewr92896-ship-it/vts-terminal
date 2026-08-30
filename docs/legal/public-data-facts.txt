@@ -1,0 +1,502 @@
+================================================================================
+VTS PUBLIC TERMINAL — DATA FACT SHEET AND DRAFTING BRIEF
+Source of truth for the Privacy Policy and Terms of Service
+================================================================================
+
+Prepared by:  Claude Code, reading the VTS Terminal repository directly
+Read from:    branch, Beta V 7.79 / Public Candidate V 2.7
+Date:         30 August 2026  (revision 7 — the admission rules are now a
+              recorded representation; the retention period is settled; the entity name and state of organisation are
+              confirmed; the privacy contact address is settled
+              and live. See 8.6. Revision 3 shipped the clickwrap and
+              corrected what audit metadata contains, in 7.4.)
+Owner:        Andrew — Vitalis Trading Systems LLC
+
+
+--------------------------------------------------------------------------------
+0. HOW THIS PROCESS WORKS — READ THIS FIRST
+--------------------------------------------------------------------------------
+
+Two AI assistants are working on these documents together, with different jobs.
+This section defines who decides what. Follow it.
+
+  CLAUDE CODE (holds the repository)
+    - Has the actual source code, database migrations and built bundle in front
+      of it. Can verify any claim about what the software does.
+    - IS THE PRIMARY DECISION MAKER. On any question of FACT about the software
+      — what is collected, stored, sent, deleted, or which third parties are
+      involved — Claude Code's reading of the code is authoritative and final.
+    - Reviews every draft against the code and reports contradictions.
+    - Implements the final text in the application.
+
+  CHATGPT (holds the legal research)
+    - Has web access and has already researched the applicable Ohio and federal
+      rules. Claude Code cannot reach the web and has a training cutoff.
+    - Drafts the documents and supplies the legal grounding and citations.
+    - DOES NOT have the code and must not assume anything about it.
+
+  HOW DISAGREEMENTS RESOLVE
+    1. A disagreement about what the SOFTWARE DOES is settled by Claude Code.
+       There is nothing to debate — it can read the file.
+    2. A disagreement about the LAW is settled by whichever position is
+       supported by a citation to primary source. Assertion does not beat
+       citation.
+    3. If both positions are cited and still conflict, the tiebreak is:
+         (a) the wording that is MOST ACCURATE about what the code actually
+             does wins — not the wording that sounds safest. In a privacy
+             policy, over-promising is the actual risk. "We delete your data
+             immediately" is not conservative if deletion takes a day.
+         (b) where both are equally accurate, the more conservative wording
+             wins.
+    4. Anything still unresolved goes to Andrew for a manual decision. Do not
+       split the difference silently.
+
+  RULES THAT BIND BOTH ASSISTANTS
+    - Never describe a practice the software does not have. An aspirational
+      privacy policy is a deceptive-practices problem, not a safety margin.
+    - If a protection would be good but is not implemented, either leave it out
+      or say plainly that it is not yet in place.
+    - If something you need is not in this fact sheet, ASK. Do not invent it.
+    - State every assumption you make explicitly, in a labelled list, so it can
+      be checked against the code and this document updated.
+    - Neither assistant is a lawyer. Nothing produced here is legal advice.
+
+  KEEPING THIS DOCUMENT CURRENT
+    This fact sheet is the shared source of truth. If anything you learn or
+    decide changes what the software does or will do, say so clearly at the end
+    of your response under a heading "FACT SHEET UPDATES NEEDED", listing each
+    change as a single line. Claude Code will verify each one against the code
+    and reissue this document. Do not edit the facts yourself.
+
+
+--------------------------------------------------------------------------------
+1. ONE FINDING TO FIX BEFORE THE DOCUMENTS ARE WRITTEN
+--------------------------------------------------------------------------------
+
+THE BETA-ACCESS FORM STORES THE SUBMITTER'S RAW IP ADDRESS.
+
+Every authentication path hashes the IP before storing it (keyedHash in
+auth.ts). The beta-access route is the single exception: it passes ip(req)
+straight into consumeRateLimit, and the value lands in a column named
+"key_hash" which, on this one path only, holds no hash.
+
+So today, submitting that form writes: an email address, an optional free-text
+note, and a raw IP address, kept indefinitely.
+
+It is a one-line fix. It should be made BEFORE these documents are written, so
+the policy describes the code we want rather than the code we have.
+
+
+--------------------------------------------------------------------------------
+2. SHAPE OF THE THING
+--------------------------------------------------------------------------------
+
+- TWO SEPARATE DEPLOYMENTS. The public service has its own Postgres database,
+  its own cookies, its own secrets and its own codebase. It shares no database,
+  session or credential with the private portal. The private portal is not in
+  scope for these documents.
+
+- THERE IS NO PUBLIC SIGN-UP. Accounts exist only because an operator ran a
+  command-line tool (`admit`). A visitor cannot create one. Admission is by
+  invitation following a beta-access request.
+
+- THE DEMO TOUCHES NOTHING. It runs entirely from memory in the browser tab:
+  no account, no cookie, no server request, no stored data. Leaving the page is
+  the reset. Every figure in it is fabricated.
+
+- EVERY ROUTE RESOLVES THE ACCOUNT FROM THE SESSION. No endpoint accepts a
+  "whose data" parameter. An id the caller does not own answers 404, not 403.
+
+- NO PAYMENT DATA ANYWHERE. No billing, no card, no bank details, in any table.
+  Nothing is sold. There are no plans, tiers or subscriptions.
+
+
+--------------------------------------------------------------------------------
+3. WHAT IS STORED ABOUT A PERSON — IDENTITY AND AUTHENTICATION
+--------------------------------------------------------------------------------
+
+public_accounts
+    Email address (unique), password hash (scrypt), display name, a
+    forced-password-change flag and its expiry, a disabled flag, when the
+    password last changed, when the account was created.
+    NO real name, postal address, phone number, date of birth or payment data.
+
+public_sessions
+    A SHA-256 hash of the session token — never the token itself — plus account
+    id, expiry, revocation time, created time.
+    Session lifetime: 12 hours.
+
+public_trusted_devices
+    Hash of the "remember this device" token, account id, expiry, revocation.
+    Lifetime: 30 days.
+
+public_auth_challenges
+    Hash of the emailed six-digit sign-in code, expiry, attempt count, whether
+    consumed.
+    Lifetime: 10 minutes. Single use.
+
+public_recovery_events
+    Account id, expiry, whether consumed. No password is ever stored in plain
+    text at any point.
+
+public_audit_events
+    Event name, account id (set to NULL if the account is deleted), a JSON
+    metadata field (currently written empty), timestamp.
+    Events recorded: beta-access requested; sign-in code created; sign-in code
+    verified; login failed; password changed; recovery requested; recovery
+    issued; trusted device used.
+
+public_rate_limits
+    Bucket name, key hash, window start, count.
+    Authentication paths store an HMAC of the IP address.
+    The beta-access path stores the RAW IP address — see section 1.
+
+public_early_access_requests
+    Email address, optional free-text note (up to 1,000 characters), status,
+    source, created timestamp, handled timestamp.
+    No expiry and no deletion process exists today.
+
+
+--------------------------------------------------------------------------------
+4. WHAT A SIGNED-IN PERSON'S OWN DATA COVERS
+--------------------------------------------------------------------------------
+
+23 further tables, all keyed to the account, all reachable only through that
+account's own session. Everything in them is typed in by the user.
+
+    Money records ......... budget categories and entries; net worth items and
+                            snapshots
+    Investments ........... accounts, holdings, transactions, valuation
+                            snapshots, goals — entered by hand; NO brokerage is
+                            ever connected
+    Trading records ....... a hand-kept trade log; funded-account records and
+                            their trades; trading notes and predictions
+    Study material ........ decks, questions, game state, run history,
+                            flashcard sets and cards, presentations
+    Support ............... bug reports and their messages; suggestions
+    Preferences ........... time zone, home screen, leaderboard opt-out,
+                            customised My Terminal, saved Live Wall layout
+
+
+--------------------------------------------------------------------------------
+5. COOKIES AND BROWSER STORAGE
+--------------------------------------------------------------------------------
+
+TWO COOKIES, BOTH STRICTLY FUNCTIONAL:
+    vts_public_session_v1          12 hours
+    vts_public_trusted_device_v1   30 days
+Both are HttpOnly, Secure, SameSite=Strict and path-scoped. Both hold a random
+token; the server stores only its hash.
+
+NO analytics, advertising or tracking cookie of any kind.
+
+LOCAL STORAGE is used for device-local convenience only — a remembered view
+choice on the trade log, drafts in the study wizard, which sample study games
+are in the user's list. It stays on the device and is never sent to the server.
+
+
+--------------------------------------------------------------------------------
+6. THIRD PARTIES THAT ACTUALLY RECEIVE SOMETHING
+--------------------------------------------------------------------------------
+
+TRADINGVIEW — YES. This one is real and must be disclosed.
+    The chart and watchlist tiles load scripts from s3.tradingview.com, so
+    TradingView receives the visitor's IP address, browser details and the page
+    they are on, and can set its own storage. This happens for demo visitors
+    too, not only signed-in accounts.
+
+EMAIL PROVIDER — YES.
+    Sign-in codes and recovery mail are sent over SMTP, so whichever provider
+    is configured processes the recipient's address and the message content.
+
+RAILWAY — YES.
+    Hosting and the managed Postgres database. Sees traffic and holds the data
+    at rest.
+
+YOUTUBE — NO.
+    Channel names appear in the code, but every public channel is marked
+    placeholder:true, so no player is ever mounted and no request is made. The
+    screen draws an empty slot instead.
+
+ANY AI PROVIDER — NO.
+    Every AI method is refused by name before anything runs. Nothing a public
+    user types reaches a model.
+
+MARKET DATA PROVIDER — NOT YET.
+    Configured but not wired; those endpoints answer 503 today. Becomes a
+    disclosure the moment it is connected.
+
+
+--------------------------------------------------------------------------------
+7. DELETION AND RETENTION — THE HONEST CURRENT STATE
+--------------------------------------------------------------------------------
+
+REVISED. Everything in the old section 7 has changed. Read this version.
+
+7.1  ACCOUNT DELETION IS BUILT AND LIVE.
+     Settings carries a delete control. It warns, the person confirms, and a
+     link is emailed. The link is valid ONE HOUR and works ONCE; ignoring it
+     cancels the request and nothing happens. Confirming deletes the account
+     immediately, in one database transaction, with NO grace period.
+     - 26 tables carry "on delete cascade", so the account row going takes the
+       user's records with it by database action rather than by application
+       code remembering to.
+     - The matching beta-access request is deleted too, by email address —
+       it is the one row about the person that no cascade can reach.
+     - A final confirmation email is sent, and nothing about the address is
+       kept afterwards. There is no suppression list, so the same address can
+       be admitted again later. Keeping an address in order to block it would
+       not be deletion.
+     - No "deactivate instead" alternative is offered anywhere.
+     Verified against a real Postgres database by counting the rows in every
+     table carrying an account id, before and after.
+
+7.2  RETENTION PERIODS ARE ENFORCED BY A SCHEDULED SWEEP.
+     A job runs when the service starts and every six hours after that. It
+     deletes:
+     - BETA-ACCESS REQUESTS — 180 days (six months) after the request was made.
+       A repeat submission from the same address restamps that clock, because
+       asking again is asking again rather than running out.
+     - EXPIRED OR SPENT AUTHENTICATION ROWS — an expired or signed-out session,
+       an expired or used sign-in code, an expired or rotated trusted-device
+       token, and a spent or expired account-deletion link.
+     - RATE-LIMIT COUNTERS whose window started more than 24 hours ago. Those
+       rows hold a keyed hash of an address and a count, nothing else.
+     Only EXPIRED OR SPENT rows, never merely old ones: a live session and a
+     browser the person asked us to remember are untouched.
+
+7.3  A BETA-ACCESS REQUEST ENDS AT THE EARLIEST OF THREE THINGS.
+     - The person is ADMITTED. The row is deleted as part of admitting them.
+     - The person ASKS. Deleting an account takes the request row with it.
+     - 180 DAYS pass. The sweep takes it.
+
+7.4  AUDIT ROWS ARE THE ONE INTENTIONALLY RETAINED TABLE, and they outlive the
+     account by design: deleting an account sets their account id to NULL
+     rather than removing the row. An audit row holds an event name, an
+     account id where applicable, a timestamp, and a metadata field.
+     CORRECTED IN THIS REVISION — the metadata is no longer a single value.
+     Two events write it: whether a trusted device was requested at sign-in,
+     and which document versions were accepted at the clickwrap (as a list of
+     "document@version" strings, e.g. "terms@2026-08-28.1"). Everything else
+     writes an empty object. No address, no token, no content.
+     (Recovery events used to be in this category. They are not any more —
+     migration 0014 made them cascade with the account, so audit events are
+     now the only exception, which is a far simpler thing to disclose.)
+
+
+--------------------------------------------------------------------------------
+8. WHAT WAS "AGREED BUT NOT YET BUILT" — ALL OF IT HAS NOW SHIPPED
+--------------------------------------------------------------------------------
+
+This section previously listed four things to be careful about describing.
+All four are built, deployed and covered by tests that were each proved to
+FAIL against deliberately broken code before being kept. Sentences describing
+them are no longer aspirational and may be published as fact.
+
+  8.1  ACCOUNT DELETION                          SHIPPED — see 7.1
+  8.2  BETA-ACCESS FORM REDUCED TO EMAIL ONLY    SHIPPED
+       The optional free-text note field is gone from the form AND ignored by
+       the route, and every historical note value was cleared by migration.
+  8.3  RAW IP ON THE BETA-ACCESS PATH HASHED     SHIPPED
+       It now goes through the same keyed hash every authentication route
+       already used, and every pre-existing row in that bucket was deleted.
+  8.4  A RETENTION PERIOD FOR BETA-ACCESS        SHIPPED — 180 days, see 7.2
+
+STILL OUTSTANDING, AND STILL A REASON NOT TO PUBLISH:
+
+  8.5  THE CLICKWRAP GATE AND THE ACCEPTANCE RECORD.       SHIPPED
+       Built exactly as specified: append-only, versioned, storing a SHA-256 of
+       the accepted text, no IP address, cascade-deleting with the account.
+       Details that matter for drafting:
+       - IT IS A GATE. A signed-in account that has not accepted is refused by
+         the SERVER on every authenticated route, not merely shown a banner.
+         Signing out, changing a forced password and requesting deletion stay
+         reachable, because declining and wanting out is a legitimate pair.
+       - THE CLIENT SENDS NOTHING. The version and hash stored are the
+         server's own, so the record cannot be a claim the browser made.
+       - ONE ROW PER DOCUMENT, and there are three: the acknowledgement, the
+         Terms and the Privacy Policy, each independently versioned.
+       - THE DOCUMENT HASHES ARE ENFORCED BY THE BUILD. Changing a word in
+         either published document fails CI until its version is bumped as
+         well, and bumping a version re-prompts every account. So a stored
+         acceptance can never point at text nobody was shown.
+       - WHAT IS AFFIRMATIVELY AGREED TO TODAY IS AN ACKNOWLEDGEMENT, not the
+         documents. The Terms and Privacy Policy are still pre-release
+         summaries that state they create no obligations, and presenting those
+         under "I agree to be bound" would contradict their own text. The four
+         statements accepted are: informational and educational only, nothing
+         is advice or a recommendation; trading carries a high risk of loss;
+         Vitalis Trading Systems LLC is not a broker, exchange, adviser or
+         custodian and holds no money; the broker's and custodian's own
+         records are the authority on an account.
+       - PUBLISHING THE OPERATIVE DOCUMENTS IS A ONE-PLACE CHANGE: the
+         acknowledgement text becomes an agreement to be bound, its version
+         goes to '2', and every account is re-prompted automatically.
+
+       WHAT THIS MEANS FOR THE DRAFTS: both documents may now describe an
+       acceptance record as a fact. The Privacy Policy should list it as a
+       category of data held (account id, document id, version, text hash,
+       timestamp — no IP address) and say it is deleted with the account.
+
+  8.6  THE FACTS ONLY ANDREW CAN SUPPLY.
+
+       SETTLED — the contact addresses. There are TWO, both live Google
+       Workspace aliases on one monitored mailbox, and they are already in the
+       shipped documents:
+         support@vitalistradingsystems.com  — general contact, Terms questions,
+                                              bug reports
+         privacy@vitalistradingsystems.com  — privacy questions, and requests to
+                                              see or delete what is held
+       Kept apart deliberately: a request carrying a statutory response deadline
+       must not be findable only by digging through support mail. The Privacy
+       Policy's Contact section and the beta-access form's collection notice
+       both name the privacy address; the Terms name the general one. Drafts
+       should use them exactly this way.
+
+       SETTLED — the entity. Confirmed by Andrew against the filing on
+       30 August 2026:
+         Legal name:            Vitalis Trading Systems LLC
+                                (no comma before "LLC")
+         State of organisation: Ohio
+         Country:               United States
+       This is what the shipped documents already say, in one constant
+       (`COMPANY` in the legal content module) that every mention reads from,
+       so there is no second spelling anywhere to drift. Drafts should use the
+       legal name verbatim wherever the contracting party is named, and
+       "Vitalis Trading Systems" only where a short label is wanted in prose.
+
+       SETTLED — the admission rules. Confirmed by Andrew on 30 August 2026:
+       accounts are for people aged 18 or over, located in the United States.
+       NOT ENFORCED BY ANY CODE, and deliberately so: nothing asks for a
+       birthdate or a country, and collecting a birthdate to enforce an age
+       rule means collecting a birthdate. Admission is entirely manual through
+       the `admit` command, so ANDREW IS THE ENFORCEMENT MECHANISM. Drafts may
+       state the rule; THEY MUST NOT IMPLY IT IS VERIFIED.
+
+       CAPTURED AS A REPRESENTATION since Beta V 7.79. The rule now appears in
+       three places, and the third is what makes it worth something:
+         - the beta-access form, before an address is asked for, so somebody
+           ineligible does not hand over data that would only be deleted;
+         - the Terms' eligibility section, with a note stating plainly that
+           age and location are not verified and that an account opened on an
+           untrue statement may be closed;
+         - the acknowledgement, as a fifth statement the person affirms:
+           "I am 18 or over and located in the United States."
+       So there is now a dated, versioned, hashed record that each account
+       stated it was eligible. That is the difference between a rule and a
+       wish, and it is the strongest form available without collecting a
+       birthdate. It remains a representation and nothing more.
+
+       SETTLED — beta-access retention. 180 days, approved by Andrew on
+       30 August 2026, and enforced by the sweep since Beta V 7.76. The
+       Privacy Policy may state it as a period the operator chose.
+
+       STILL OUTSTANDING:
+       - The SMTP provider's name as configured in Railway.
+       - Railway's backup and snapshot behaviour, if any claim stronger than
+         "the active database" is wanted.
+
+
+--------------------------------------------------------------------------------
+9. SECURITY MEASURES WORTH STATING
+--------------------------------------------------------------------------------
+
+A policy that claims less than the code does is a wasted opportunity.
+
+- Passwords hashed with scrypt; never stored or logged in plain text.
+- EVERY sign-in requires a code emailed to the account's address, valid ten
+  minutes, single use, with attempts counted.
+- Session and trusted-device tokens are stored only as hashes, so the database
+  alone cannot be used to sign in as somebody.
+- Rate limiting on sign-in, verification, recovery and the beta-access form.
+- Sign-in and recovery answer identically whether or not an account exists, so
+  the site cannot be used to discover who has one.
+- Cookies are HttpOnly, Secure and SameSite=Strict, and the API refuses a
+  non-HTTPS origin outright.
+
+
+================================================================================
+10. DRAFTING BRIEF — INSTRUCTIONS FOR CHATGPT
+================================================================================
+
+You are drafting two legal documents for Andrew: a PRIVACY POLICY and TERMS OF
+SERVICE for the public VTS Terminal described above. He has no budget for a
+lawyer, so these must be accurate, honest and conservative rather than
+impressive.
+
+Sections 0 through 9 of this document are the ONLY source of truth about what
+the software does. Claude Code produced them by reading the repository and is
+the decision maker on all questions of fact — see section 0.
+
+FACTS YOU STILL NEED FROM ANDREW (ask if not supplied):
+    - State of the business:                    [ OHIO — confirm ]
+    - Legal entity name exactly as registered:  [ ................ ]
+    - Contact address for privacy requests:     [ ................ ]
+    - Whether a physical mailing address must appear, and whether he has one
+      he is willing to publish
+
+DOCUMENT 1 — PRIVACY POLICY. Cover at minimum:
+    - the legal entity and how to reach it
+    - every category of data collected, and why
+    - the third parties named in section 6, by name
+    - cookies and local storage
+    - retention periods
+    - how someone requests access, correction or deletion, and how identity is
+      verified
+    - security measures
+    - children's use
+    - how changes are notified
+    - an effective date
+
+DOCUMENT 2 — TERMS OF SERVICE. Cover at minimum:
+    - who may hold an account, and that admission is by invitation only
+    - acceptable use
+    - that the service is informational and educational software and is NOT a
+      broker, exchange, investment adviser, money transmitter or signal
+      service; provides no advice and no recommendations; and takes no custody
+      of funds
+    - that ALL data shown in the demo is fabricated and is not the performance
+      of any account, person or firm
+    - user content and who owns it
+    - that the software is provided as-is during pre-release, with no uptime
+      commitment
+    - limitation of liability
+    - termination
+    - governing law
+    - how changes are notified
+
+ALSO TELL ANDREW:
+    - which clauses are legally REQUIRED in his state versus merely customary,
+      with citations to primary source
+    - anything in sections 1 to 9 that you believe is a compliance problem in
+      itself, rather than merely something to describe
+    - whether a clickwrap acceptance step is needed, where it belongs, and what
+      must be recorded when someone accepts
+
+FORMAT:
+    Give both documents as clean, complete text suitable for pasting into a
+    Word file — headings, numbered sections, no placeholders left except the
+    bracketed blanks above.
+
+REQUIRED CLOSING SECTIONS, in this order:
+
+    "NOT YET TRUE"
+        Every sentence in either document that is only accurate once the code
+        in section 8 ships. One line each.
+
+    "ASSUMPTIONS I MADE"
+        Every assumption you made about the software that section 1-9 did not
+        state. One line each. Claude Code will check these against the code.
+
+    "FACT SHEET UPDATES NEEDED"
+        Anything that should change in sections 1-9. One line each. Do not edit
+        the facts yourself.
+
+    "SUMMARY FOR ANDREW"
+        No more than four sentences of plain language: what you produced, the
+        single most important decision you made, and anything you need from him
+        before this can be used.
+
+================================================================================
+END
+================================================================================

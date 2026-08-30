@@ -12,7 +12,7 @@
 //
 // LEGAL_STATUS is the banner the screens draw above all three documents. It is what
 // makes the "in production" state impossible to miss and must not be quietly dropped.
-export const LEGAL_VERSION='2026-08-30.1';export const LEGAL_EFFECTIVE_DATE='August 30, 2026';
+export const LEGAL_VERSION='2026-08-30.2';export const LEGAL_EFFECTIVE_DATE='August 30, 2026';
 export const LEGAL_STATUS='PRE-RELEASE — THIS DOCUMENT IS INCOMPLETE AND IN PRODUCTION. It is a plain-language summary of how the finished document will work, published so you can see the shape of it while the terminal is still being built. It is not the operative agreement, it creates no obligations on you, and the binding Terms of Service and Privacy Policy will be published before the service launches. Do not rely on it as legal terms.';
 // TWO ADDRESSES, AND THEY ARE DIFFERENT JOBS. `contactEmail` is general contact
 // — Terms questions, bugs, anything about the service. `privacyEmail` is where a
@@ -45,8 +45,9 @@ export const TERMS:LegalDoc={
   {note:'Trading foreign exchange, derivatives, crypto-assets and securities carries a high level of risk and is not suitable for everybody. You can lose more than you deposit. Past performance does not indicate future results.'},
   {p:'How this will work: the Terms will require you to acknowledge this risk statement before the account is usable, and it will remain reachable from every screen that displays a result.'}]},
  {heading:'Eligibility and your account',blocks:[
-  {p:'Accounts are for individuals of legal age in their jurisdiction, used personally, and are not to be shared. Access during pre-release is by beta invitation only.'},
-  {p:'How this will work: the Terms will set the minimum age, require accurate registration details, make you responsible for keeping your credentials secure, and require you to tell us promptly about unauthorised use.'}]},
+  {p:'Accounts are for individuals aged 18 or over who are located in the United States, used personally, and are not to be shared. Access during pre-release is by beta invitation only.'},
+  {note:'We do not verify your age or where you are. You are asked to confirm both when you first sign in, and an account opened on a statement that turns out to be untrue may be closed.'},
+  {p:'How this will work: the Terms will state the minimum age and the territories served, require accurate registration details, make you responsible for keeping your credentials secure, and require you to tell us promptly about unauthorised use.'}]},
  {heading:'Your records and your content',blocks:[
   {p:'Everything you enter — trades, notes, budgets, holdings, study material — stays yours. We do not sell it, and we do not use it to make recommendations to other users.'},
   {p:'How this will work: the Terms will confirm you keep ownership of your content, grant us only the limited licence needed to store and display it back to you, and will describe how to export or delete it.'}]},
@@ -121,7 +122,7 @@ export const PRIVACY:LegalDoc={
   {ul:['See and correct what is held about you.','Export the records you have entered.','Delete your account from inside the terminal.','Ask a question or complain to a supervisory authority where you have that right.']},
   {p:'How this will work: the policy will state how to make each request, how long a response takes, and what proof of identity is needed.'}]},
  {heading:'Children',blocks:[
-  {p:'The terminal is not intended for children, and accounts are not knowingly created for them.'},
+  {p:'The terminal is not intended for anyone under 18, and accounts are not knowingly created for them.'},
   {p:'How this will work: the policy will state the minimum age and how a child’s record is removed if one is found.'}]},
  {heading:'Security',blocks:[
   {p:'Passwords are stored only as hashes, sessions are separate from the private portal’s, and sign-in is protected by a second factor sent to your email address.'},
