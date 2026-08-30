@@ -55,6 +55,7 @@ import { backfillCapitalAccounts } from './trading/traderCapital.js';
 import { ensureBakedInGamesAllTeams } from './studies/bakedGames.js';
 import { seedWelcome } from './chat/announcements.js';
 import { demoGuard } from './demo/demo.js';
+import { maintenanceExempt, maintenanceOn, maintenanceReply, MAINTENANCE_HEADERS } from './maintenance.js';
 import { startFeeds } from './trading/feeds.js';
 import { startDeskWatch } from './trading/service.js';
 import { warmMarketMacro } from './trading/marketMacro.js';
@@ -112,6 +113,20 @@ export async function buildServer() {
     reply.header('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
     return payload;
   });
+
+  // MAINTENANCE MODE, BEFORE ANYTHING ELSE. Registered ahead of `loadUser` so a
+  // closed terminal answers without touching the database or resolving a
+  // session — there is nothing to look up when the answer is the same for
+  // everybody. `/api/health` is exempt, because Railway health-checks it and a
+  // failed health check rolls the deploy back.
+  if (maintenanceOn()) {
+    app.log.warn('PRIVATE_MAINTENANCE is on: serving the maintenance notice and starting no watches');
+    app.addHook('onRequest', async (request, reply) => {
+      if (maintenanceExempt(request.url)) return;
+      const { status, contentType, body } = maintenanceReply(request.url);
+      return reply.code(status).headers(MAINTENANCE_HEADERS).type(contentType).send(body);
+    });
+  }
 
   app.decorateRequest('currentUser', null);
   app.addHook('onRequest', loadUser);
@@ -265,6 +280,15 @@ async function main() {
   try {
     await app.listen({ port: config.PORT, host: '0.0.0.0' });
     app.log.info(`VTS terminal listening on port ${config.PORT}`);
+    // NONE OF THE WATCHES RUN IN MAINTENANCE MODE. A terminal nobody can open
+    // must not still be buzzing phones about trades, sessions and price levels
+    // — and this is what stops the notifications without deleting a row or
+    // disconnecting a broker. Turn the variable off and they all come back.
+    if (maintenanceOn()) {
+      app.log.warn('PRIVATE_MAINTENANCE is on: background watches not started');
+      return;
+    }
+
     // Start the background market-news pollers (production only). Best-effort
     // and non-blocking: failures are contained and never affect serving.
     startFeeds();
