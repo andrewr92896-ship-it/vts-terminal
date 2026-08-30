@@ -25,6 +25,10 @@ const cookie = process.env.PUBLIC_LIVE_COOKIE ?? '';
 // uses, so it burns this one rather than the one every other test needs — which
 // is what keeps the suite repeatable without reseeding between runs.
 const spareCookie = process.env.PUBLIC_LIVE_SPARE_COOKIE || cookie;
+// A THIRD session, on a DIFFERENT account that has never ticked the clickwrap.
+// The main account's seed accepts, because otherwise every screen the suite
+// opens would be the gate; this one is what proves the gate is really there.
+const pendingCookie = process.env.PUBLIC_LIVE_PENDING_COOKIE ?? '';
 
 const [name, value] = cookie.split('=');
 
@@ -467,5 +471,63 @@ test('signing out revokes the session, not just the screen', async ({ browser, r
     headers: { cookie: spareCookie }, ignoreHTTPSErrors: true,
   });
   expect(still.status(), 'the session still answered after signing out').toBe(401);
+  await context.close();
+});
+
+test('an account that has not accepted the terms gets the gate, not the terminal', async ({ browser, request }) => {
+  // The gate is enforced on the SERVER — every authenticated route refuses
+  // until the box is ticked — and this is the half that proves the screen
+  // matches: a browser carrying a real session for an account with no
+  // acceptance row lands on the clickwrap and cannot reach the wall behind it.
+  test.skip(pendingCookie === '', 'PUBLIC_LIVE_PENDING_COOKIE is not set — reseed to run this');
+
+  // First the enforcement, directly: a record route must refuse.
+  const refused = await request.get(`${base}/public/v1/budget`, {
+    headers: { cookie: pendingCookie }, ignoreHTTPSErrors: true,
+  });
+  expect(refused.status(), 'a record route was served to an account that has not accepted').toBe(403);
+
+  const [pendingName, pendingValue] = pendingCookie.split('=');
+  const context = await browser.newContext({ ignoreHTTPSErrors: true });
+  await context.addCookies([{
+    name: pendingName, value: decodeURIComponent(pendingValue ?? ''), domain: '127.0.0.1', path: '/',
+    httpOnly: true, secure: true, sameSite: 'Lax',
+  }]);
+  const page = await context.newPage();
+  const errors = [];
+  const onError = (error) => errors.push(String(error));
+  page.on('pageerror', onError);
+  await page.goto(`${base}/#live`, { waitUntil: 'domcontentloaded' });
+
+  // The acknowledgement, and the terminal nowhere in sight.
+  await expect(page.getByRole('heading', { name: /Before you start/i })).toBeVisible();
+  await expect(page.locator('.vts-public-shell')).toHaveCount(0);
+
+  // AN AFFIRMATIVE ACT, which is the whole distinction the name points at: the
+  // button does not work until the box is ticked.
+  const button = page.getByRole('button', { name: /Continue to the terminal/i });
+  await expect(button).toBeDisabled();
+
+  // The documents are readable from here. Somebody gated out of the terminal
+  // cannot navigate to Site Help, so "agree to a document you cannot open" is
+  // the failure this has to avoid.
+  await page.getByRole('button', { name: /Read the Terms of Service/i }).click();
+  await expect(page.getByRole('heading', { name: 'Terms of Service' })).toBeVisible();
+  await page.getByRole('button', { name: /Back/i }).first().click();
+
+  await page.getByRole('checkbox').check();
+  await expect(button).toBeEnabled();
+  await button.click();
+
+  // Through to the terminal, and it stays through after a reload — which is
+  // what proves a row was written rather than a flag flipped in the browser.
+  await expect(page.locator('.vts-public-shell')).toBeVisible({ timeout: 15_000 });
+  await page.goto('about:blank');
+  await page.goto(`${base}/#live`, { waitUntil: 'domcontentloaded' });
+  await expect(page.locator('.vts-public-shell')).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByRole('heading', { name: /Before you start/i })).toHaveCount(0);
+
+  page.off('pageerror', onError);
+  expect(errors, 'the clickwrap threw').toEqual([]);
   await context.close();
 });

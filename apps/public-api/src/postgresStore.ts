@@ -1,5 +1,5 @@
 import pg from 'pg';
-import type { NewFundedAccount, NewFundedTrade, NewTrade, BugReport, BugRole, Suggestion, FlashcardSetDetail, FlashcardSetPatch, FlashcardSetRow, NewFlashcardSet, NewStudyGuide, StudyGuideDetail, StudyGuidePatch, StudyGuideRow, NewStudyDeck, StudyDeckDetail, StudyDeckPatch, StudyDeckRow, NewTradingNote, TradingNotePatch, NetWorthItem, NetWorthSnapshot, InvestmentAccount, InvestmentGoal, InvestmentHolding, InvestmentSnapshot, InvestmentTransaction, BudgetCategory, BudgetEntry, Challenge, NewBudgetCategory, NewBudgetEntry, PublicAccount, PublicStore, RateLimitResult, RetentionSweep, Session, TodoItemRow, TodoSectionRow, TrustedDevice } from './types.js';
+import type { NewFundedAccount, NewFundedTrade, NewTrade, BugReport, BugRole, Suggestion, FlashcardSetDetail, FlashcardSetPatch, FlashcardSetRow, NewFlashcardSet, NewStudyGuide, StudyGuideDetail, StudyGuidePatch, StudyGuideRow, NewStudyDeck, StudyDeckDetail, StudyDeckPatch, StudyDeckRow, NewTradingNote, TradingNotePatch, NetWorthItem, NetWorthSnapshot, InvestmentAccount, InvestmentGoal, InvestmentHolding, InvestmentSnapshot, InvestmentTransaction, BudgetCategory, BudgetEntry, Challenge, NewBudgetCategory, NewBudgetEntry, PublicAccount, PublicStore, LegalAcceptance, RateLimitResult, RetentionSweep, Session, TodoItemRow, TodoSectionRow, TrustedDevice } from './types.js';
 import { RETENTION } from './retention.js';
 import { STARTER_SECTIONS } from './todo.js';
 import type { NoteRow } from './notes.js';
@@ -69,6 +69,33 @@ export class PostgresPublicStore implements PublicStore {
   }
   async recordEarlyAccessRequest(email:string,note:string|null){await this.pool.query(`insert into public_early_access_requests(email,note) values($1,$2) on conflict(lower(email)) do update set note=coalesce(excluded.note,public_early_access_requests.note),status='new',handled_at=null,created_at=now()`,[email,note])}
   async deleteEarlyAccessRequest(email:string){await this.pool.query('delete from public_early_access_requests where lower(email)=lower($1)',[email])}
+
+  // ---- the clickwrap record -------------------------------------------------
+  //
+  // Both statements are deliberately minimal. There is no UPDATE and no DELETE
+  // for this table anywhere in the store: the row is evidence, the only thing
+  // that removes one is the account cascade, and an append-only table with no
+  // way to rewrite it is a far easier thing to stand behind than one with a
+  // rewrite path nobody currently calls.
+  async listLegalAcceptances(accountId:string):Promise<LegalAcceptance[]>{
+    const r=await this.pool.query('select document,version,text_sha256 as "sha256",extract(epoch from accepted_at)*1000 as "acceptedAt" from public_document_acceptances where account_id=$1 order by accepted_at',[accountId]);
+    return r.rows.map((row)=>({...row,acceptedAt:Number(row.acceptedAt)})) as LegalAcceptance[];
+  }
+  // ONE STATEMENT FOR THE WHOLE SET, so the three rows share an `accepted_at`
+  // to the microsecond and cannot be half-written by a request that died between
+  // them — an account holding the terms but not the acknowledgement would be
+  // gated forever with no way to tell why.
+  async recordLegalAcceptances(accountId:string,entries:ReadonlyArray<{document:string;version:string;sha256:string}>){
+    // A zero-row insert is harmless — `jsonb_to_recordset('[]')` simply yields
+    // nothing — so this saves a round trip rather than preventing an error.
+    if(entries.length===0)return;
+    await this.pool.query(
+      `insert into public_document_acceptances(account_id,document,version,text_sha256)
+       select $1, d.document, d.version, d.sha256
+         from jsonb_to_recordset($2::jsonb) as d(document text, version text, sha256 text)`,
+      [accountId,JSON.stringify(entries)],
+    );
+  }
 
   // ---- the retention sweep --------------------------------------------------
   //

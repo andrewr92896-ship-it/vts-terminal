@@ -511,8 +511,24 @@ function deckShape(body:{categories?:unknown;categoryWeights?:unknown},questions
   return {categories,categoryWeights:readCategoryWeights(body.categoryWeights,categories)};
 }
 
+// EVERY AUTHENTICATED ROUTE GOES THROUGH HERE, which is why the clickwrap gate
+// is here and not in a list of paths somebody has to keep in step. A route added
+// tomorrow inherits it by using the same helper.
+//
+// The routes that must stay reachable while the gate is up are exactly the ones
+// that do NOT use this helper, and that is not a coincidence: reading the
+// session, signing out, changing a forced password, and asking to delete the
+// account all call the auth service directly. Somebody who declines to agree
+// must still be able to leave and to take their account with them — a gate that
+// traps you is not a consent mechanism.
+//
+// 403 rather than 402 or 428: nothing here is for sale and nothing is
+// conditional. The client never has to read this refusal, because the session
+// payload already told it to draw the gate; this is what makes the gate an
+// enforcement rather than a screen anybody could skip past.
 async function authenticatedAccount(req:IncomingMessage,service:PublicAuthService){
   const current=await service.session(sessionCookie(req));
+  if(current.legalAcceptanceRequired)throw new AuthError(403,'Accept the terms to continue.');
   return current.user.id;
 }
 
@@ -561,6 +577,14 @@ export async function handleRequest(req:IncomingMessage,res:ServerResponse,depen
       return json(res,202,{message:'Request received. If a place opens up you will hear from us at that address.'});
     }
     if(method==='GET'&&path==='/public/v1/auth/session')return json(res,200,await authService.session(sessionCookie(req)));
+    // ---- the clickwrap -------------------------------------------------------
+    //
+    // Both routes resolve the account from the session and take nothing from the
+    // caller. The accept route in particular has NO BODY: the version and the
+    // hash written to the record are the server's own, because a client-supplied
+    // hash would be a record of whatever the client felt like claiming.
+    if(method==='GET'&&path==='/public/v1/legal/documents')return json(res,200,await authService.legalDocuments(sessionCookie(req)));
+    if(method==='POST'&&path==='/public/v1/legal/accept')return json(res,200,await authService.acceptLegal(sessionCookie(req)));
     if(method==='POST'&&path==='/public/v1/auth/change-password'){
       const body=await readBody(req);const result=await authService.changePassword(sessionCookie(req),String(body.currentPassword||''),String(body.newPassword||''));
       return json(res,200,{ok:true,passwordChangeRequired:false},{'Set-Cookie':cookie(PUBLIC_SESSION_COOKIE,result.sessionToken,12*60*60)});

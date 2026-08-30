@@ -6,6 +6,7 @@ import { PublicScreen } from './PublicScreens';
 import { publicAuth, isDemo, startDemo, setPublicUser, readPublicUser, readDemoDevice, setDemoDevice, type DemoDevice } from './PublicRuntime';
 import { PublicDeviceCard } from './PublicDeviceCard';
 import { PublicDeleteAccount } from './PublicDeleteAccount';
+import { PublicLegalGate } from './PublicLegalGate';
 import { presetTiles } from './PublicBoard';
 import { useResponsive } from '../hooks/useMediaQuery';
 import { MyTerminalCustomizer } from '../components/MyTerminalCustomizer';
@@ -40,7 +41,7 @@ const deleteToken=query.get('delete');
 const urlDevice:DemoDevice|null=query.get('device')==='mobile'?'mobile':query.get('device')==='desktop'?'desktop':null;
 if(urlDevice){setDemoDevice(urlDevice);setPublicUser({...readPublicUser(),wallLayout:deviceLayout(urlDevice)})}
 export function PublicApp(){
- const initial=allowed.has(first)?first:'live';const [verified,setVerified]=useState(evidence);const [checking,setChecking]=useState(!evidence);const [passwordChangeRequired,setPasswordChangeRequired]=useState(false);const [authStep,setAuthStep]=useState<'login'|'early-access'|null>(null);const [screen,setScreen]=useState<PublicScreenKey>(initial);
+ const initial=allowed.has(first)?first:'live';const [verified,setVerified]=useState(evidence);const [checking,setChecking]=useState(!evidence);const [passwordChangeRequired,setPasswordChangeRequired]=useState(false);const [legalRequired,setLegalRequired]=useState(false);const [authStep,setAuthStep]=useState<'login'|'early-access'|null>(null);const [screen,setScreen]=useState<PublicScreenKey>(initial);
  const [collapsed,setCollapsed]=useState(urlDevice?urlDevice==='mobile':(query.get('sidebar')==='collapsed'||(!query.has('sidebar')&&innerWidth<=1024)));const [mobileOpen,setMobileOpen]=useState(query.get('sidebar')==='expanded'&&innerWidth<=768);
  // BELOW 768 THE SIDEBAR IS A DRAWER, AND A DRAWER MUST NEVER BE COLLAPSED.
  // `collapsed` initialises true on anything narrower than 1024, which is right
@@ -72,13 +73,19 @@ export function PublicApp(){
  // reader away from the board they deliberately put it on.
  const [workspace,setWorkspace]=useState<PublicWorkspaceKey>(()=>publicWorkspaceFor(initial).key);
  const workspaceNav=useMemo(()=>publicNavFor(workspace),[workspace]);
- useEffect(()=>{if(evidence){setPublicUser({id:'demo-user',username:'demo',displayName:'Demo',isDemo:true});return}publicAuth.session().then((value)=>{const prefs=value.preferences??{};setPublicUser({id:value.user.id,username:value.user.email.split('@')[0]??'public',displayName:value.user.displayName,email:value.user.email,...prefs});setSections(prefs.myTerminalSections??null);setPasswordChangeRequired(value.passwordChangeRequired);setVerified(!value.passwordChangeRequired)}).catch(()=>setVerified(false)).finally(()=>setChecking(false))},[]);
+ useEffect(()=>{if(evidence){setPublicUser({id:'demo-user',username:'demo',displayName:'Demo',isDemo:true});return}publicAuth.session().then((value)=>{const prefs=value.preferences??{};setPublicUser({id:value.user.id,username:value.user.email.split('@')[0]??'public',displayName:value.user.displayName,email:value.user.email,...prefs});setSections(prefs.myTerminalSections??null);setPasswordChangeRequired(value.passwordChangeRequired);setLegalRequired(value.legalAcceptanceRequired===true);setVerified(!value.passwordChangeRequired)}).catch(()=>setVerified(false)).finally(()=>setChecking(false))},[]);
  useEffect(()=>{const onHash=()=>{const next=location.hash.slice(1) as PublicScreenKey;if(allowed.has(next))setScreen(next)};addEventListener('hashchange',onHash);return()=>removeEventListener('hashchange',onHash)},[]);
  useEffect(()=>{const onAi=()=>{location.hash='hp_howto'};addEventListener('vts-public-ai',onAi);return()=>removeEventListener('vts-public-ai',onAi)},[]);
  useEffect(()=>{const onAccount=()=>{location.hash='my_settings'};addEventListener('vts-public-account',onAccount);return()=>removeEventListener('vts-public-account',onAccount)},[]);
  if(deleteToken)return <PublicDeleteAccount token={deleteToken}/>;
  if(checking)return null;
- if(!verified||authStep)return <PublicLogin initialStep={authStep==='early-access'||query.get('screen')==='early-access'?'early-access':passwordChangeRequired?'change-password':query.get('screen')==='two-factor'?'two-factor':'login'} onVerified={()=>{setAuthStep(null);setPasswordChangeRequired(false);setVerified(true)}} onDemo={()=>{setAuthStep(null);startDemo();setPublicUser({id:'demo-user',username:'demo',displayName:'Demo',isDemo:true});setVerified(true)}} onClose={authStep&&verified?()=>setAuthStep(null):undefined}/>;
+ if(!verified||authStep)return <PublicLogin initialStep={authStep==='early-access'||query.get('screen')==='early-access'?'early-access':passwordChangeRequired?'change-password':query.get('screen')==='two-factor'?'two-factor':'login'} onVerified={()=>{setAuthStep(null);setPasswordChangeRequired(false);setVerified(true);publicAuth.session().then((value)=>setLegalRequired(value.legalAcceptanceRequired===true)).catch(()=>{})}} onDemo={()=>{setAuthStep(null);startDemo();setPublicUser({id:'demo-user',username:'demo',displayName:'Demo',isDemo:true});setVerified(true)}} onClose={authStep&&verified?()=>setAuthStep(null):undefined}/>;
+ // THE CLICKWRAP, AFTER THE SIGN-IN CARD AND BEFORE ANYTHING ELSE. The server
+ // refuses every authenticated route until it is answered, so drawing the
+ // terminal here would draw a screen whose every request comes back 403. The
+ // demo never reaches it: there is no account, nothing is stored, and the DEMO
+ // bar already says what it is.
+ if(legalRequired&&!isDemo())return <PublicLegalGate onAccepted={()=>setLegalRequired(false)}/>;
  // Only the demo, and only once per visit. A signed-in account has a saved board
  // and a saved sidebar of its own, and answering this would overwrite both.
  if(isDemo()&&!device)return <PublicDeviceCard likely={isTablet?'mobile':'desktop'} onPick={pickDevice}/>;

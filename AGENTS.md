@@ -528,6 +528,78 @@ to meet. The password is printed once and is not recoverable.
   attempt. That is the earliest of the three ends a request can come to — the
   other two being the person asking for deletion, and the sweep below.
 
+**THE CLICKWRAP IS A GATE, AND THE RECORD IS THE POINT OF IT**
+(`src/legalDocuments.ts` + `public_document_acceptances`, migration `0016`;
+routes `GET /legal/documents` and `POST /legal/accept`; the screen is
+`apps/web/src/public/PublicLegalGate.tsx`). A "Terms" link in the footer is a
+**browsewrap** and is worth close to nothing — nobody can show the person ever
+saw it. What makes a **clickwrap** worth something is that there was a moment, an
+affirmative act, and a row saying which words were on the screen.
+- **THE GATE IS IN `authenticatedAccount`, WHICH IS WHY IT CANNOT BE FORGOTTEN.**
+  Every authenticated route resolves its caller through that one helper, so a
+  route added tomorrow inherits the refusal. **403**, not 402 or 428 — nothing
+  here is for sale and nothing is conditional. The client never needs to read
+  that refusal: `legalAcceptanceRequired` rides the session payload beside
+  `passwordChangeRequired`, so the shell draws the gate instead of a terminal
+  whose every request would come back 403.
+- **WHAT STAYS REACHABLE WHILE THE GATE IS UP IS EXACTLY WHAT DOES NOT USE THAT
+  HELPER**, and that is not a coincidence: reading the session, signing out,
+  changing a forced password and asking to delete the account all call the auth
+  service directly. **A gate somebody cannot leave is not a consent mechanism** —
+  declining and wanting out is a legitimate combination.
+- **THE SERVER HOLDS A VERSION AND A HASH, NEVER THE DOCUMENT TEXT.** The Terms
+  and Privacy Policy live in the public terminal's bundle
+  (`adapters/publicLegal.ts`); this is a different deployment and may not import
+  from it. **`npm run verify:legal-hashes`** recomputes the SHA-256 of the
+  canonical rendering and fails when it disagrees. **The fix is never "update the
+  hash"** — it is bump the version AND the hash, which re-prompts everybody,
+  because people who agreed to the old wording have not agreed to the new one.
+  That is the property worth protecting: **the terms cannot be quietly changed
+  underneath somebody who already agreed.**
+- **THE ACKNOWLEDGEMENT IS THE EXCEPTION AND IS SERVED IN FULL**, because it is
+  owned here and hashed from the same constants it is served from — what was on
+  the screen and what the record pins are provably one thing. The two documents
+  are only described.
+- **IT IS AN ACKNOWLEDGEMENT, NOT AN AGREEMENT TO BE BOUND, AND THAT IS
+  DELIBERATE.** The public Terms and Privacy Policy are still pre-release
+  summaries that say outright they create no obligations; presenting those under
+  "I agree to be bound" would be a claim the documents contradict, and a
+  clickwrap whose own text is untrue is worse than none. What IS affirmatively
+  agreed to are the four statements that stand whatever state the documents are
+  in — informational only, risk of loss, not a broker/adviser/custodian, and the
+  broker's own records are the authority. **When the operative documents are
+  published, `ACKNOWLEDGEMENT_VERSION` goes to '2' and everybody is re-prompted.
+  Nothing else in the mechanism moves.**
+- **THE CLIENT SENDS NOTHING.** `POST /legal/accept` takes no body: the version
+  and hash written are the server's own, because a client-supplied hash is a
+  record of whatever the client felt like claiming.
+- **APPEND-ONLY, ONE ROW PER DOCUMENT.** Accepting v1 and later v2 leaves two
+  rows — "when did they agree to the current terms" and "did they ever see the
+  old ones" are different questions. Accepting twice writes neither a row nor a
+  second audit event. Nothing updates or deletes a row; the account cascade is
+  the only thing that removes one, and **the retention sweep must never take
+  one** — it is evidence, not spent authentication material.
+- **`admitAccount` DELIBERATELY DOES NOT TICK THE BOX.** An operator letting
+  somebody in cannot consent on their behalf; if admission wrote these rows the
+  gate would exist and nobody would ever meet it. The test fixtures, the
+  live-suite seed and `verify:public-wiring` write them explicitly, and that last
+  one is the cautionary case: **403 is not 404, so the wiring check went green
+  proving nothing the first time the gate was up.** Its seed helper now fails
+  loudly on any non-2xx.
+- **The "is this account current?" answer is cached in-process, one way only**
+  (`accepted` in `auth.ts`). `session()` runs on every authenticated request, so
+  reading the rows there put an extra query on every request in the service.
+  Caching only the CURRENT answer is safe: acceptance is append-only, and the
+  required set is a module constant, so the only thing that can make a current
+  account owe something again is a deploy — which restarts the process. **"Owed"
+  is never cached**, because that is the answer that changes.
+- **The documents are readable FROM the gate**, rendered by the same
+  `LegalDocBody` the Site Help screens use. Somebody gated out of the terminal
+  cannot navigate to Site Help, and "agree to a document you cannot open" is the
+  failure this exists to avoid.
+- The live-account suite seeds a SECOND account that has never ticked, which is
+  what proves the gate stands in the browser; the demo never reaches it at all.
+
 **THE RETENTION SWEEP IS WHAT MAKES A SENTENCE IN THE PRIVACY POLICY TRUE**
 (`src/retention.ts`, `sweepExpired` in both stores). A published document saying
 beta-access requests are removed after six months is a **feature, not a wording

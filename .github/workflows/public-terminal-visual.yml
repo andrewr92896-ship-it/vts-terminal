@@ -111,6 +111,7 @@ jobs:
           node scripts/seed-public-account.mjs --cookie > /tmp/vts-cookies
           echo "PUBLIC_LIVE_COOKIE=$(sed -n 1p /tmp/vts-cookies)" >> $GITHUB_ENV
           echo "PUBLIC_LIVE_SPARE_COOKIE=$(sed -n 2p /tmp/vts-cookies)" >> $GITHUB_ENV
+          echo "PUBLIC_LIVE_PENDING_COOKIE=$(sed -n 3p /tmp/vts-cookies)" >> $GITHUB_ENV
 
       - name: Start the public stack
         run: PORT=4174 node scripts/serve-public-stack.mjs > /tmp/vts-public-stack.log 2>&1 &

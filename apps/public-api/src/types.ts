@@ -102,6 +102,10 @@ export type NewFundedTrade=Omit<FundedTradeRow,'id'>;
 
 export type DeletionRequest={accountId:string;expiresAt:number;consumedAt?:number};
 
+// One row of the clickwrap record: this account, this document, this version,
+// and the hash of the exact text that was on the screen.
+export type LegalAcceptance={document:string;version:string;sha256:string;acceptedAt:number};
+
 // What one pass of the retention sweep removed, per table.
 //
 // COUNTS RATHER THAN A BOOLEAN, because the only way to know a scheduled
@@ -146,6 +150,13 @@ export interface PublicStore {
   // One pass of the retention sweep. See `retention.ts` for what each cutoff is
   // and why. Returns what it removed rather than nothing.
   sweepExpired(now:number):Promise<RetentionSweep>;
+  // ---- the clickwrap record -------------------------------------------------
+  //
+  // APPEND-ONLY. There is deliberately no update and no delete: an acceptance
+  // is a statement about a moment, and the only thing that ever removes one is
+  // the account cascade.
+  listLegalAcceptances(accountId:string):Promise<LegalAcceptance[]>;
+  recordLegalAcceptances(accountId:string,entries:ReadonlyArray<{document:string;version:string;sha256:string}>):Promise<void>;
   // Account deletion. `deleteAccount` takes the EMAIL as well as the id because
   // the beta-access request is keyed by address and carries no account id — it
   // is the one row about a person that the account's own cascade cannot reach.

@@ -1,4 +1,4 @@
-import type { NewFundedAccount, NewFundedTrade, NewTrade, BugReport, BugRole, Suggestion, FlashcardSetDetail, FlashcardSetPatch, FlashcardSetRow, NewFlashcardSet, NewStudyGuide, StudyGuideDetail, StudyGuidePatch, StudyGuideRow, NewStudyDeck, StudyDeckDetail, StudyDeckPatch, StudyDeckRow, NewTradingNote, TradingNotePatch, NetWorthItem, NetWorthSnapshot, InvestmentAccount, InvestmentGoal, InvestmentHolding, InvestmentSnapshot, InvestmentTransaction, BudgetCategory, BudgetEntry, Challenge, NewBudgetCategory, NewBudgetEntry, PublicAccount, PublicStore, RateLimitResult, RetentionSweep, Session, TodoItemRow, TodoSectionRow, TrustedDevice } from './types.js';
+import type { NewFundedAccount, NewFundedTrade, NewTrade, BugReport, BugRole, Suggestion, FlashcardSetDetail, FlashcardSetPatch, FlashcardSetRow, NewFlashcardSet, NewStudyGuide, StudyGuideDetail, StudyGuidePatch, StudyGuideRow, NewStudyDeck, StudyDeckDetail, StudyDeckPatch, StudyDeckRow, NewTradingNote, TradingNotePatch, NetWorthItem, NetWorthSnapshot, InvestmentAccount, InvestmentGoal, InvestmentHolding, InvestmentSnapshot, InvestmentTransaction, BudgetCategory, BudgetEntry, Challenge, NewBudgetCategory, NewBudgetEntry, PublicAccount, PublicStore, LegalAcceptance, RateLimitResult, RetentionSweep, Session, TodoItemRow, TodoSectionRow, TrustedDevice } from './types.js';
 import { RETENTION } from './retention.js';
 import { STARTER_SECTIONS } from './todo.js';
 import type { NoteRow } from './notes.js';
@@ -34,6 +34,7 @@ export class MemoryPublicStore implements PublicStore {
     for(const [k,v] of this.sessions) if(v.accountId===accountId) this.sessions.delete(k);
     for(const [k,v] of this.trusted) if(v.accountId===accountId) this.trusted.delete(k);
     for(const [k,v] of this.challenges) if(v.accountId===accountId) this.challenges.delete(k);
+    this.legalAcceptances=this.legalAcceptances.filter((r)=>r.accountId!==accountId);
     this.layouts.delete(accountId); this.prefs.delete(accountId);
   }
   // `createdAt` is restamped by a repeat submission, exactly as the Postgres
@@ -41,6 +42,13 @@ export class MemoryPublicStore implements PublicStore {
   earlyAccess=new Map<string,{email:string;note:string|null;createdAt:number}>();
   async recordEarlyAccessRequest(email:string,note:string|null){this.earlyAccess.set(email.toLowerCase(),{email,note,createdAt:this.now()})}
   async deleteEarlyAccessRequest(email:string){this.earlyAccess.delete(email.trim().toLowerCase())}
+  // Append-only, like the table. Nothing here ever rewrites a row.
+  legalAcceptances:Array<LegalAcceptance&{accountId:string}>=[];
+  async listLegalAcceptances(accountId:string){return this.legalAcceptances.filter((r)=>r.accountId===accountId).map(({accountId:_,...r})=>r)}
+  async recordLegalAcceptances(accountId:string,entries:ReadonlyArray<{document:string;version:string;sha256:string}>){
+    const acceptedAt=this.now();
+    for(const entry of entries)this.legalAcceptances.push({accountId,...entry,acceptedAt});
+  }
   // The same rules `retention.ts` states, applied to the maps. Expired or spent,
   // never merely old — a live session and an unexpired trusted device survive
   // however long the sweep has been running.

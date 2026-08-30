@@ -23,6 +23,10 @@ const STEPS = [
   // a typecheck or to a screenshot.
   ['demo coverage', 'verify:demo-coverage'],
   ['limits mirror', 'verify:limits-mirror'],
+  // The clickwrap's pinned hashes against the documents the terminal actually
+  // renders. A stored acceptance names a version and a hash; if the text moves
+  // and the hash does not, every row points at words nobody was shown.
+  ['legal document hashes (clickwrap)', 'verify:legal-hashes'],
   ['demo writes', 'verify:demo-writes'],
   ['Desk right now responsive layout', 'verify:desk-layout'],
   ['rollover alerts and re-entry math', 'verify:rollover'],
