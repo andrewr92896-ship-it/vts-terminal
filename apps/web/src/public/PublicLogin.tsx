@@ -77,7 +77,7 @@ export function PublicLogin({ initialStep = 'login', onVerified, onDemo, onClose
         for nothing else, so there is nothing else to keep.
       </p>
       <p>
-        Ask us to delete it at any time — write to <em>{COMPANY.contactEmail}</em> and it is removed.
+        Ask us to delete it at any time — write to <em>{COMPANY.privacyEmail}</em> and it is removed.
         This paragraph is what we do with it, and applies whatever the pre-release Privacy Policy says
         about itself.
       </p>

@@ -12,9 +12,15 @@
 //
 // LEGAL_STATUS is the banner the screens draw above all three documents. It is what
 // makes the "in production" state impossible to miss and must not be quietly dropped.
-export const LEGAL_VERSION='2026-08-28.1';export const LEGAL_EFFECTIVE_DATE='August 28, 2026';
+export const LEGAL_VERSION='2026-08-30.1';export const LEGAL_EFFECTIVE_DATE='August 30, 2026';
 export const LEGAL_STATUS='PRE-RELEASE — THIS DOCUMENT IS INCOMPLETE AND IN PRODUCTION. It is a plain-language summary of how the finished document will work, published so you can see the shape of it while the terminal is still being built. It is not the operative agreement, it creates no obligations on you, and the binding Terms of Service and Privacy Policy will be published before the service launches. Do not rely on it as legal terms.';
-export const COMPANY={entity:'Vitalis Trading Systems LLC',short:'Vitalis Trading Systems',product:'VTS Public Terminal',state:'Ohio',country:'United States',contactEmail:'support@vitalistradingsystems.com'} as const;
+// TWO ADDRESSES, AND THEY ARE DIFFERENT JOBS. `contactEmail` is general contact
+// — Terms questions, bugs, anything about the service. `privacyEmail` is where a
+// request to see or delete what is held goes, and it is separate because those
+// carry response deadlines in several states: a privacy request must not be
+// findable only by digging through a pile of support mail. Both are aliases on
+// one mailbox, so this costs nothing to monitor.
+export const COMPANY={entity:'Vitalis Trading Systems LLC',short:'Vitalis Trading Systems',product:'VTS Public Terminal',state:'Ohio',country:'United States',contactEmail:'support@vitalistradingsystems.com',privacyEmail:'privacy@vitalistradingsystems.com'} as const;
 export type Block={p:string}|{ul:string[]}|{note:string};export interface LegalSection{heading:string;blocks:Block[]}export interface LegalDoc{title:string;intro:string;sections:LegalSection[]}
 
 export const TERMS:LegalDoc={
@@ -122,7 +128,7 @@ export const PRIVACY:LegalDoc={
   {note:'No system is perfectly secure. Use a password you use nowhere else, and tell us immediately if you think your account has been reached by somebody else.'},
   {p:'How this will work: the policy will describe the safeguards in place and the notification you would receive if a breach affected you.'}]},
  {heading:'Contact',blocks:[
-  {p:`Privacy questions may be sent to ${COMPANY.contactEmail}.`}]},
+  {p:`Privacy questions, and requests to see or delete what is held about you, may be sent to ${COMPANY.privacyEmail}.`}]},
 ]};
 
 export const RULES={

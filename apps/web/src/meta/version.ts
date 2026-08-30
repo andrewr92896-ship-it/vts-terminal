@@ -11,9 +11,18 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 7.77';
+export const APP_VERSION = 'Beta V 7.78';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 7.78',
+    date: '2026-08-30',
+    notes: [
+      'The public terminal now names a separate privacy address — privacy@vitalistradingsystems.com — for requests to see or delete what is held about you. General questions and bug reports still go to support@. Both reach the same inbox; keeping them apart means a deletion request is not buried in support mail, which matters because those carry response deadlines.',
+      'The Privacy Policy moves to v2026-08-30.1 and everyone is asked to accept again. That is the clickwrap working: the address somebody would use to exercise their rights changed, so the record has to point at the version that names it.',
+      'The private terminal is unchanged — its own documents state their contact inline and were deliberately not rewired.',
+    ],
+  },
   {
     version: 'Beta V 7.77',
     date: '2026-08-30',

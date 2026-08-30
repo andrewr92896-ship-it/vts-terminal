@@ -29,6 +29,11 @@ export const COMPANY = {
   state: 'Ohio',
   country: 'United States',
   contactEmail: 'support@vitalistradingsystems.com',
+  // Declared here as well as in the public adapter because the two COMPANY
+  // objects are a build seam and the shared components typecheck against this
+  // one. The private portal's own documents state their contact inline and are
+  // deliberately not rewired by this — changing them is a separate decision.
+  privacyEmail: 'privacy@vitalistradingsystems.com',
 } as const;
 
 // ---- Document model -------------------------------------------------------

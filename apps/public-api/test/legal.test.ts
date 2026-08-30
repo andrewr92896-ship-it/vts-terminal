@@ -77,7 +77,8 @@ test('a reworded document re-prompts, and only that one is written again',async(
   await after.acceptLegal(token);
   const rows=await store.listLegalAcceptances('account-1');
   assert.equal(rows.length,4,'the record is append-only; the earlier acceptance must survive');
-  assert.deepEqual(rows.filter((r)=>r.document==='terms').map((r)=>r.version),['2026-08-28.1','2026-09-01.1']);
+  const wasAt=REQUIRED_DOCUMENTS.find((d)=>d.id==='terms')!.version;
+  assert.deepEqual(rows.filter((r)=>r.document==='terms').map((r)=>r.version),[wasAt,'2026-09-01.1']);
   assert.equal(rows.filter((r)=>r.document==='privacy').length,1,'a document that did not change was written again');
   assert.equal((await after.session(token)).legalAcceptanceRequired,false);
 });

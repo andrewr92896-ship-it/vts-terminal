@@ -2,8 +2,12 @@ export interface PatchNote{version:string;date:string;notes:string[]}
 // The public terminal's own version and its historical archive. Separate from the
 // private terminal's `meta/version` (replaced at the build seam) because they are
 // different products on different release trains.
-export const APP_VERSION='Public Candidate V 2.5';
+export const APP_VERSION='Public Candidate V 2.6';
 export const PATCH_NOTES:PatchNote[]=[
+ {version:'Public Candidate V 2.6',date:'August 30, 2026',notes:[
+  'There is now a dedicated address for privacy requests: privacy@vitalistradingsystems.com. Use it to ask what we hold about you or to have it deleted. Everything else — questions, bugs, anything about the terminal — still goes to support@vitalistradingsystems.com.',
+  'The Privacy Policy has moved to a new version, so you will be asked to accept once more. That is deliberate: the address you would write to has changed, and we do not alter a document you have already agreed to without telling you.',
+ ]},
  {version:'Public Candidate V 2.5',date:'August 30, 2026',notes:[
   'Before you use the terminal we now ask you to read four short statements about what it is and is not, and to tick a box. The Terms of Service and Privacy Policy are readable from that screen rather than linked away to.',
   'We record which version you accepted and when. If either document changes we will ask again — we cannot alter what you agreed to without telling you.',
