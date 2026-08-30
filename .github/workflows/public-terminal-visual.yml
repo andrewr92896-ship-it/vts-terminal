@@ -1,10 +1,15 @@
 name: public-terminal-visual
 
+# Same trigger shape as `verify`: the pull request that proposes the change, and
+# `main` once it lands. Deliberately NOT every push to a working branch — a
+# session pushes a branch several times before it is ready, and each of those
+# pushes was firing this whole suite (a build, a browser download and a live
+# Postgres stack) for a branch nobody had asked to deploy yet.
 on:
+  pull_request:
   push:
     branches:
-      - 'codex/public-terminal-**'
-      - 'claude/**'
+      - main
   workflow_dispatch:
 
 concurrency:

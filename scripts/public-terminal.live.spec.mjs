@@ -32,8 +32,28 @@ const pendingCookie = process.env.PUBLIC_LIVE_PENDING_COOKIE ?? '';
 
 const [name, value] = cookie.split('=');
 
+// THE THIRD-PARTY EMBEDS ARE BLOCKED, AND THAT IS A CORRECTNESS RULE RATHER
+// THAN A SPEED ONE — the same rule, and the same host list, as the visual spec.
+//
+// This file waits on `networkidle`, and that only ever settled because it was
+// written in a sandbox with no outbound access, where these hosts simply fail.
+// A CI runner HAS outbound access: the Live Wall's watchlist tile opens a
+// connection to TradingView and holds it, the page never goes idle, and the
+// navigation spends the whole 60s test budget naming nothing. It cost a run on
+// #468 — one test in twenty-one, on the one navigation that had no blocking in
+// front of it — and it would have gone on failing at random.
+//
+// Blocked on the CONTEXT rather than the page, because two tests build their
+// own context and open a page in it afterwards. Add a new embed's host here
+// rather than letting a third party decide whether the run passes.
+const THIRD_PARTY = /(^|\.)((s3\.)?tradingview\.com|youtube(-nocookie)?\.com|ytimg\.com|googlevideo\.com)/;
+async function blockEmbeds(context) {
+  await context.route((url) => THIRD_PARTY.test(url.hostname), (route) => route.abort());
+}
+
 test.beforeEach(async ({ context }) => {
   expect(cookie, 'PUBLIC_LIVE_COOKIE must be set by the harness').not.toBe('');
+  await blockEmbeds(context);
   await context.addCookies([{
     name, value: decodeURIComponent(value ?? ''), domain: '127.0.0.1', path: '/',
     // Carried as the production cookie is: Secure, over HTTPS.
@@ -253,6 +273,7 @@ test('a visitor with no account can ask for early access', async ({ browser }) =
   // marketing site's two buttons both land here. Its own browser context, with
   // NO cookie, because "works while signed in" says nothing about it.
   const context = await browser.newContext({ ignoreHTTPSErrors: true });
+  await blockEmbeds(context);
   const page = await context.newPage();
   const errors = [];
   page.on('pageerror', (error) => errors.push(String(error)));
@@ -365,6 +386,27 @@ test('answering a study question is remembered by the server', async ({ page, br
   await expect.poll(answered, { message: 'answering did not move the count' }).toBe(before + 1);
   expect(errors, 'the study game threw while answering').toEqual([]);
 
+  // THE COUNT MOVING ON SCREEN SAYS NOTHING ABOUT THE SERVER HAVING BEEN TOLD.
+  // The player writes to the account on an 800ms debounce, fire and forget, so
+  // opening the second browser the moment the number changes is a race against
+  // that timer and the round trip behind it — one this test simply used to win,
+  // because building a context and loading a page took longer than a second.
+  // It stopped winning as soon as the suite got faster, which is exactly the
+  // kind of "fix one thing, a different test goes red" this would have become.
+  //
+  // Waiting for the write makes "was the server told" an awaited fact rather
+  // than a hope — and it fails HERE, naming the save, if the write never
+  // happens at all, which is the bug this test exists to catch. Registered
+  // after the click on purpose: the debounce guarantees the request has not
+  // been sent yet, and the effect clears its own pending timer on every change,
+  // so exactly one save is in flight and it is this answer's.
+  await page.waitForResponse(
+    (response) => /^\/public\/v1\/studies\/decks\/[^/]+\/game$/.test(new URL(response.url()).pathname)
+      && response.request().method() === 'PUT'
+      && response.ok(),
+    { timeout: 15_000 },
+  );
+
   // Reloading is what separates a counter held in the component from one the
   // server was actually told about.
   // A DIFFERENT BROWSER, not a reload. The player keeps its own per-deck state
@@ -374,6 +416,7 @@ test('answering a study question is remembered by the server', async ({ page, br
   // never seen this deck can tell the two apart, which is also the case that
   // matters: the same account on a second machine.
   const elsewhere = await browser.newContext({ ignoreHTTPSErrors: true });
+  await blockEmbeds(elsewhere);
   await elsewhere.addCookies([{
     name, value: decodeURIComponent(value ?? ''), domain: '127.0.0.1', path: '/',
     httpOnly: true, secure: true, sameSite: 'Lax',
@@ -463,6 +506,7 @@ test('signing out revokes the session, not just the screen', async ({ browser, r
 
   const [spareName, spareValue] = spareCookie.split('=');
   const context = await browser.newContext({ ignoreHTTPSErrors: true });
+  await blockEmbeds(context);
   await context.addCookies([{
     name: spareName, value: decodeURIComponent(spareValue ?? ''), domain: '127.0.0.1', path: '/',
     httpOnly: true, secure: true, sameSite: 'Lax',
@@ -498,6 +542,7 @@ test('an account that has not accepted the terms gets the gate, not the terminal
 
   const [pendingName, pendingValue] = pendingCookie.split('=');
   const context = await browser.newContext({ ignoreHTTPSErrors: true });
+  await blockEmbeds(context);
   await context.addCookies([{
     name: pendingName, value: decodeURIComponent(pendingValue ?? ''), domain: '127.0.0.1', path: '/',
     httpOnly: true, secure: true, sameSite: 'Lax',

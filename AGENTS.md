@@ -6800,6 +6800,15 @@ Because of that:
   any relevant API checks) and only merge when they pass.
 - If a build or verification step **fails**, do not merge — report the failure
   instead. Railway keeps the previous version live on a failed build.
+- **WAIT FOR CI TO GO GREEN ON THE PR BEFORE MERGING** (owner instruction,
+  2026-08). Not "open it and merge" — open it, watch the checks, and squash-merge
+  only once they pass. This is the whole reason the PR exists: a local `npm run
+  verify` and CI are not the same evidence, because CI has outbound network and
+  this sandbox does not, and several branches are in flight at once so the
+  merge base is not what was verified. Merging without waiting turns the PR into
+  paperwork — the safety property it was opened for is never collected. Read the
+  run rather than assuming it: `mcp__github__pull_request_read` with
+  `method: 'get_status'`, or `actions_list` on the branch.
 - **Squash-merge the PR** (see Deploy mechanics below).
 
 ## Deploy mechanics
@@ -6810,6 +6819,15 @@ Because of that:
   is the only deploy trigger.
 - **Squash merges only**, and always through a PR (see above), so `main` keeps
   one commit per release and every release has a PR page behind it.
+- **CI runs on the PULL REQUEST and on `main`, never on a working branch push**
+  (owner instruction, 2026-08). Both workflows — `verify.yml` and
+  `public-terminal-visual.yml` — carry the same `on:` block for that reason.
+  A session pushes a branch several times before it is ready, and every one of
+  those pushes was firing both suites (two builds, a browser download, a live
+  Postgres stack) against work nobody had asked to deploy, which is what took
+  the account to 90% of its free Actions minutes. **Do not add a branch-push
+  trigger back**, and do not add a new workflow with one — the run that matters
+  is the one on the proposal, which is the run the rule above says to wait for.
 
 ### A failed BUILD is harmless. A failed START is an outage.
 
@@ -6864,9 +6882,9 @@ own password.
 - **503 with `Retry-After` and `no-store`, never 200.** The condition is
   temporary; a 200 lets a crawler record the notice as the site's content, and a
   cacheable one outlives the maintenance.
-- **The notice references no asset.** Static files are behind the same gate, so
-  a page reaching for a stylesheet or a logo renders broken at the moment it has
-  to look deliberate.
+- **The notice references no asset.** It is one self-contained document, so it
+  renders correctly even if nothing else on the deployment does — which is the
+  one moment it has to look deliberate.
 - **Only the exact string `true` closes it** (trimmed, case-insensitive). A
   variable set to `1` or `yes` by somebody guessing the format must not take the
   terminal down, and neither must one left behind reading `false`.
@@ -6882,10 +6900,52 @@ own password.
   http(s) and is HTML-escaped before it reaches the href: this is the one page
   served to everybody, signed in or not.
 
-`npm run verify:maintenance` checks all of it, and is in `verify` because these
-failures are only visible once the mode is needed — one of them (blocking the
-health check) makes the very deploy that enables it roll back. Every rule above
-was proved load-bearing by breaking it.
+- **THE SERVED PAGE CANNOT REACH THE PEOPLE IT WAS WRITTEN FOR, SO THE CLIENT
+  DRAWS ITS OWN** (`apps/web/src/lib/maintenance.ts` + `pages/Maintenance.tsx`).
+  The terminal is an installed PWA with a precached shell: a returning partner
+  is served `index.html` out of their own device and the notice above is never
+  requested at all. They got the ordinary sign-in screen and, on submitting it,
+  a generic failure — which is exactly the afternoon of "have I forgotten my own
+  password?" the whole feature exists to prevent. **It only appeared in a
+  private window**, where there is no worker. Reported by the owner, 2026-08.
+  - **What still reaches a cached client is every API call** (`/api` is
+    deliberately never cached), so that is what carries it. `request()` reports
+    the outcome of **every** response to the store, and `App` draws the card
+    ahead of every other branch.
+  - **THE WORDING AND THE LINK ARE SENT, NOT MIRRORED.** The 503 body carries
+    `title`, `message`, `demoUrl` and `demoNote`, so the served page and the
+    in-app card cannot drift into saying different things. The constants in the
+    web module are only the fallback for a client cached from before the server
+    sent them, and the URL gets the same http(s) guard on both sides.
+  - **ANY ANSWER FROM THE SERVER REOPENS IT, NOT ONLY A SUCCESSFUL ONE.** The
+    card replaces every other screen, so nothing else is left running to notice
+    the terminal reopening — it polls `me`, which answers **401** for a
+    signed-out session, and reading that as "still closed" would leave somebody
+    trapped on the card for good. It polls `me` rather than the health check for
+    the same reason: health is exempt from the gate, so it answers 200
+    throughout and could never say the terminal had come back.
+  - **Only a 503 that names itself `maintenance` closes the app.** A platform
+    503 during a deploy is not the terminal saying it is closed.
+- **THE APP SHELL'S OWN FILES KEEP SERVING, AND THAT IS NOT A CONVENIENCE** —
+  it is what stops maintenance mode freezing every installed device. A worker
+  updates by re-fetching itself and everything in its precache list; gate those
+  and a phone is stuck on whatever build it had when the terminal closed, for as
+  long as it stays closed, which is precisely the case this is for. So
+  `maintenanceExempt` also passes `/index.html`, `/sw.js`, `/registerSW.js`,
+  `/push-sw.js`, the manifest, `/assets/*`, `workbox-*.js` and the root icons
+  and fonts. **A navigation is still closed** (`/` answers with the notice, so a
+  fresh browser gets it on the first request), **nothing under `/api` rides the
+  asset rule**, and **never the employee portal** — page or chunk — which is
+  network-only and hardened and must not be left standing by a closed terminal.
+  What is served is public JavaScript, CSS and icons that carry no data and
+  reach none: every request the shell makes is an `/api` one, and those are all
+  refused.
+
+`npm run verify:maintenance` checks all of it — both halves, the server's and
+the client's — and is in `verify` because these failures are only visible once
+the mode is needed: one of them (blocking the health check) makes the very
+deploy that enables it roll back, and another leaves a phone stuck on a card
+that will not clear. Every rule above was proved load-bearing by breaking it.
 
 **An allowlist entry may be an account ID, a username, or an email**
 (`auth/privateAccess.ts`, checked by `npm run verify:private-access`). It matched

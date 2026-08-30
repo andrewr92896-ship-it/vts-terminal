@@ -160,6 +160,7 @@ import type {
   AdminLogEntry,
   DevBlogPost,
 } from './types';
+import { noteResponse } from '../lib/maintenance';
 
 export type TerminalLoginResponse =
   | { requiresTwoFactor: true; sentTo: string; rememberDays: number }
@@ -282,6 +283,12 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
       body = text;
     }
   }
+
+  // Every response, not only the failures. The terminal can be closed for
+  // maintenance while a device is serving the app out of its own precache, and
+  // an API call is then the only thing that still reaches the server — so this
+  // is where the notice arrives, and where it lifts again. See lib/maintenance.
+  noteResponse(res.status, body);
 
   if (!res.ok) {
     const message =

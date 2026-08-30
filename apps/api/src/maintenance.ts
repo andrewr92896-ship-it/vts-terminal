@@ -30,9 +30,59 @@ export function maintenanceOn(env: NodeJS.ProcessEnv = process.env): boolean {
 // that blocked it would refuse to deploy at all, which is a spectacular way for
 // this feature to fail exactly when it is needed. Matched on the path alone so
 // a query string cannot slip past it.
+function isHealth(path: string): boolean {
+  return path === '/api/health' || path === '/api/health/';
+}
+
+// AND THE APP SHELL'S OWN FILES, WHICH IS NOT A CONVENIENCE — IT IS WHAT STOPS
+// MAINTENANCE MODE FREEZING EVERY INSTALLED DEVICE.
+//
+// The terminal is a PWA: a service worker precaches the shell, so a phone that
+// already has the app never asks the server for a page and never sees the
+// notice above. The client draws its own from the 503 on an API call instead
+// (see `maintenanceReply`) — but only if the device is running a build that
+// knows how to. Getting it there means the worker updating, and the worker
+// updates by re-fetching itself and everything in its precache list. Gate
+// those and the device is stuck on whatever build it had when the terminal
+// closed, permanently, for as long as it stays closed. Which is exactly the
+// case this is for.
+//
+// So the files a worker needs are served throughout. NOT the navigation: `/`
+// still answers with the notice, so a browser arriving fresh gets it on the
+// first request rather than a second after the app has booted. And never
+// `/employee` — that surface is deliberately network-only and hardened, and a
+// closed terminal must not leave it standing.
+//
+// What is served is public JavaScript, CSS, fonts and icons. It carries no data
+// and reaches no data: every request the shell makes is an `/api` one, and
+// those are all refused.
+const SHELL_FILES = new Set([
+  '/index.html',
+  '/sw.js',
+  '/registerSW.js',
+  '/push-sw.js',
+  '/manifest.webmanifest',
+]);
+
+// Matched on the EXTENSION, at any depth — the precache list is a glob over the
+// whole build (`**/*.{js,css,html,svg,png,ico,woff,woff2}`), so anything it can
+// reach has to be servable or the worker's install fails and it never updates.
+// `.html` is deliberately absent: that is a navigation, and `/index.html` is
+// named above as the one exception the precache genuinely fetches.
+const SHELL_FILE_PATTERN = /\.(?:js|mjs|css|map|png|jpe?g|gif|ico|svg|webmanifest|woff2?|ttf|otf|json|txt|mp3|wav)$/;
+
 export function maintenanceExempt(url: string): boolean {
   const path = url.split('?')[0] ?? '';
-  return path === '/api/health' || path === '/api/health/';
+  if (isHealth(path)) return true;
+  // The hardened surface stays closed with everything else, and no asset rule
+  // may reach it — `employee.html` and its chunks are already kept out of the
+  // precache for the same reason.
+  const file = path.slice(path.lastIndexOf('/') + 1);
+  if (path === '/employee' || path.startsWith('/employee/') || file.startsWith('employee.') || file.startsWith('employee-')) {
+    return false;
+  }
+  if (path.startsWith('/api')) return false;
+  return SHELL_FILES.has(path) || SHELL_FILE_PATTERN.test(path);
 }
 
 export type MaintenanceReply = { status: 503; contentType: string; body: string };
@@ -122,13 +172,32 @@ function page(env: NodeJS.ProcessEnv = process.env): string {
 // An API caller gets JSON and a browser gets the page. A client that asked for
 // JSON and received HTML reports a parse error, which is a worse thing to put
 // in front of somebody than the notice itself.
+//
+// THE JSON BODY IS NOT ONLY AN ERROR — IT IS HOW THE NOTICE REACHES A PHONE
+// THAT ALREADY HAS THE APP. The terminal is an installed PWA with a precached
+// shell, so a returning partner is served `index.html` out of their own device
+// and the page above is never fetched at all: they got the ordinary sign-in
+// screen and, on submitting it, a generic failure — which is the exact thing
+// this feature exists to stop somebody spending an afternoon on. (That is why
+// the notice only appeared in a private window, where there is no worker.)
+//
+// What DOES still reach a cached client is every API call, so the client reads
+// this body and draws the same notice itself (`web/src/lib/maintenance.ts`).
+// The wording and the demo link are sent from here rather than mirrored there,
+// so the served page and the in-app card cannot come to say different things.
 export function maintenanceReply(url: string, env: NodeJS.ProcessEnv = process.env): MaintenanceReply {
   const path = url.split('?')[0] ?? '';
   if (path.startsWith('/api')) {
     return {
       status: 503,
       contentType: 'application/json; charset=utf-8',
-      body: JSON.stringify({ error: 'maintenance', message: MAINTENANCE_MESSAGE }),
+      body: JSON.stringify({
+        error: 'maintenance',
+        message: MAINTENANCE_MESSAGE,
+        title: MAINTENANCE_TITLE,
+        demoUrl: publicTerminalUrl(env),
+        demoNote: MAINTENANCE_DEMO_NOTE,
+      }),
     };
   }
   return { status: 503, contentType: 'text/html; charset=utf-8', body: page(env) };

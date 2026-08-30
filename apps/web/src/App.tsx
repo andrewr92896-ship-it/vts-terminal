@@ -3,14 +3,23 @@ import { useAuth } from './auth/AuthContext';
 import { Login } from './pages/Login';
 import { ChangePassword } from './pages/ChangePassword';
 import { AcceptTerms } from './pages/AcceptTerms';
+import { Maintenance, useMaintenance } from './pages/Maintenance';
 import { Portal } from './components/Portal';
 import { UpdatePrompt } from './components/UpdatePrompt';
 
 export function App() {
   const { user, loading } = useAuth();
+  // Ahead of every other branch, including `loading`: the session check is what
+  // discovers the terminal is closed, and while it is, no other screen here can
+  // do anything useful. A cached PWA never fetches the server's own notice
+  // page, so this is the only way that notice reaches a device that already has
+  // the app — see `lib/maintenance.ts`.
+  const closed = useMaintenance();
 
   let content: ReactNode;
-  if (loading) {
+  if (closed) {
+    content = <Maintenance notice={closed} />;
+  } else if (loading) {
     content = (
       <div
         style={{
