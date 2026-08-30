@@ -11,9 +11,17 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 7.73';
+export const APP_VERSION = 'Beta V 7.74';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 7.74',
+    date: '2026-08-29',
+    notes: [
+      'The public terminal can delete an account. Settings asks, an emailed link confirms — good once, expiring after an hour, and ignoring it cancels — and confirming removes the account and everything in it immediately. No grace period, no deactivate alternative, and no address kept to block signing up again, because keeping one to block with would not be deletion.',
+      'It also removes the beta-access request for that address, which is the one record about a person the account’s own database cascades cannot reach. The private terminal is unchanged.',
+    ],
+  },
   {
     version: 'Beta V 7.73',
     date: '2026-08-29',

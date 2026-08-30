@@ -1,5 +1,7 @@
+import { useState } from 'react';
 import type { Theme } from '../theme/themes';
 import { Icon } from '../components/Icon';
+import { publicAuth, isDemo } from './PublicRuntime';
 
 const card=(theme:Theme)=>({background:'rgba(11,26,58,.5)',border:`1px solid ${theme.navBorder}`,borderRadius:12,padding:'18px 20px'} as const);
 function Header({title,subtitle}:{title:string;subtitle:string}){return <header style={{marginBottom:18}}><h2 style={{margin:0,fontSize:22,color:'#eef3ff'}}>{title}</h2><p style={{margin:'7px 0 0',color:'#9fb0d6',fontSize:12.5,lineHeight:1.55}}>{subtitle}</p></header>;}
@@ -36,4 +38,51 @@ export function PublicPlans({theme}:{theme:Theme}){
   <p style={{color:'#7f90b6',fontSize:12,lineHeight:1.6,margin:'16px 0 0'}}>Order placement, broker connections, live balances and group features are not part of the public terminal. Everything here is informational only and is not investment advice.</p>
  </div>;
 }
-export function PublicSettings({theme}:{theme:Theme}){return <div style={{maxWidth:820,margin:'0 auto'}}><Header title="Settings" subtitle="Public-terminal account, privacy and display settings. Private portal roles, credentials, connections and notification services are intentionally absent."/><section style={card(theme)}><div style={{display:'grid',gap:14}}><label style={{display:'flex',justifyContent:'space-between',gap:18,color:'#dfe7fa',fontSize:13}}>Public account security <span style={{color:theme.accent}}>Password + email verification</span></label><label style={{display:'flex',justifyContent:'space-between',gap:18,color:'#dfe7fa',fontSize:13}}>Remembered device <span style={{color:'#9fb0d6'}}>Up to 30 days</span></label><label style={{display:'flex',justifyContent:'space-between',gap:18,color:'#dfe7fa',fontSize:13}}>Data boundary <span style={{color:'#9fb0d6'}}>Public records only</span></label></div></section></div>;}
+export function PublicSettings({theme}:{theme:Theme}){return <div style={{maxWidth:820,margin:'0 auto'}}><Header title="Settings" subtitle="Public-terminal account, privacy and display settings. Private portal roles, credentials, connections and notification services are intentionally absent."/><section style={card(theme)}><div style={{display:'grid',gap:14}}><label style={{display:'flex',justifyContent:'space-between',gap:18,color:'#dfe7fa',fontSize:13}}>Public account security <span style={{color:theme.accent}}>Password + email verification</span></label><label style={{display:'flex',justifyContent:'space-between',gap:18,color:'#dfe7fa',fontSize:13}}>Remembered device <span style={{color:'#9fb0d6'}}>Up to 30 days</span></label><label style={{display:'flex',justifyContent:'space-between',gap:18,color:'#dfe7fa',fontSize:13}}>Data boundary <span style={{color:'#9fb0d6'}}>Public records only</span></label></div></section><DeleteAccountCard theme={theme}/></div>;}
+
+// DELETING THE ACCOUNT. Two steps, and the second one is an email, because the
+// session alone is a laptop somebody walked away from. It asks no more of a
+// person than getting in does — every sign-in already needs an emailed code —
+// which is the test that matters: deletion must never be harder than access.
+//
+// Deliberately absent: a "deactivate instead" offer, a grace period, and any
+// second and third "are you sure". Each of those reads as discouragement, which
+// is the thing to avoid on this control specifically.
+function DeleteAccountCard({theme}:{theme:Theme}){
+ const [step,setStep]=useState<'idle'|'confirm'|'sent'>('idle');
+ const [busy,setBusy]=useState(false);
+ const [error,setError]=useState('');
+ const [notice,setNotice]=useState('');
+ const demo=isDemo();
+ async function ask(){
+  setBusy(true);setError('');
+  try{const result=await publicAuth.requestDeletion();setNotice(result.message);setStep('sent')}
+  catch(reason){setError(reason instanceof Error?reason.message:'Could not start that.')}
+  finally{setBusy(false)}
+ }
+ const danger={background:'#f0596e',border:0,color:'#2a0008',fontWeight:700,padding:'9px 14px',borderRadius:8,cursor:'pointer',fontSize:13} as const;
+ const quiet={background:'transparent',border:`1px solid ${theme.navBorder}`,color:'#9fb0d6',padding:'9px 14px',borderRadius:8,cursor:'pointer',fontSize:13} as const;
+ return <section style={{...card(theme),marginTop:16,borderColor:'rgba(240,89,110,.45)'}}>
+  <h3 style={{margin:'0 0 8px',fontSize:15,color:'#eef3ff'}}>Delete your account</h3>
+  {step==='sent'
+   ? <p style={{margin:0,color:'#8fd8b0',fontSize:12.5,lineHeight:1.6}}>{notice}</p>
+   : <>
+     <p style={{margin:'0 0 12px',color:'#9fb0d6',fontSize:12.5,lineHeight:1.6}}>
+      This removes your account and everything in it — your records, your notes, your study material and your settings — from this terminal. It cannot be undone, and there is no grace period.
+     </p>
+     {step==='idle'
+      ? <button type="button" style={quiet} disabled={demo} onClick={()=>setStep('confirm')}>Delete my account</button>
+      : <>
+        <p style={{margin:'0 0 12px',color:'#f3c9cf',fontSize:12.5,lineHeight:1.6}}>
+         We will email you a link to confirm. It works once and expires after an hour. Nothing is deleted until you open it, and ignoring the email is enough to cancel.
+        </p>
+        <div style={{display:'flex',gap:8,flexWrap:'wrap'}}>
+         <button type="button" style={danger} disabled={busy} onClick={()=>{void ask()}}>{busy?'Sending…':'Email me the link'}</button>
+         <button type="button" style={quiet} onClick={()=>{setStep('idle');setError('')}}>Keep my account</button>
+        </div>
+       </>}
+     {demo&&<p style={{margin:'10px 0 0',color:'#7f90b6',fontSize:12}}>There is no account to delete in the demo — nothing you do here is stored anywhere.</p>}
+     {error&&<p style={{margin:'10px 0 0',color:'#f0596e',fontSize:12}}>{error}</p>}
+    </>}
+ </section>;
+}

@@ -4,13 +4,26 @@ import { hashPassword, keyedHash, maskEmail, randomCode, randomTemporaryPassword
 const TEN_MINUTES = 10 * 60_000;
 const THIRTY_DAYS = 30 * 24 * 60 * 60_000;
 const SESSION_LIFETIME = 12 * 60 * 60_000;
+// An hour to open the deletion link. Long enough to walk away from the screen
+// and come back; short enough that a forwarded or intercepted mailbox is not a
+// standing offer to delete somebody's account.
+const DELETION_WINDOW = 60 * 60_000;
 const DUMMY_HASH = 'scrypt$AAAAAAAAAAAAAAAAAAAAAA$5gvM3xrTTFvQDeiqs8XEB5P5uJ5fwxNf2pNxcrZqaD54YCYeJkzVKI06vdqdI6OcTnxv1LX6xlvQEzkKyQl9fA';
 
 export class AuthError extends Error { constructor(public status:number, message:string) { super(message); } }
 export type LoginResult = { requiresTwoFactor:boolean; challengeId?:string; sentTo?:string; sessionToken?:string; trustedDeviceToken?:string; passwordChangeRequired?:boolean; privateGroupWarning?:boolean };
 
 export class PublicAuthService {
-  constructor(private store:PublicStore, private mailer:PublicMailer, private keys:{session:string;challenge:string;trusted:string}, private now=()=>Date.now()) {}
+  // `site` is not a key and sits here anyway, because this object is what the
+  // service must be TOLD rather than what it can work out — and making it a
+  // required field is what stops a deletion email going out with a broken link
+  // because somebody added a constructor argument and forgot this one.
+  constructor(private store:PublicStore, private mailer:PublicMailer, private keys:{session:string;challenge:string;trusted:string;site:string}, private now=()=>Date.now()) {}
+
+  // The public terminal reads `?delete=` at load and posts it back. A query
+  // parameter rather than a hash, because a hash never reaches the server and
+  // this has to survive being pasted, forwarded and opened in another browser.
+  private deletionUrl(token:string){return `${this.keys.site.replace(/\/$/,'')}/?delete=${encodeURIComponent(token)}`}
 
   private async rate(bucket:string,key:string,limit:number,windowMs:number) {
     const result = await this.store.consumeRateLimit(bucket, keyedHash(this.keys.challenge,key), limit, windowMs);
@@ -90,6 +103,52 @@ export class PublicAuthService {
       await this.store.audit('public.auth.recovery_issued',account.id,{});
     } else await this.store.audit('public.auth.recovery_requested',undefined,{});
     return generic;
+  }
+
+  // ---- account deletion -----------------------------------------------------
+  //
+  // Two steps, because one is not enough and three is theatre. The signed-in
+  // session proves who is asking; the emailed link proves they still control the
+  // address, which is what stops a walked-away-from laptop being enough. That is
+  // the same bar getting IN clears — every sign-in already needs an emailed code
+  // — so deletion is no harder than access, which is the test that matters.
+  async requestDeletion(sessionToken:string|undefined) {
+    const {account}=await this.accountForSession(sessionToken);
+    const token=randomToken();
+    await this.store.createDeletionRequest(sha256(token),{accountId:account.id,expiresAt:this.now()+DELETION_WINDOW});
+    await this.mailer.sendDeletionLink(account.email,this.deletionUrl(token));
+    await this.store.audit('public.account.deletion_requested',account.id,{});
+    return {message:`Check ${maskEmail(account.email)} for a link to confirm. It is good for one hour.`};
+  }
+
+  // The link is opened by somebody who may not be signed in — a different
+  // browser, a phone, an hour later — so this authenticates on the token alone.
+  // That is safe because the token went to the address the account is reached
+  // at, is stored only as a hash, expires, and is claimed before it is acted on.
+  async confirmDeletion(token:string) {
+    const hash=sha256(String(token||''));
+    const request=await this.store.getDeletionRequest(hash);
+    // One refusal for every way this can fail: unknown, expired, already used.
+    // Distinguishing them tells whoever is holding a stale link nothing useful
+    // and tells somebody holding a guessed one something worth knowing.
+    if(!request||request.consumedAt||request.expiresAt<=this.now()) throw new AuthError(400,'That deletion link is no longer valid. Sign in and ask again if you still want to delete your account.');
+    // CLAIMED BEFORE ANYTHING IS DELETED, so a double-open cannot run the
+    // deletion twice — the second finds the row already spent.
+    if(!await this.store.consumeDeletionRequest(hash,this.now())) throw new AuthError(400,'That deletion link is no longer valid. Sign in and ask again if you still want to delete your account.');
+    const account=await this.store.findAccountById(request.accountId);
+    if(!account) return {message:'That account has already been deleted.'};
+    // Read the address BEFORE the row is gone: it is what the beta-access row is
+    // keyed by, and what the confirmation is sent to.
+    const email=account.email;
+    await this.store.deleteAccount(account.id,email);
+    // A NULL actor, because there is no longer an account for this to point at.
+    await this.store.audit('public.account.deleted',undefined,{});
+    // BEST EFFORT, AND DELIBERATELY LAST. The account is already gone; a mail
+    // server having a bad minute must not resurrect it or report a failure for
+    // work that succeeded. The cost of this failing is that somebody does not
+    // get a receipt, which is smaller than the cost of the alternative.
+    await this.mailer.sendDeletionComplete(email).catch(()=>{});
+    return {message:'Your account and everything in it have been deleted.'};
   }
 
   async session(token:string|undefined) {

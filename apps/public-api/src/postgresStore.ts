@@ -46,6 +46,26 @@ export class PostgresPublicStore implements PublicStore {
   // and a missing row means nothing is.
   async getPreferences(id:string){const r=await this.pool.query('select preferences from public_preferences where account_id=$1',[id]);return (r.rows[0]?.preferences??{}) as Record<string,unknown>}
   async savePreferences(id:string,preferences:Record<string,unknown>){await this.pool.query('insert into public_preferences(account_id,preferences) values($1,$2) on conflict(account_id) do update set preferences=excluded.preferences,updated_at=now()',[id,JSON.stringify(preferences)])}
+  async createDeletionRequest(hash:string,v:{accountId:string;expiresAt:number}){await this.pool.query('insert into public_account_deletions(token_hash,account_id,expires_at) values($1,$2,to_timestamp($3/1000.0))',[hash,v.accountId,v.expiresAt]);}
+  async getDeletionRequest(hash:string){const r=await this.pool.query('select account_id,expires_at,consumed_at from public_account_deletions where token_hash=$1',[hash]);const row=r.rows[0];return row?{accountId:row.account_id as string,expiresAt:new Date(row.expires_at).getTime(),consumedAt:row.consumed_at?new Date(row.consumed_at).getTime():undefined}:undefined;}
+  // ONE CONDITIONAL UPDATE decides which caller proceeds. An emailed link gets
+  // clicked twice — by a mail scanner, by a double tap, by somebody refreshing
+  // the page it opened — and read-then-write would let both through.
+  async consumeDeletionRequest(hash:string,at:number){const r=await this.pool.query('update public_account_deletions set consumed_at=to_timestamp($2/1000.0) where token_hash=$1 and consumed_at is null',[hash,at]);return (r.rowCount??0)>0;}
+  // ONE TRANSACTION, and the beta-access row goes first. Everything the account
+  // owns is removed by the database's own cascades — 26 tables' worth — so what
+  // is written out here is only what those cannot reach: the request row, which
+  // is keyed by email address and carries no account id at all.
+  async deleteAccount(accountId:string,email:string){
+    const client=await this.pool.connect();
+    try{
+      await client.query('begin');
+      await client.query('delete from public_early_access_requests where lower(email)=lower($1)',[email]);
+      await client.query('delete from public_accounts where id=$1',[accountId]);
+      await client.query('commit');
+    }catch(error){await client.query('rollback').catch(()=>{});throw error}
+    finally{client.release()}
+  }
   async recordEarlyAccessRequest(email:string,note:string|null){await this.pool.query(`insert into public_early_access_requests(email,note) values($1,$2) on conflict(lower(email)) do update set note=coalesce(excluded.note,public_early_access_requests.note),status='new',handled_at=null,created_at=now()`,[email,note])}
   // ---- budget ---------------------------------------------------------------
   //

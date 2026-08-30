@@ -401,6 +401,37 @@ test('every remaining screen renders without throwing', async ({ page }) => {
 });
 
 // LAST, deliberately: it revokes the session every other test signs in with.
+// THE DELETE CONTROL IS ON THE SCREEN AND ASKS BEFORE IT ACTS.
+//
+// Driven through the UI rather than the route, because the route is already
+// covered against a real database and what this checks is the half that is not:
+// that a person can find the control, that pressing it does NOT delete, and that
+// what it asks for is the emailed link. Deliberately stops at "email me the
+// link" — actually completing it would destroy the account every other test in
+// this file signs in with.
+test('the account can be deleted from the screen, and asking does not delete it', async ({ page }) => {
+  const errors = await open(page, 'my_settings');
+
+  const start = page.getByRole('button', { name: 'Delete my account' });
+  await expect(start).toBeVisible();
+  await start.click();
+
+  // What it asks for is proof of the address, and it says ignoring the email is
+  // enough to cancel — the sentence that stops this reading as a trap.
+  const card = page.locator('section', { hasText: 'Delete your account' }).last();
+  await expect(card).toContainText(/email you a link/i);
+  await expect(card).toContainText(/works once/i);
+  await expect(card).toContainText(/ignoring the email is enough/i);
+
+  // And there is no talking-you-out-of-it step, which is what turns a deletion
+  // control into an obstacle course.
+  await expect(card).not.toContainText(/deactivate/i);
+
+  // The session still works, so nothing was deleted by asking.
+  await expect(page.getByRole('button', { name: 'Keep my account' })).toBeVisible();
+  expect(errors, 'the delete card threw').toEqual([]);
+});
+
 test('signing out revokes the session, not just the screen', async ({ browser, request }) => {
   // There was no way out at all — the account chip has never had a handler and
   // the adapter's logout was a stub — so a signed-in public account stayed

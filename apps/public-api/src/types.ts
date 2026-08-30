@@ -100,6 +100,8 @@ export type NewTrade=Omit<TradeRow,'id'>;
 export type NewFundedAccount=Omit<FundedAccountRow,'id'|'createdAt'|'updatedAt'|'trades'>;
 export type NewFundedTrade=Omit<FundedTradeRow,'id'>;
 
+export type DeletionRequest={accountId:string;expiresAt:number;consumedAt?:number};
+
 export interface PublicStore {
   createAccount(v:{email:string;displayName:string;passwordHash:string}):Promise<string>;
   findAccountByEmail(email:string):Promise<PublicAccount|undefined>;
@@ -124,6 +126,13 @@ export interface PublicStore {
   getPreferences(accountId:string):Promise<Record<string,unknown>>;
   savePreferences(accountId:string,preferences:Record<string,unknown>):Promise<void>;
   recordEarlyAccessRequest(email:string,note:string|null):Promise<void>;
+  // Account deletion. `deleteAccount` takes the EMAIL as well as the id because
+  // the beta-access request is keyed by address and carries no account id — it
+  // is the one row about a person that the account's own cascade cannot reach.
+  createDeletionRequest(hash:string,value:DeletionRequest):Promise<void>;
+  getDeletionRequest(hash:string):Promise<DeletionRequest|undefined>;
+  consumeDeletionRequest(hash:string,at:number):Promise<boolean>;
+  deleteAccount(accountId:string,email:string):Promise<void>;
   // Budget. Every one of these takes the account id and filters on it — there is
   // no "whose" parameter anywhere, and no version of this feature where somebody
   // else's budget is worth reading.
@@ -231,6 +240,12 @@ export interface PublicStore {
 export interface PublicMailer {
   sendVerification(to:string,code:string):Promise<void>;
   sendTemporaryPassword(to:string,password:string):Promise<void>;
+  // Deletion is the one flow where the SECOND message matters as much as the
+  // first: the link is how somebody proves the request was theirs, and the
+  // confirmation is the only evidence they ever get that it happened, since by
+  // then there is no account left to look at.
+  sendDeletionLink(to:string,url:string):Promise<void>;
+  sendDeletionComplete(to:string):Promise<void>;
 }
 
 export interface PublicMarketProvider {

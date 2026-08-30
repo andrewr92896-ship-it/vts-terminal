@@ -145,8 +145,8 @@ if (!url) {
     let emailedCode = '';
     const auth = new PublicAuthService(store as any,
       { sendVerification: async (_to: string, code: string) => { emailedCode = code; },
-        sendTemporaryPassword: async () => {} },
-      { session: key, challenge: key, trusted: key });
+        sendTemporaryPassword: async () => {}, sendDeletionLink: async () => {}, sendDeletionComplete: async () => {}, },
+      { session: key, challenge: key, trusted: key ,site:'https://public.example.com'});
 
     const address = `admitted-${randomBytes(6).toString('hex')}@example.com`;
     const admitted = await admitAccount(store as any, { email: address, displayName: 'Admitted' });
@@ -486,8 +486,8 @@ if (!url) {
     const { PublicAuthService } = await import('../src/auth.js');
     let code = '';
     const auth = new PublicAuthService(store as any,
-      { sendVerification: async (_to: string, sent: string) => { code = sent; }, sendTemporaryPassword: async () => {} },
-      { session: key, challenge: key, trusted: key });
+      { sendVerification: async (_to: string, sent: string) => { code = sent; }, sendTemporaryPassword: async () => {}, sendDeletionLink: async () => {}, sendDeletionComplete: async () => {}, },
+      { session: key, challenge: key, trusted: key ,site:'https://public.example.com'});
 
     const address = `changer-${randomBytes(6).toString('hex')}@example.com`;
     const admitted = await admitAccount(store as any, { email: address, displayName: 'Changer' });
@@ -500,6 +500,66 @@ if (!url) {
     // The old password must be dead, or a leaked one stays live forever.
     await assert.rejects(auth.login(address, admitted.password, undefined, '203.0.113.12'));
     assert.equal((await auth.login(address, next, undefined, '203.0.113.13')).requiresTwoFactor, true);
+  });
+
+  test('an account deletes, taking its records and its beta-access row with it', async () => {
+    // THE ONE FLOW WHERE BEING WRONG IS UNRECOVERABLE, and most of what makes it
+    // correct is the database rather than the code: 26 cascading foreign keys do
+    // the work, and the only row written out by hand is the beta-access request,
+    // which is keyed by email address and carries no account id for a cascade to
+    // follow. Nothing but a real Postgres can show that the cascades reach what
+    // they are assumed to reach.
+    const { admitAccount } = await import('../src/admit.js');
+    const { PublicAuthService } = await import('../src/auth.js');
+    let code = '';
+    let link = '';
+    let receipt = '';
+    const auth = new PublicAuthService(store as any,
+      { sendVerification: async (_to: string, sent: string) => { code = sent; }, sendTemporaryPassword: async () => {},
+        sendDeletionLink: async (_to: string, url: string) => { link = url; },
+        sendDeletionComplete: async (to: string) => { receipt = to; } },
+      { session: key, challenge: key, trusted: key, site: 'https://public.example.com' });
+
+    const address = `deleter-${randomBytes(6).toString('hex')}@example.com`;
+    // They asked for a place before they had an account, which is how every
+    // account here comes to exist.
+    await store.recordEarlyAccessRequest(address, null);
+    const admitted = await admitAccount(store as any, { email: address, displayName: 'Deleter' });
+    const started = await auth.login(address, admitted.password, undefined, '203.0.113.21');
+    const signedIn = await auth.verify(started.challengeId!, code, false, '203.0.113.21');
+
+    // Something of theirs in a cascading table, so the cascade has work to do.
+    await store.addBudgetCategory(admitted.id, { name: 'Rent', kind: 'expense', monthlyLimitCents: 120000 } as any);
+    const owned = async () => (await store.raw(
+      `select count(*)::int as n from public_budget_categories where account_id='${admitted.id}'`) as Array<{ n: number }>)[0]!.n;
+    assert.equal(await owned(), 1);
+
+    await auth.requestDeletion(signedIn.sessionToken!);
+    // Asking does not delete. Until the link is opened the account is untouched.
+    const stillThere = await store.raw(`select count(*)::int as n from public_accounts where id='${admitted.id}'`) as Array<{ n: number }>;
+    assert.equal(stillThere[0]!.n, 1, 'requesting deletion must not delete anything');
+    const token = new URL(link).searchParams.get('delete')!;
+
+    await auth.confirmDeletion(token);
+
+    const gone = async (sql: string) => ((await store.raw(sql)) as Array<{ n: number }>)[0]!.n;
+    assert.equal(await gone(`select count(*)::int as n from public_accounts where id='${admitted.id}'`), 0, 'the account survived');
+    assert.equal(await owned(), 0, 'the cascade did not reach the budget rows');
+    assert.equal(await gone(`select count(*)::int as n from public_sessions where account_id='${admitted.id}'`), 0, 'a session survived');
+    assert.equal(await gone(`select count(*)::int as n from public_account_deletions where account_id='${admitted.id}'`), 0, 'the pending request survived');
+    assert.equal(await gone(`select count(*)::int as n from public_early_access_requests where lower(email)=lower('${address}')`), 0, 'the beta-access row survived');
+    // 0014 made this cascade rather than linger as a de-linked row.
+    assert.equal(await gone(`select count(*)::int as n from public_recovery_events where account_id='${admitted.id}'`), 0, 'a recovery event survived');
+    assert.equal(receipt, address, 'no confirmation was sent');
+
+    // Audit events are the ONE thing that intentionally outlives the account,
+    // de-linked. That is what the Privacy Policy discloses, so it is asserted
+    // rather than assumed.
+    const linked = await gone(`select count(*)::int as n from public_audit_events where account_id='${admitted.id}'`);
+    assert.equal(linked, 0, 'an audit row is still linked to the deleted account');
+
+    // And the spent link is dead.
+    await assert.rejects(() => auth.confirmDeletion(token), /no longer valid/);
   });
 
   test('an early-access request is recorded, and asking twice is not two rows', async () => {
