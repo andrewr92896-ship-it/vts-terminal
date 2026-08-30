@@ -40,6 +40,9 @@ const envSchema = z.object({
   // see `maintenance.ts`. Only the exact string 'true' closes it, so a stray
   // value cannot take the terminal down by accident.
   PRIVATE_MAINTENANCE: blankAsUnset,
+  // Where the maintenance notice's demo button points. Defaults to the public
+  // terminal's demo URL, so the button works without being configured.
+  PUBLIC_TERMINAL_URL: blankAsUnset,
   PRIVATE_BOOTSTRAP_ADMIN_ID: blankAsUnset.pipe(z.string().uuid().optional()),
   SESSION_SECRET: z.string().min(16, 'SESSION_SECRET must be at least 16 characters'),
   SESSION_TTL_DAYS: z.coerce.number().int().positive().default(14),

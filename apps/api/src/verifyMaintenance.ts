@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { maintenanceExempt, maintenanceOn, maintenanceReply, MAINTENANCE_HEADERS } from './maintenance.js';
+import { maintenanceExempt, maintenanceOn, maintenanceReply, publicTerminalUrl, MAINTENANCE_HEADERS } from './maintenance.js';
 
 // Maintenance mode is the one feature whose failures are only visible when it
 // is already needed — you turn it on because something is wrong, and if it is
@@ -52,6 +52,30 @@ const checks: Array<[string, () => void]> = [
     // deliberate.
     assert.doesNotMatch(page.body, /<link[^>]+href=|<script[^>]+src=|<img/i,
       'the notice must not reference an asset it cannot load');
+  }],
+
+  ['the notice offers the public demo, and cannot be turned into a hole', () => {
+    // Somebody landing on the apex during maintenance is not necessarily one of
+    // the three who can sign in, and the demo is a working thing to look at.
+    const page = maintenanceReply('/', {}).body;
+    assert.match(page, /Try the public demo/);
+    assert.match(page, /href="https:\/\/app\.vitalistradingsystems\.com\/\?demo=1"/,
+      'the default must point at the public terminal\'s demo');
+    // It must say what it is sending them to. "Demo" on a page about YOUR
+    // terminal reads as your terminal in a limited mode, which it is not.
+    assert.match(page, /not your account/i);
+
+    // A configured URL is used...
+    assert.equal(publicTerminalUrl({ PUBLIC_TERMINAL_URL: 'https://demo.example.com/x' }), 'https://demo.example.com/x');
+    // ...but the value is an environment read, not a trusted input, and this
+    // link is on the one page served to everybody signed in or not.
+    for (const hostile of ['javascript:alert(1)', 'data:text/html,<script>', 'not a url', ' ']) {
+      assert.equal(publicTerminalUrl({ PUBLIC_TERMINAL_URL: hostile }),
+        'https://app.vitalistradingsystems.com/?demo=1', `"${hostile}" must not reach the href`);
+    }
+    // And a quote must not break out of the attribute into the markup.
+    const escaped = maintenanceReply('/', { PUBLIC_TERMINAL_URL: 'https://x.example.com/"><script>alert(1)</script>' }).body;
+    assert.doesNotMatch(escaped, /<script>/, 'the URL was not escaped before it reached the href');
   }],
 
   ['it answers 503 and says when to come back', () => {

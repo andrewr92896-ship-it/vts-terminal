@@ -6872,6 +6872,15 @@ own password.
   terminal down, and neither must one left behind reading `false`.
 - **It deletes nothing, disconnects nothing and revokes nothing.** Turn it off
   and everything is exactly as it was.
+- **It carries a button to the PUBLIC DEMO** (`PUBLIC_TERMINAL_URL`, defaulting
+  to the same demo URL the marketing site links). The apex is the primary
+  domain, so the people who land on the notice are not only the three who can
+  sign in. The caption says outright that it is a separate site with sample data
+  and **not your account** — "demo" on a page about *your* terminal otherwise
+  reads as your terminal in a limited mode, which it is not. The URL is an
+  environment read rather than a trusted input, so it is refused unless it is
+  http(s) and is HTML-escaped before it reaches the href: this is the one page
+  served to everybody, signed in or not.
 
 `npm run verify:maintenance` checks all of it, and is in `verify` because these
 failures are only visible once the mode is needed — one of them (blocking the
