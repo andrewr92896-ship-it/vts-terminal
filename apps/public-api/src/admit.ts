@@ -48,5 +48,15 @@ export async function admitAccount(store:PublicStore, input:{ email:string; disp
   }
 
   const id = await store.createAccount({ email, displayName, passwordHash: await hashPassword(password) });
+
+  // THE BETA-ACCESS REQUEST HAS DONE ITS JOB. It exists to tell an operator
+  // somebody is waiting; admitting them is the answer, and after it the row is
+  // the same address held a second time with nothing left to do. Deleting it
+  // here is the earliest of the three ends the Privacy Policy names — the other
+  // two being the person asking, and the six-month sweep in `retention.ts`.
+  //
+  // AFTER the account exists, not before: if creating the account fails, the
+  // request must still be there for the next attempt.
+  await store.deleteEarlyAccessRequest(email);
   return { id, email, displayName, password };
 }

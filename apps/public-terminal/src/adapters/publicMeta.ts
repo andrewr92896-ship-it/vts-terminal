@@ -2,8 +2,12 @@ export interface PatchNote{version:string;date:string;notes:string[]}
 // The public terminal's own version and its historical archive. Separate from the
 // private terminal's `meta/version` (replaced at the build seam) because they are
 // different products on different release trains.
-export const APP_VERSION='Public Candidate V 2.3';
+export const APP_VERSION='Public Candidate V 2.4';
 export const PATCH_NOTES:PatchNote[]=[
+ {version:'Public Candidate V 2.4',date:'August 30, 2026',notes:[
+  'Beta-access requests are now deleted automatically — six months after they are made, or the moment the person is let in, whichever comes first. Nothing about the terminal changes for you; what changes is that the address is no longer kept once it has nothing left to do.',
+  'Spent sign-in material is cleared on the same schedule: expired sessions, used codes, rotated device tokens and finished deletion links. Being signed in, and a browser you asked us to remember, are unaffected.',
+ ]},
  {version:'Public Candidate V 2.3',date:'August 29, 2026',notes:[
   'The demo can read a trade off a screenshot. Paste or upload a photo of a platform on Manual Trades and the trade is logged \u2014 an open position that then runs on the Live Wall, a whole history at once, or the close of one you are already in.',
   'No AI reads your image in the demo. The reading is a stored example and the screen says so beside the result. The sample is deliberately not flattering: the history import brings in a loser, skips a duplicate rather than double-counting it, and ignores a row that was never a trade.',

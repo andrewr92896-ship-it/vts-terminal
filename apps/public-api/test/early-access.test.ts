@@ -43,7 +43,11 @@ test('a request is recorded and answered the same way whether or not it is new',
   assert.equal(first.store.earlyAccess.size, 1);
   // Stored lower-cased so a second submission from the same person updates the
   // one lead rather than queueing another for somebody to work twice.
-  assert.deepEqual(first.store.earlyAccess.get('person@example.com'), { email: 'person@example.com', note: null });
+  const stored = first.store.earlyAccess.get('person@example.com');
+  assert.equal(stored?.email, 'person@example.com');
+  assert.equal(stored?.note, null);
+  // Stamped, because the six-month retention sweep measures from it.
+  assert.equal(typeof stored?.createdAt, 'number');
 });
 
 test('a malformed address is refused before anything is stored', async () => {

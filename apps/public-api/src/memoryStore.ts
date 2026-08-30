@@ -1,4 +1,5 @@
-import type { NewFundedAccount, NewFundedTrade, NewTrade, BugReport, BugRole, Suggestion, FlashcardSetDetail, FlashcardSetPatch, FlashcardSetRow, NewFlashcardSet, NewStudyGuide, StudyGuideDetail, StudyGuidePatch, StudyGuideRow, NewStudyDeck, StudyDeckDetail, StudyDeckPatch, StudyDeckRow, NewTradingNote, TradingNotePatch, NetWorthItem, NetWorthSnapshot, InvestmentAccount, InvestmentGoal, InvestmentHolding, InvestmentSnapshot, InvestmentTransaction, BudgetCategory, BudgetEntry, Challenge, NewBudgetCategory, NewBudgetEntry, PublicAccount, PublicStore, RateLimitResult, Session, TodoItemRow, TodoSectionRow, TrustedDevice } from './types.js';
+import type { NewFundedAccount, NewFundedTrade, NewTrade, BugReport, BugRole, Suggestion, FlashcardSetDetail, FlashcardSetPatch, FlashcardSetRow, NewFlashcardSet, NewStudyGuide, StudyGuideDetail, StudyGuidePatch, StudyGuideRow, NewStudyDeck, StudyDeckDetail, StudyDeckPatch, StudyDeckRow, NewTradingNote, TradingNotePatch, NetWorthItem, NetWorthSnapshot, InvestmentAccount, InvestmentGoal, InvestmentHolding, InvestmentSnapshot, InvestmentTransaction, BudgetCategory, BudgetEntry, Challenge, NewBudgetCategory, NewBudgetEntry, PublicAccount, PublicStore, RateLimitResult, RetentionSweep, Session, TodoItemRow, TodoSectionRow, TrustedDevice } from './types.js';
+import { RETENTION } from './retention.js';
 import { STARTER_SECTIONS } from './todo.js';
 import type { NoteRow } from './notes.js';
 import type { FundedAccountRow, TradeRow } from './trades.js';
@@ -6,7 +7,7 @@ import type { FundedAccountRow, TradeRow } from './trades.js';
 
 export class MemoryPublicStore implements PublicStore {
   accounts=new Map<string,PublicAccount>(); challenges=new Map<string,Challenge>(); sessions=new Map<string,Session>(); trusted=new Map<string,TrustedDevice>();
-  rates=new Map<string,{count:number;reset:number}>(); layouts=new Map<string,unknown>(); audits:Array<{event:string;accountId?:string;metadata:Record<string,unknown>}>=[];
+  rates=new Map<string,{count:number;reset:number;started:number}>(); layouts=new Map<string,unknown>(); audits:Array<{event:string;accountId?:string;metadata:Record<string,unknown>}>=[];
   constructor(private now=()=>Date.now()){}
   addAccount(account:PublicAccount){this.accounts.set(account.id,account)}
   async createAccount(v:{email:string;displayName:string;passwordHash:string}){const id=crypto.randomUUID();this.accounts.set(id,{id,email:v.email,passwordHash:v.passwordHash,displayName:v.displayName,forcePasswordChange:false,privateGroupWarning:false,disabled:false});return id}
@@ -16,7 +17,7 @@ export class MemoryPublicStore implements PublicStore {
   async createChallenge(h:string,v:Challenge){this.challenges.set(h,{...v})} async getChallenge(h:string){const v=this.challenges.get(h);return v&&{...v}} async updateChallenge(h:string,v:Challenge){this.challenges.set(h,{...v})}
   async createSession(h:string,v:Session){this.sessions.set(h,{...v})} async getSession(h:string){const v=this.sessions.get(h);return v&&{...v}} async revokeSession(h:string){const v=this.sessions.get(h);if(v)this.sessions.set(h,{...v,revokedAt:this.now()})} async revokeAllSessions(id:string){for(const [h,v] of this.sessions)if(v.accountId===id)this.sessions.set(h,{...v,revokedAt:this.now()})}
   async createTrustedDevice(h:string,v:TrustedDevice){this.trusted.set(h,{...v})} async getTrustedDevice(h:string){const v=this.trusted.get(h);return v&&{...v}} async revokeTrustedDevice(h:string){const v=this.trusted.get(h);if(v)this.trusted.set(h,{...v,revokedAt:this.now()})} async revokeAllTrustedDevices(id:string){for(const [h,v] of this.trusted)if(v.accountId===id)this.trusted.set(h,{...v,revokedAt:this.now()})}
-  async consumeRateLimit(bucket:string,key:string,limit:number,windowMs:number):Promise<RateLimitResult>{const id=`${bucket}:${key}`,now=this.now();let v=this.rates.get(id);if(!v||v.reset<=now)v={count:0,reset:now+windowMs};v.count++;this.rates.set(id,v);return {allowed:v.count<=limit,retryAfterSeconds:Math.ceil((v.reset-now)/1000)}}
+  async consumeRateLimit(bucket:string,key:string,limit:number,windowMs:number):Promise<RateLimitResult>{const id=`${bucket}:${key}`,now=this.now();let v=this.rates.get(id);if(!v||v.reset<=now)v={count:0,reset:now+windowMs,started:now};v.count++;this.rates.set(id,v);return {allowed:v.count<=limit,retryAfterSeconds:Math.ceil((v.reset-now)/1000)}}
   async getLayout(id:string){return this.layouts.get(id)} async saveLayout(id:string,v:unknown){this.layouts.set(id,v)}
   prefs=new Map<string,Record<string,unknown>>();
   async getPreferences(id:string){return {...(this.prefs.get(id)??{})}} async savePreferences(id:string,v:Record<string,unknown>){this.prefs.set(id,{...v})}
@@ -35,8 +36,29 @@ export class MemoryPublicStore implements PublicStore {
     for(const [k,v] of this.challenges) if(v.accountId===accountId) this.challenges.delete(k);
     this.layouts.delete(accountId); this.prefs.delete(accountId);
   }
-  earlyAccess=new Map<string,{email:string;note:string|null}>();
-  async recordEarlyAccessRequest(email:string,note:string|null){this.earlyAccess.set(email.toLowerCase(),{email,note})}
+  // `createdAt` is restamped by a repeat submission, exactly as the Postgres
+  // upsert restamps `created_at`: asking again is asking again, not running out.
+  earlyAccess=new Map<string,{email:string;note:string|null;createdAt:number}>();
+  async recordEarlyAccessRequest(email:string,note:string|null){this.earlyAccess.set(email.toLowerCase(),{email,note,createdAt:this.now()})}
+  async deleteEarlyAccessRequest(email:string){this.earlyAccess.delete(email.trim().toLowerCase())}
+  // The same rules `retention.ts` states, applied to the maps. Expired or spent,
+  // never merely old — a live session and an unexpired trusted device survive
+  // however long the sweep has been running.
+  async sweepExpired(now:number):Promise<RetentionSweep>{
+    const swept={betaAccessRequests:0,sessions:0,challenges:0,trustedDevices:0,recoveryEvents:0,deletionRequests:0,rateLimits:0};
+    for(const [k,v] of this.earlyAccess) if(now-v.createdAt>=RETENTION.betaAccessMs){this.earlyAccess.delete(k);swept.betaAccessRequests++}
+    for(const [k,v] of this.sessions) if(v.expiresAt<=now||v.revokedAt!=null){this.sessions.delete(k);swept.sessions++}
+    for(const [k,v] of this.challenges) if(v.expiresAt<=now||v.consumedAt!=null){this.challenges.delete(k);swept.challenges++}
+    for(const [k,v] of this.trusted) if(v.expiresAt<=now||v.revokedAt!=null){this.trusted.delete(k);swept.trustedDevices++}
+    for(const [k,v] of this.deletions) if(v.expiresAt<=now||v.consumedAt!=null){this.deletions.delete(k);swept.deletionRequests++}
+    for(const [k,v] of this.rates) if(now-v.started>=RETENTION.rateLimitMs){this.rates.delete(k);swept.rateLimits++}
+    // `public_recovery_events` has no counterpart here because NOTHING WRITES
+    // ONE — the table survives from the first migration and no code path has
+    // ever inserted a row. The Postgres store still sweeps it, so a future
+    // writer inherits the rule; inventing a map for it here would be inventing
+    // state this store does not hold.
+    return swept;
+  }
   // ---- budget ---------------------------------------------------------------
   //
   // Mirrors the Postgres store's RULES, not just its shape: rows are keyed by

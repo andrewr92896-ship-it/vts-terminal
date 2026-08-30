@@ -1,5 +1,6 @@
 import pg from 'pg';
-import type { NewFundedAccount, NewFundedTrade, NewTrade, BugReport, BugRole, Suggestion, FlashcardSetDetail, FlashcardSetPatch, FlashcardSetRow, NewFlashcardSet, NewStudyGuide, StudyGuideDetail, StudyGuidePatch, StudyGuideRow, NewStudyDeck, StudyDeckDetail, StudyDeckPatch, StudyDeckRow, NewTradingNote, TradingNotePatch, NetWorthItem, NetWorthSnapshot, InvestmentAccount, InvestmentGoal, InvestmentHolding, InvestmentSnapshot, InvestmentTransaction, BudgetCategory, BudgetEntry, Challenge, NewBudgetCategory, NewBudgetEntry, PublicAccount, PublicStore, RateLimitResult, Session, TodoItemRow, TodoSectionRow, TrustedDevice } from './types.js';
+import type { NewFundedAccount, NewFundedTrade, NewTrade, BugReport, BugRole, Suggestion, FlashcardSetDetail, FlashcardSetPatch, FlashcardSetRow, NewFlashcardSet, NewStudyGuide, StudyGuideDetail, StudyGuidePatch, StudyGuideRow, NewStudyDeck, StudyDeckDetail, StudyDeckPatch, StudyDeckRow, NewTradingNote, TradingNotePatch, NetWorthItem, NetWorthSnapshot, InvestmentAccount, InvestmentGoal, InvestmentHolding, InvestmentSnapshot, InvestmentTransaction, BudgetCategory, BudgetEntry, Challenge, NewBudgetCategory, NewBudgetEntry, PublicAccount, PublicStore, RateLimitResult, RetentionSweep, Session, TodoItemRow, TodoSectionRow, TrustedDevice } from './types.js';
+import { RETENTION } from './retention.js';
 import { STARTER_SECTIONS } from './todo.js';
 import type { NoteRow } from './notes.js';
 import type { DeckQuestion, Flashcard, GuideSlide } from './studies.js';
@@ -67,6 +68,42 @@ export class PostgresPublicStore implements PublicStore {
     finally{client.release()}
   }
   async recordEarlyAccessRequest(email:string,note:string|null){await this.pool.query(`insert into public_early_access_requests(email,note) values($1,$2) on conflict(lower(email)) do update set note=coalesce(excluded.note,public_early_access_requests.note),status='new',handled_at=null,created_at=now()`,[email,note])}
+  async deleteEarlyAccessRequest(email:string){await this.pool.query('delete from public_early_access_requests where lower(email)=lower($1)',[email])}
+
+  // ---- the retention sweep --------------------------------------------------
+  //
+  // Seven statements, one per table, each one the rule `retention.ts` states.
+  // Deliberately NOT a transaction: these are independent deletions of dead
+  // rows, and a partial pass simply means the next one finishes the job — where
+  // a transaction would mean one busy table holds a lock across all seven.
+  //
+  // Cutoffs are computed in SQL from `now` rather than compared in JavaScript,
+  // so the comparison happens in the same place and the same type the column
+  // is stored in. Every count is returned, because a sweep that removes nothing
+  // and a sweep that never ran log identically otherwise.
+  async sweepExpired(now:number):Promise<RetentionSweep>{
+    const at=`to_timestamp(${'$'}1/1000.0)`;
+    const del=async(sql:string,params:unknown[])=>(await this.pool.query(sql,params)).rowCount??0;
+    return {
+      betaAccessRequests:await del(`delete from public_early_access_requests where created_at <= ${at} - ($2::text||' milliseconds')::interval`,[now,RETENTION.betaAccessMs]),
+      // Expired OR spent. A revoked session is a signed-out one and a consumed
+      // challenge is a used sign-in code; both are already refused by name in
+      // `auth.ts`, so removing them changes no answer the terminal gives.
+      sessions:await del(`delete from public_sessions where expires_at <= ${at} or revoked_at is not null`,[now]),
+      challenges:await del(`delete from public_auth_challenges where expires_at <= ${at} or consumed_at is not null`,[now]),
+      // A remembered browser ROTATES its token on every sign-in, revoking the
+      // old row — so without this these are the rows that accumulate fastest.
+      trustedDevices:await del(`delete from public_trusted_devices where expires_at <= ${at} or revoked_at is not null`,[now]),
+      // Nothing writes a recovery event today; the table survives from the
+      // first migration and no code path inserts one. Swept anyway so a future
+      // writer inherits the rule rather than having to remember it.
+      recoveryEvents:await del(`delete from public_recovery_events where expires_at <= ${at} or consumed_at is not null`,[now]),
+      deletionRequests:await del(`delete from public_account_deletions where expires_at <= ${at} or consumed_at is not null`,[now]),
+      // The window, not the row's age: a bucket somebody is actively inside has
+      // a recent `window_started` however long the key has existed.
+      rateLimits:await del(`delete from public_rate_limits where window_started <= ${at} - ($2::text||' milliseconds')::interval`,[now,RETENTION.rateLimitMs]),
+    };
+  }
   // ---- budget ---------------------------------------------------------------
   //
   // Every statement carries `account_id = $1`, including the ones that already

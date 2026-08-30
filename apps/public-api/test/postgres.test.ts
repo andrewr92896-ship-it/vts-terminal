@@ -669,6 +669,102 @@ if (!url) {
     await ok('DELETE', `/public/v1/investments/accounts/${account.id}`);
   });
 
+  test('the retention sweep takes what is spent and leaves what is live', async () => {
+    // The sweep's rules are tested against the memory store, where they are
+    // fast and total. What is checked HERE is the half that store cannot
+    // check: seven hand-written DELETE statements, each with a timestamp
+    // comparison Postgres has to type, against real columns.
+    //
+    // Every one is given a row on BOTH sides of its cutoff, because a DELETE
+    // with the predicate dropped passes "the old row is gone" perfectly — and
+    // that is the worse failure of the two. A sweep that took live sessions
+    // would sign the whole terminal out every six hours.
+    const now = Date.now();
+    const ago = (ms: number) => `to_timestamp(${(now - ms) / 1000})`;
+    const ahead = (ms: number) => `to_timestamp(${(now + ms) / 1000})`;
+    const DAY = 24 * 60 * 60_000;
+    const h = () => randomBytes(16).toString('hex');
+
+    // ONE PASS FIRST, to clear what the tests above left behind — signing in
+    // and changing a password both leave spent codes and revoked sessions, and
+    // an absolute count is only evidence if the rows being counted are the ones
+    // this test put there.
+    await store.sweepExpired(now);
+
+    const [oldLead, freshLead] = [h(), h()];
+    await store.raw(`insert into public_early_access_requests(email,created_at) values
+      ('${oldLead}@example.com', ${ago(181 * DAY)}), ('${freshLead}@example.com', ${ago(179 * DAY)})`);
+
+    const [deadSession, liveSession, revokedSession] = [h(), h(), h()];
+    await store.raw(`insert into public_sessions(token_hash,account_id,expires_at,revoked_at) values
+      ('${deadSession}','${accountId}',${ago(1000)},null),
+      ('${liveSession}','${accountId}',${ahead(12 * 60 * 60_000)},null),
+      ('${revokedSession}','${accountId}',${ahead(12 * 60 * 60_000)},${ago(1000)})`);
+
+    const [deadCode, liveCode, usedCode] = [h(), h(), h()];
+    await store.raw(`insert into public_auth_challenges(token_hash,account_id,code_hash,expires_at,consumed_at) values
+      ('${deadCode}','${accountId}','x',${ago(1000)},null),
+      ('${liveCode}','${accountId}','x',${ahead(10 * 60_000)},null),
+      ('${usedCode}','${accountId}','x',${ahead(10 * 60_000)},${ago(1000)})`);
+
+    const [deadDevice, liveDevice, rotatedDevice] = [h(), h(), h()];
+    await store.raw(`insert into public_trusted_devices(token_hash,account_id,expires_at,revoked_at) values
+      ('${deadDevice}','${accountId}',${ago(1000)},null),
+      ('${liveDevice}','${accountId}',${ahead(30 * DAY)},null),
+      ('${rotatedDevice}','${accountId}',${ahead(30 * DAY)},${ago(1000)})`);
+
+    // NOTHING WRITES A RECOVERY EVENT — the table survives from the first
+    // migration and no code path inserts one — so the row is put here by hand.
+    // The statement is swept anyway, so a future writer inherits the rule, and
+    // this is the only way that DELETE can ever be proved to be valid SQL.
+    await store.raw(`insert into public_recovery_events(account_id,expires_at) values
+      ('${accountId}', ${ago(1000)}), ('${accountId}', ${ahead(15 * 60_000)})`);
+
+    const [deadLink, liveLink] = [h(), h()];
+    await store.raw(`insert into public_account_deletions(token_hash,account_id,expires_at) values
+      ('${deadLink}','${accountId}',${ago(1000)}), ('${liveLink}','${accountId}',${ahead(60 * 60_000)})`);
+
+    const [staleBucket, freshBucket] = [h(), h()];
+    await store.raw(`insert into public_rate_limits(bucket,key_hash,window_started,count) values
+      ('sweep-test','${staleBucket}',${ago(25 * 60 * 60_000)},3),
+      ('sweep-test','${freshBucket}',${ago(60_000)},3)`);
+
+    const swept = await store.sweepExpired(now);
+
+    const gone = async (sql: string) => Number((await store.raw(sql) as Array<{ n: number }>)[0]!.n);
+    const has = async (table: string, hash: string) =>
+      gone(`select count(*)::int as n from ${table} where token_hash='${hash}'`);
+
+    assert.equal(swept.betaAccessRequests, 1);
+    assert.equal(await gone(`select count(*)::int as n from public_early_access_requests where email='${freshLead}@example.com'`), 1, 'a five-month-old lead was swept');
+    assert.equal(await gone(`select count(*)::int as n from public_early_access_requests where email='${oldLead}@example.com'`), 0);
+
+    assert.equal(swept.sessions, 2, 'the expired and the signed-out session');
+    assert.equal(await has('public_sessions', liveSession), 1, 'a live session was swept — everyone would be signed out');
+    assert.equal(await has('public_sessions', deadSession), 0);
+    assert.equal(await has('public_sessions', revokedSession), 0);
+
+    assert.equal(swept.challenges, 2);
+    assert.equal(await has('public_auth_challenges', liveCode), 1, 'a sign-in code in flight was swept');
+
+    assert.equal(swept.trustedDevices, 2);
+    assert.equal(await has('public_trusted_devices', liveDevice), 1, 'a remembered browser was forgotten early');
+
+    assert.equal(swept.recoveryEvents, 1);
+    assert.equal(await gone(`select count(*)::int as n from public_recovery_events where account_id='${accountId}'`), 1);
+
+    assert.equal(swept.deletionRequests, 1);
+    assert.equal(await has('public_account_deletions', liveLink), 1, 'an unopened deletion link was swept');
+
+    assert.equal(swept.rateLimits, 1);
+    assert.equal(await gone(`select count(*)::int as n from public_rate_limits where key_hash='${freshBucket}'`), 1, 'a window somebody is inside was swept');
+    assert.equal(await gone(`select count(*)::int as n from public_rate_limits where key_hash='${staleBucket}'`), 0);
+
+    // And the suite's own session still works, which is what proves the counts
+    // above were counting the right rows.
+    assert.ok((await ok('GET', '/public/v1/auth/session')).user.email);
+  });
+
   test('every statement in the store has actually executed', async () => {
     // A method never called is SQL that has never run. Nothing else in this
     // repository can see inside these strings, so an unreached one is a
