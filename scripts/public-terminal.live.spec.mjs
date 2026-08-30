@@ -268,7 +268,9 @@ test('a visitor with no account can ask for early access', async ({ browser }) =
   const card = page.locator('.vts-public-auth-card');
   await expect(card).toContainText('not sold, not shared');
   await expect(card).toContainText(/delete it at any time/i);
-  await expect(card).toContainText('support@vitalistradingsystems.com');
+  // The PRIVACY address, not the general one: this paragraph is about deleting
+  // what is held, which is a privacy request and has its own inbox.
+  await expect(card).toContainText('privacy@vitalistradingsystems.com');
 
   // AND NOTHING IS OFFERED IN EXCHANGE FOR IT (owner instruction, 2026-08). The
   // form used to lead with a free Max membership and three months free after

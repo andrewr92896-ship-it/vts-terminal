@@ -125,16 +125,20 @@ export const REQUIRED_DOCUMENTS:readonly LegalDocument[]=[
   {
     id:'terms',
     title:'Terms of Service',
-    version:'2026-08-28.1',
-    effectiveDate:'August 28, 2026',
+    version:'2026-08-30.1',
+    effectiveDate:'August 30, 2026',
+    // Unchanged text at a new version: the two documents share one version
+    // string in the terminal's header, so the Terms move with the Privacy
+    // Policy even when only the latter was edited. Slightly over-eager, and
+    // preferable to a header that names a version only one document is at.
     sha256:'8faedfcca228159c068ec5be095977e3dcaa3860778a937f9b9db1e72720f946',
   },
   {
     id:'privacy',
     title:'Privacy Policy',
-    version:'2026-08-28.1',
-    effectiveDate:'August 28, 2026',
-    sha256:'96cdb63d2238e2f74e6bbaa04ae94667d53be863b775f047ea6e7e9ad5e2905d',
+    version:'2026-08-30.1',
+    effectiveDate:'August 30, 2026',
+    sha256:'5657a38616562c7a1458b44869752ec9d9e1737a79e04952442759b9cfb46640',
   },
 ];
 
