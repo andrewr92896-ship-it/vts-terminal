@@ -25,6 +25,7 @@ const { MemoryPublicStore } = await import('../src/memoryStore.js');
 // it. Built with the real helpers so these tests go through the same session
 // lookup production does rather than around it.
 const { signToken, sha256 } = await import('../src/security.js');
+const { acceptanceEntries } = await import('../src/legalDocuments.js');
 
 const ET = 'America/New_York';
 const etToday = () =>
@@ -40,6 +41,9 @@ async function signedIn(store: InstanceType<typeof MemoryPublicStore>) {
   } as never);
   const id = randomUUID();
   await store.createSession(sha256(id), { accountId, expiresAt: Date.now() + 3_600_000, forcePasswordChange: false });
+  // The clickwrap is accepted here rather than in the route, because the gate
+  // is real: without this every request below would be refused with a 403.
+  await store.recordLegalAcceptances(accountId, acceptanceEntries());
   return { accountId, token: signToken(id, key) };
 }
 

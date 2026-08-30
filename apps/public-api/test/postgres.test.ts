@@ -183,6 +183,50 @@ if (!url) {
       (error: unknown) => error instanceof AdmitError && /already has an account/.test(error.message));
   });
 
+  test('the clickwrap record: one row per document, append-only, and it gates', async () => {
+    // FIRST, that the gate is really in front of everything. This test sits
+    // immediately after signing in and before every record family below,
+    // because that is the real order — and because an account that has not
+    // accepted is refused everywhere, so the suite could not reach them anyway.
+    assert.equal((await call('GET', '/public/v1/budget')).status, 403, 'a record route was served before the terms were accepted');
+
+    const before = await call('GET', '/public/v1/legal/documents');
+    assert.equal(before.status, 200);
+    assert.deepEqual([...before.body.outstanding].sort(), ['acknowledgement', 'privacy', 'terms']);
+
+    assert.equal((await call('POST', '/public/v1/legal/accept')).status, 200);
+
+    const rows = await store.listLegalAcceptances(accountId);
+    assert.equal(rows.length, 3);
+    for (const row of rows) {
+      assert.match(row.sha256, /^[0-9a-f]{64}$/, `${row.document} came back without its hash`);
+      assert.ok(row.version.length > 0);
+      assert.ok(Number.isFinite(row.acceptedAt) && row.acceptedAt > 0, 'accepted_at did not survive the round trip');
+    }
+    // One statement writes the whole set, so the three share a timestamp — a
+    // half-written acceptance would gate the account forever with no way to
+    // tell why.
+    assert.equal(new Set(rows.map((r) => r.acceptedAt)).size, 1);
+
+    // Append-only: a second version of one document adds a row and leaves the
+    // first exactly where it was.
+    await store.recordLegalAcceptances(accountId, [{ document: 'terms', version: 'later', sha256: 'c'.repeat(64) }]);
+    const after = await store.listLegalAcceptances(accountId);
+    assert.equal(after.length, 4);
+    assert.equal(after.filter((r) => r.document === 'terms').length, 2);
+    // Ordered oldest first, which is what makes "when did they first agree"
+    // readable off the top of the list.
+    assert.ok(after[0]!.acceptedAt <= after[after.length - 1]!.acceptedAt);
+
+    // An empty set writes nothing and does not raise.
+    await store.recordLegalAcceptances(accountId, []);
+    assert.equal((await store.listLegalAcceptances(accountId)).length, 4);
+
+    // And the same route is served now, which is what the rest of this file
+    // depends on.
+    assert.equal((await call('GET', '/public/v1/budget')).status, 200);
+  });
+
   test('budget: dollars in, cents out, and the totals add up', async () => {
     const created = await ok('POST', '/public/v1/budget/categories', { name: 'Groceries', kind: 'expense', monthlyLimit: 600 });
     const id = created.categories[0].id;

@@ -2,8 +2,13 @@ export interface PatchNote{version:string;date:string;notes:string[]}
 // The public terminal's own version and its historical archive. Separate from the
 // private terminal's `meta/version` (replaced at the build seam) because they are
 // different products on different release trains.
-export const APP_VERSION='Public Candidate V 2.4';
+export const APP_VERSION='Public Candidate V 2.5';
 export const PATCH_NOTES:PatchNote[]=[
+ {version:'Public Candidate V 2.5',date:'August 30, 2026',notes:[
+  'Before you use the terminal we now ask you to read four short statements about what it is and is not, and to tick a box. The Terms of Service and Privacy Policy are readable from that screen rather than linked away to.',
+  'We record which version you accepted and when. If either document changes we will ask again — we cannot alter what you agreed to without telling you.',
+  'You will only see it once unless the documents change. Signing out and deleting your account both stay available if you would rather not accept.',
+ ]},
  {version:'Public Candidate V 2.4',date:'August 30, 2026',notes:[
   'Beta-access requests are now deleted automatically — six months after they are made, or the moment the person is let in, whichever comes first. Nothing about the terminal changes for you; what changes is that the address is no longer kept once it has nothing left to do.',
   'Spent sign-in material is cleared on the same schedule: expired sessions, used codes, rotated device tokens and finished deletion links. Being signed in, and a browser you asked us to remember, are unaffected.',

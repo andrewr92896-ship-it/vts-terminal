@@ -42,6 +42,7 @@ Object.assign(process.env, {
 const { handleRequest, PUBLIC_SESSION_COOKIE } = await import('../apps/public-api/dist/src/server.js');
 const { PostgresPublicStore } = await import('../apps/public-api/dist/src/postgresStore.js');
 const { signToken, sha256 } = await import('../apps/public-api/dist/src/security.js');
+const { acceptanceEntries } = await import('../apps/public-api/dist/src/legalDocuments.js');
 
 const store = new PostgresPublicStore(url);
 const accountId = randomUUID();
@@ -50,6 +51,12 @@ await store.raw(`insert into public_accounts(id,email,password_hash,display_name
 const session = randomUUID();
 await store.createSession(sha256(session), { accountId, expiresAt: Date.now() + 3_600_000, forcePasswordChange: false });
 const token = signToken(session, key);
+// THE CLICKWRAP, TICKED. Without it every authenticated route answers 403 —
+// which is not a 404, so this check would go green having proved nothing at all
+// about the paths, and the seeds below would silently create none of the rows
+// the template holes are filled from. The `seed` helper asserts its own status
+// for the same reason.
+await store.recordLegalAcceptances(accountId, acceptanceEntries());
 
 const market = { marketData: async () => ({}), marketNews: async () => ({}) };
 
@@ -88,7 +95,16 @@ if (calls.length < 40) {
 // that IS there.
 const seeded = {};
 const seed = async (name, method, path, body) => {
-  seeded[name] = (await send(method, path, body)).body;
+  // A seed that quietly fails leaves its template hole undefined, and every
+  // path carrying that hole is then checked against a URL with "undefined" in
+  // it — which still is not a 404, so the whole check degrades to nothing
+  // without a word. It has to be loud.
+  const result = await send(method, path, body);
+  if (result.status >= 300) {
+    console.error(`FAIL seeding "${name}" (${method} ${path}) answered ${result.status}: ${result.body.message ?? ''}`);
+    process.exit(1);
+  }
+  seeded[name] = result.body;
 };
 
 const question = (n) => ({

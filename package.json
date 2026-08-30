@@ -59,6 +59,7 @@
     "verify:demo-writes": "npm --workspace @vts/web run verify:demo-writes",
     "verify:demo-coverage": "node scripts/verify-demo-coverage.mjs",
     "verify:limits-mirror": "node scripts/verify-limits-mirror.mjs",
+    "verify:legal-hashes": "node scripts/verify-legal-hashes.mjs",
     "verify:postgres": "npm --workspace @vts/public-api run test:postgres",
     "db:migrate:public": "npm --workspace @vts/public-api run db:migrate",
     "verify:public-wiring": "node scripts/verify-public-wiring.mjs"

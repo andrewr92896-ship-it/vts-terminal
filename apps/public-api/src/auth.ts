@@ -1,5 +1,6 @@
 import type { PublicAccount, PublicMailer, PublicStore } from './types.js';
 import { hashPassword, keyedHash, maskEmail, randomCode, randomTemporaryPassword, randomToken, sha256, signToken, validateNewPassword, verifyPassword, verifySignedToken } from './security.js';
+import { ACKNOWLEDGEMENT_CONFIRM, ACKNOWLEDGEMENT_STATEMENTS, ACKNOWLEDGEMENT_TITLE, REQUIRED_DOCUMENTS, outstandingDocuments, type LegalDocument } from './legalDocuments.js';
 
 const TEN_MINUTES = 10 * 60_000;
 const THIRTY_DAYS = 30 * 24 * 60 * 60_000;
@@ -18,7 +19,31 @@ export class PublicAuthService {
   // service must be TOLD rather than what it can work out — and making it a
   // required field is what stops a deletion email going out with a broken link
   // because somebody added a constructor argument and forgot this one.
-  constructor(private store:PublicStore, private mailer:PublicMailer, private keys:{session:string;challenge:string;trusted:string;site:string}, private now=()=>Date.now()) {}
+  constructor(private store:PublicStore, private mailer:PublicMailer, private keys:{session:string;challenge:string;trusted:string;site:string}, private now=()=>Date.now(), private documents:readonly LegalDocument[]=REQUIRED_DOCUMENTS) {}
+
+  // ACCOUNTS KNOWN TO HOLD EVERY REQUIRED VERSION.
+  //
+  // `session()` is called on every authenticated request — it is what
+  // `authenticatedAccount` resolves the caller with — so reading the acceptance
+  // rows there put an extra query on every request in the service. That is a
+  // real cost for an answer that, for all but the first request of a session,
+  // is always the same.
+  //
+  // IT IS SAFE TO CACHE ONLY THE "CURRENT" ANSWER, and only in this direction.
+  // Acceptance is append-only, so an account that holds every required version
+  // can never stop holding it; and the required SET is a module constant, so
+  // the only thing that can make a current account owe something again is a
+  // deploy, which restarts the process and empties this. "Owed" is never
+  // cached, because that is the answer that changes — the moment somebody ticks
+  // the box.
+  private accepted=new Set<string>();
+
+  private async legalOutstanding(accountId:string){
+    if(this.accepted.has(accountId))return [] as LegalDocument[];
+    const outstanding=outstandingDocuments(this.documents,await this.store.listLegalAcceptances(accountId));
+    if(outstanding.length===0)this.accepted.add(accountId);
+    return outstanding;
+  }
 
   // The public terminal reads `?delete=` at load and posts it back. A query
   // parameter rather than a hash, because a hash never reaches the server and
@@ -158,7 +183,51 @@ export class PublicAuthService {
     // Terminal board BEFORE it draws anything, and a screen that renders on the
     // default and then jumps is worse than one that waits for one request.
     const preferences=await this.store.getPreferences(account.id);
-    return {user:{id:account.id,email:account.email,displayName:account.displayName},preferences,passwordChangeRequired:account.forcePasswordChange,privateGroupWarning:account.privateGroupWarning};
+    // WHETHER THE CLICKWRAP IS OWED RIDES THE SESSION, like the forced password
+    // change beside it. The shell has to know before it draws anything, and a
+    // second request would mean a moment where the terminal is on screen and
+    // the gate has not arrived yet.
+    const outstanding=await this.legalOutstanding(account.id);
+    return {user:{id:account.id,email:account.email,displayName:account.displayName},preferences,passwordChangeRequired:account.forcePasswordChange,privateGroupWarning:account.privateGroupWarning,legalAcceptanceRequired:outstanding.length>0};
+  }
+
+  // ---- the clickwrap --------------------------------------------------------
+  //
+  // What is on screen is read from the SERVER, and what is written is read from
+  // the server. The client sends no version, no hash and no document list — a
+  // client-supplied hash proves nothing, because anything could be sent. All it
+  // does is say that the person ticked the box.
+  // THE ACKNOWLEDGEMENT TEXT IS SERVED, THE DOCUMENTS ARE ONLY DESCRIBED.
+  //
+  // Those are different because of where each one lives. The acknowledgement is
+  // owned here and hashed from the same constants it is served from, so what is
+  // on the screen and what the record pins are provably one thing with nothing
+  // in between. The Terms and Privacy Policy live in the terminal's bundle and
+  // are rendered from there, so this carries their version and hash and nothing
+  // else — prose here would be a second copy to drift.
+  async legalDocuments(sessionToken:string|undefined){
+    const {account}=await this.accountForSession(sessionToken);
+    const accepted=await this.store.listLegalAcceptances(account.id);
+    return {
+      documents:this.documents,
+      outstanding:outstandingDocuments(this.documents,accepted).map((doc)=>doc.id),
+      acknowledgement:{title:ACKNOWLEDGEMENT_TITLE,confirm:ACKNOWLEDGEMENT_CONFIRM,statements:[...ACKNOWLEDGEMENT_STATEMENTS]},
+    };
+  }
+
+  async acceptLegal(sessionToken:string|undefined){
+    const {account}=await this.accountForSession(sessionToken);
+    const outstanding=await this.legalOutstanding(account.id);
+    // Nothing outstanding is a SUCCESS rather than an error: a double-click, a
+    // retried request or a second tab all land here, and refusing would make
+    // the gate look broken at the exact moment it had already worked. It writes
+    // nothing, so the record does not gain a duplicate row for one tick.
+    if(outstanding.length>0){
+      await this.store.recordLegalAcceptances(account.id,outstanding.map((doc)=>({document:doc.id,version:doc.version,sha256:doc.sha256})));
+      await this.store.audit('public.legal.accepted',account.id,{documents:outstanding.map((doc)=>`${doc.id}@${doc.version}`)});
+      this.accepted.add(account.id);
+    }
+    return {ok:true as const,legalAcceptanceRequired:false};
   }
 
   async changePassword(token:string|undefined,currentPassword:string,newPassword:string) {

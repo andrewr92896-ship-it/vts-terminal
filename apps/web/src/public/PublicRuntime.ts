@@ -20,7 +20,12 @@ export const publicAuth={
   login(email:string,password:string){return publicRequest<PublicAuthResult>('/auth/login',{method:'POST',body:JSON.stringify({email,password})})},
   verify(challengeId:string,code:string,remember:boolean){return publicRequest<PublicAuthResult&{ok:true}>('/auth/two-factor/verify',{method:'POST',body:JSON.stringify({challengeId,code,remember})})},
   recover(email:string){return publicRequest<{message:string}>('/auth/recovery',{method:'POST',body:JSON.stringify({email})})},
-  session(){return publicRequest<{user:{id:string;email:string;displayName:string};preferences?:PublicPreferences;passwordChangeRequired:boolean;privateGroupWarning:boolean}>('/auth/session')},
+  session(){return publicRequest<{user:{id:string;email:string;displayName:string};preferences?:PublicPreferences;passwordChangeRequired:boolean;privateGroupWarning:boolean;legalAcceptanceRequired:boolean}>('/auth/session')},
+  // The clickwrap. Neither call sends anything: what is written to the record is
+  // the server's own version and hash, because a client-supplied one would be a
+  // record of whatever the client felt like claiming.
+  legalDocuments(){return publicRequest<{documents:Array<{id:string;title:string;version:string;effectiveDate:string}>;outstanding:string[];acknowledgement:{title:string;confirm:string;statements:string[]}}>('/legal/documents')},
+  acceptLegal(){return publicRequest<{ok:true;legalAcceptanceRequired:false}>('/legal/accept',{method:'POST'})},
   // A PATCH, and the server merges: this bundle is cached, so an older one saves
   // the subset of settings it knows about and must never blank the rest.
   savePreferences(patch:PublicPreferences){return publicRequest<{preferences:PublicPreferences}>('/preferences',{method:'PATCH',body:JSON.stringify(patch)})},

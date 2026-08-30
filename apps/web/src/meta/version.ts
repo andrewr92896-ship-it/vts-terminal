@@ -11,9 +11,19 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 7.76';
+export const APP_VERSION = 'Beta V 7.77';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 7.77',
+    date: '2026-08-30',
+    notes: [
+      'The public terminal now asks people to accept before they can use it. A signed-in account meets a short screen — four statements about what the terminal is and is not — reads the Terms and Privacy Policy from that screen, and ticks a box. Until they do, the server refuses every route: it is a gate, not a banner.',
+      'What is recorded is the version and a hash of the exact text they were shown, one row per document, append-only. Changing a word in either document now fails the build until the version is bumped too, which re-prompts everyone — so the terms cannot be quietly changed underneath somebody who already agreed.',
+      'Signing out, changing a forced password and deleting the account all stay reachable while the gate is up. Declining and wanting out is a legitimate combination.',
+      'The private terminal is unchanged — this is the public service only.',
+    ],
+  },
   {
     version: 'Beta V 7.76',
     date: '2026-08-30',
