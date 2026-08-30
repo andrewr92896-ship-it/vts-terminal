@@ -1,5 +1,14 @@
 import assert from 'node:assert/strict';
-import { maintenanceExempt, maintenanceOn, maintenanceReply, publicTerminalUrl, MAINTENANCE_HEADERS } from './maintenance.js';
+import {
+  maintenanceExempt,
+  maintenanceOn,
+  maintenanceReply,
+  publicTerminalUrl,
+  MAINTENANCE_HEADERS,
+  MAINTENANCE_TITLE,
+  MAINTENANCE_MESSAGE,
+  MAINTENANCE_DEMO_NOTE,
+} from './maintenance.js';
 
 // Maintenance mode is the one feature whose failures are only visible when it
 // is already needed — you turn it on because something is wrong, and if it is
@@ -32,6 +41,70 @@ const checks: Array<[string, () => void]> = [
     for (const url of ['/api/healthz', '/api/health-check', '/api/healthy/thing', '/api/trading/live', '/']) {
       assert.equal(maintenanceExempt(url), false, `${url} must not be exempt`);
     }
+  }],
+
+  ['the app shell keeps serving, so an installed device is not frozen', () => {
+    // THE HALF THAT MAKES THE NOTICE REACH A PHONE. The terminal is a PWA: a
+    // device that already has it serves its own shell and never fetches the
+    // server's page, so the notice gets there through the API 503 and the
+    // client's own card. That only works if the device can pick up a build
+    // that draws one — which means the service worker re-fetching itself and
+    // its precache list. Gate those and every installed device is stuck on
+    // whatever it had when the terminal closed, for as long as it stays closed.
+    for (const url of [
+      '/index.html', '/sw.js', '/registerSW.js', '/push-sw.js', '/manifest.webmanifest',
+      '/workbox-3f1a2b.js', '/assets/index-a1b2c3.js', '/assets/main-9f8e.css',
+      '/icon-192.png', '/apple-touch-icon-180.png', '/favicon.ico', '/icon.svg',
+      // Subdirectories too: the precache list is a glob over the whole build,
+      // so anything it can reach has to be servable or the install fails.
+      '/brand/vts-development.svg', '/sounds/alert.mp3', '/assets/fonts/plex.woff2',
+    ]) {
+      assert.equal(maintenanceExempt(url), true, `${url} must keep serving or the worker cannot update`);
+    }
+
+    // A NAVIGATION IS STILL CLOSED. `/` answering with the app would put a
+    // browser arriving fresh in front of a terminal that 503s everything,
+    // instead of the notice, on the first request rather than the second.
+    // `.html` is deliberately not an asset extension — that is a navigation.
+    for (const url of ['/', '/live', '/trading', '/some/deep/route', '/anything.html']) {
+      assert.equal(maintenanceExempt(url), false, `${url} is a navigation and must get the notice`);
+    }
+
+    // NOTHING UNDER /api RIDES THE ASSET RULE. `/api/x.json` looks like a file
+    // and is a route.
+    for (const url of ['/api/trading/live', '/api/x.json', '/api/auth/me']) {
+      assert.equal(maintenanceExempt(url), false, `${url} must stay closed`);
+    }
+
+    // AND NEVER THE EMPLOYEE PORTAL, page or chunk. It is deliberately
+    // network-only and hardened; a closed terminal must not leave it standing.
+    for (const url of [
+      '/employee', '/employee/', '/employee/security', '/employee.html',
+      '/assets/employee-1a2b.js', '/assets/employee.css', '/employee-abc.js',
+    ]) {
+      assert.equal(maintenanceExempt(url), false, `${url} must stay closed`);
+    }
+  }],
+
+  ['the 503 body carries the notice the client draws', () => {
+    // A cached client cannot read the served page, so the wording and the demo
+    // link travel on the API refusal instead — sent rather than mirrored, so
+    // the page and the in-app card cannot come to say different things.
+    const body = JSON.parse(maintenanceReply('/api/auth/me', { PUBLIC_TERMINAL_URL: 'https://demo.example.com/x' }).body) as
+      Record<string, unknown>;
+    assert.equal(body.error, 'maintenance', 'the client keys off this exact value');
+    for (const key of ['title', 'message', 'demoUrl', 'demoNote']) {
+      assert.equal(typeof body[key], 'string', `${key} must be sent`);
+      assert.ok(String(body[key]).length > 0, `${key} must not be empty`);
+    }
+    assert.equal(body.demoUrl, 'https://demo.example.com/x', 'the demo link must be the configured one');
+    assert.equal(body.title, MAINTENANCE_TITLE);
+    assert.equal(body.message, MAINTENANCE_MESSAGE);
+    assert.equal(body.demoNote, MAINTENANCE_DEMO_NOTE);
+    // The same guard the href gets: this string ends up in a link in the app.
+    const hostile = JSON.parse(maintenanceReply('/api/auth/me', { PUBLIC_TERMINAL_URL: 'javascript:alert(1)' }).body) as
+      Record<string, unknown>;
+    assert.equal(hostile.demoUrl, 'https://app.vitalistradingsystems.com/?demo=1');
   }],
 
   ['an API caller gets JSON and a browser gets the page', () => {

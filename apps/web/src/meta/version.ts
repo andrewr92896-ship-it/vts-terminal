@@ -11,9 +11,18 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 7.80';
+export const APP_VERSION = 'Beta V 7.81';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 7.81',
+    date: '2026-08-30',
+    notes: [
+      'The maintenance notice now reaches a phone that already has the terminal installed. The app keeps its own copy of the screens on the device, so it never asked the server for a page and never saw the notice — it showed the ordinary sign-in instead, which is the exact confusion the notice exists to prevent. It only appeared in a private browser window.',
+      'The app now draws the notice itself, with the same words and the same demo button, and takes itself back off it the moment the terminal reopens — no reload needed.',
+      'Installed devices can also pick up new versions while the terminal is closed. They could not before, so a phone was stuck on whatever version it had when maintenance started.',
+    ],
+  },
   {
     version: 'Beta V 7.80',
     date: '2026-08-30',
