@@ -2,8 +2,15 @@ export interface PatchNote{version:string;date:string;notes:string[]}
 // The public terminal's own version and its historical archive. Separate from the
 // private terminal's `meta/version` (replaced at the build seam) because they are
 // different products on different release trains.
-export const APP_VERSION='Public Candidate V 2.1';
+export const APP_VERSION='Public Candidate V 2.3';
 export const PATCH_NOTES:PatchNote[]=[
+ {version:'Public Candidate V 2.3',date:'August 29, 2026',notes:[
+  'The demo can read a trade off a screenshot. Paste or upload a photo of a platform on Manual Trades and the trade is logged \u2014 an open position that then runs on the Live Wall, a whole history at once, or the close of one you are already in.',
+  'No AI reads your image in the demo. The reading is a stored example and the screen says so beside the result. The sample is deliberately not flattering: the history import brings in a loser, skips a duplicate rather than double-counting it, and ignores a row that was never a trade.',
+ ]},
+ {version:'Public Candidate V 2.2',date:'August 29, 2026',notes:[
+  'You can delete your account from Settings. We email you a link to confirm; it works once and expires after an hour, and ignoring it cancels the request. Confirming removes your account and everything in it, with no grace period and nothing kept to stop you signing up again.',
+ ]},
  {version:'Public Candidate V 2.1',date:'August 29, 2026',notes:[
   'Preferences no longer offers to hide you from a leaderboard. There are no leaderboards here \u2014 nothing you do is visible to any other person \u2014 and the screen was saying otherwise.',
  ]},

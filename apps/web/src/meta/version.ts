@@ -11,9 +11,26 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 7.73';
+export const APP_VERSION = 'Beta V 7.75';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 7.75',
+    date: '2026-08-29',
+    notes: [
+      'The demo can now demonstrate reading a trade off a screenshot — an open position, a whole history, or closing one you are in — and the trade actually lands in the demo book, so the balance moves and the position runs on the Live Wall.',
+      'No model runs for it. The reading is a stored example, and the screen says "no AI read your image" beside the result rather than showing something indistinguishable from a live read. Three screenshot methods are the only AI-shaped calls the demo answers; everything else still fails closed, and a real public account still gets a refusal until the provider migration.',
+      'The private terminal is unchanged — its screenshot reads are real, and the new note never draws there.',
+    ],
+  },
+  {
+    version: 'Beta V 7.74',
+    date: '2026-08-29',
+    notes: [
+      'The public terminal can delete an account. Settings asks, an emailed link confirms — good once, expiring after an hour, and ignoring it cancels — and confirming removes the account and everything in it immediately. No grace period, no deactivate alternative, and no address kept to block signing up again, because keeping one to block with would not be deletion.',
+      'It also removes the beta-access request for that address, which is the one record about a person the account’s own database cascades cannot reach. The private terminal is unchanged.',
+    ],
+  },
   {
     version: 'Beta V 7.73',
     date: '2026-08-29',

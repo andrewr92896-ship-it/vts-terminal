@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type CSSProperties } from 'react';
+import { screenshotReadsAreSamples } from '../../auth/access';
 import { api, ApiError } from '../../api/client';
 import { useResponsive } from '../../hooks/useMediaQuery';
 import { readClipboardImage } from '../../lib/clipboard';
@@ -191,7 +192,10 @@ function AccountCard({
         onData(res.funded);
         const p = res.parsed;
         const side = p.side === 'short' ? 'Short' : 'Long';
-        setPosMsg(`Tracking ${side} ${p.instrument ?? ''}${p.entryPrice != null ? ` @ ${fmtPrice(p.entryPrice)}` : ''} — now live on the Live Wall.`);
+        // THE PROVENANCE RIDES THE SAME SENTENCE AS THE RESULT. In the demo no
+        // model reads the image — a stored example comes back — and the screen
+        // would otherwise show something indistinguishable from a live read.
+        setPosMsg(`Tracking ${side} ${p.instrument ?? ''}${p.entryPrice != null ? ` @ ${fmtPrice(p.entryPrice)}` : ''} — now live on the Live Wall.${screenshotReadsAreSamples() ? ' This is a stored example — no AI read your image.' : ''}`);
       } catch (e) {
         onError(e instanceof ApiError ? e.message : 'Could not read that active-trade screenshot');
       } finally {
@@ -215,6 +219,7 @@ function AccountCard({
         if (res.skipped) parts.push(`${res.skipped} duplicate${res.skipped === 1 ? '' : 's'} skipped`);
         if (res.ignored) parts.push(`${res.ignored} ignored`);
         if (res.balanceSet != null) parts.push(`balance set to ${money(res.balanceSet, ccy)}`);
+        if (screenshotReadsAreSamples()) parts.push('stored example — no AI read your image');
         setShotMsg(parts.join(' · '));
       } catch (e) {
         onError(e instanceof ApiError ? e.message : 'Could not read that screenshot');

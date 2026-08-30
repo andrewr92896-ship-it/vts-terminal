@@ -20,6 +20,21 @@ export class MemoryPublicStore implements PublicStore {
   async getLayout(id:string){return this.layouts.get(id)} async saveLayout(id:string,v:unknown){this.layouts.set(id,v)}
   prefs=new Map<string,Record<string,unknown>>();
   async getPreferences(id:string){return {...(this.prefs.get(id)??{})}} async savePreferences(id:string,v:Record<string,unknown>){this.prefs.set(id,{...v})}
+  deletions=new Map<string,{accountId:string;expiresAt:number;consumedAt?:number}>();
+  async createDeletionRequest(h:string,v:{accountId:string;expiresAt:number;consumedAt?:number}){this.deletions.set(h,{...v})}
+  async getDeletionRequest(h:string){const v=this.deletions.get(h);return v?{...v}:undefined}
+  // CLAIMED, not read-then-written. Two clicks of the same emailed link race
+  // here exactly as they would in Postgres, and only one may win.
+  async consumeDeletionRequest(h:string,at:number){const v=this.deletions.get(h);if(!v||v.consumedAt)return false;v.consumedAt=at;return true}
+  async deleteAccount(accountId:string,email:string){
+    this.earlyAccess.delete(email.toLowerCase());
+    this.accounts.delete(accountId);
+    for(const [k,v] of this.deletions) if(v.accountId===accountId) this.deletions.delete(k);
+    for(const [k,v] of this.sessions) if(v.accountId===accountId) this.sessions.delete(k);
+    for(const [k,v] of this.trusted) if(v.accountId===accountId) this.trusted.delete(k);
+    for(const [k,v] of this.challenges) if(v.accountId===accountId) this.challenges.delete(k);
+    this.layouts.delete(accountId); this.prefs.delete(accountId);
+  }
   earlyAccess=new Map<string,{email:string;note:string|null}>();
   async recordEarlyAccessRequest(email:string,note:string|null){this.earlyAccess.set(email.toLowerCase(),{email,note})}
   // ---- budget ---------------------------------------------------------------

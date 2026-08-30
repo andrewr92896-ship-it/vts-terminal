@@ -5,6 +5,7 @@ import { PublicTopBar } from './PublicTopBar';
 import { PublicScreen } from './PublicScreens';
 import { publicAuth, isDemo, startDemo, setPublicUser, readPublicUser, readDemoDevice, setDemoDevice, type DemoDevice } from './PublicRuntime';
 import { PublicDeviceCard } from './PublicDeviceCard';
+import { PublicDeleteAccount } from './PublicDeleteAccount';
 import { presetTiles } from './PublicBoard';
 import { useResponsive } from '../hooks/useMediaQuery';
 import { MyTerminalCustomizer } from '../components/MyTerminalCustomizer';
@@ -30,6 +31,12 @@ const deviceLayout=(device:DemoDevice)=>JSON.stringify({cols:12,tiles:presetTile
 // Applied here at module scope, before anything renders, for the same reason the
 // card is a GATE rather than a modal: the Live Wall reads its tiles in a state
 // initialiser, so a layout written after it mounted would never reach it.
+// THE DELETION LINK. Read at module scope like `?device=`, because the page it
+// opens must show the confirmation and nothing else — not the sign-in card, not
+// the terminal. Whoever opens it may not be signed in at all: the link is read
+// wherever the person reads their mail, which is often another browser.
+const deleteToken=query.get('delete');
+
 const urlDevice:DemoDevice|null=query.get('device')==='mobile'?'mobile':query.get('device')==='desktop'?'desktop':null;
 if(urlDevice){setDemoDevice(urlDevice);setPublicUser({...readPublicUser(),wallLayout:deviceLayout(urlDevice)})}
 export function PublicApp(){
@@ -69,6 +76,7 @@ export function PublicApp(){
  useEffect(()=>{const onHash=()=>{const next=location.hash.slice(1) as PublicScreenKey;if(allowed.has(next))setScreen(next)};addEventListener('hashchange',onHash);return()=>removeEventListener('hashchange',onHash)},[]);
  useEffect(()=>{const onAi=()=>{location.hash='hp_howto'};addEventListener('vts-public-ai',onAi);return()=>removeEventListener('vts-public-ai',onAi)},[]);
  useEffect(()=>{const onAccount=()=>{location.hash='my_settings'};addEventListener('vts-public-account',onAccount);return()=>removeEventListener('vts-public-account',onAccount)},[]);
+ if(deleteToken)return <PublicDeleteAccount token={deleteToken}/>;
  if(checking)return null;
  if(!verified||authStep)return <PublicLogin initialStep={authStep==='early-access'||query.get('screen')==='early-access'?'early-access':passwordChangeRequired?'change-password':query.get('screen')==='two-factor'?'two-factor':'login'} onVerified={()=>{setAuthStep(null);setPasswordChangeRequired(false);setVerified(true)}} onDemo={()=>{setAuthStep(null);startDemo();setPublicUser({id:'demo-user',username:'demo',displayName:'Demo',isDemo:true});setVerified(true)}} onClose={authStep&&verified?()=>setAuthStep(null):undefined}/>;
  // Only the demo, and only once per visit. A signed-in account has a saved board

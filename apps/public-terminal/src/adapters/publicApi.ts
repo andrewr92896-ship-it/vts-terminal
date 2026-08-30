@@ -2,7 +2,7 @@ type MarketDataLayout={pinned:string[];hidden:string[];custom:Array<Record<strin
 type MarketDataPayload={groups:Array<{key:string;label:string}>;series:Array<Record<string,unknown>>;periods:string[];defaultPins:string[];meetings:string[];meetingYear:number;sampleValues:boolean};
 type MarketNewsData={aiTagging:boolean;headlines:Array<Record<string,unknown>>;calendar:Array<Record<string,unknown>>};
 import { isDemo, publicRequest } from '../../../web/src/public/PublicRuntime';
-import { demoCall } from '../demo/demoStore';
+import { DEMO_SCREENSHOT_METHODS, demoCall } from '../demo/demoStore';
 
 export class ApiError extends Error { constructor(public status:number,message:string){super(message)} }
 
@@ -238,6 +238,17 @@ export const api:any=new Proxy(baseApi as any,{get(target,key:string){if(key in 
  // of a study game, and `closeFundedTrade` reads the result off a screenshot.
  // Without them the calls fell through to a "route not found", which reads as a
  // broken button rather than a feature that is deliberately switched off.
+ // READING A TRADE OFF A SCREENSHOT IS THE ONE AI-SHAPED THING THE DEMO ANSWERS,
+ // and it is a NAMED list rather than a pattern so nothing else can slip through
+ // it. Pasting a screenshot and having the trade logged is the feature people
+ // ask about first; a showcase that answers it with "switched off" is showing
+ // the wrong product. No model runs — the demo returns a stored reading and says
+ // so in `model`, which is the field the screens print as provenance.
+ //
+ // ORDER MATTERS: this sits ABOVE the refusal, and the refusal still covers
+ // every other AI method including these same three OUTSIDE the demo, where a
+ // real account would otherwise get a fabricated read of their own screenshot.
+ if(isDemo()&&DEMO_SCREENSHOT_METHODS.includes(key)){const answered=demoCall(key,args);if(answered.handled)return answered.value}
  if(/(import|extract|chat|generate|analyze|audit|categorize|preview|fixture|tutor)/i.test(key)||/^ai/i.test(key)||key==='flashcardsFromGame'||key==='closeFundedTrade')throw new ApiError(501,'AI features are moving to a new provider and are switched off in the public terminal.');
  // The DEMO comes first, always. It is the showcase, it answers out of module
  // memory, and `publicRequest` refuses to reach the service from inside it.

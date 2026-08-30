@@ -464,6 +464,58 @@ test('Preferences does not claim a leaderboard the public terminal has no', asyn
   expect(errors, 'Preferences threw').toEqual([]);
 });
 
+// READING A TRADE OFF A SCREENSHOT, DRIVEN TO THE ACT IT EXISTS FOR.
+//
+// The terminal's headline feature: paste a photo of a platform, the trade is
+// read off it and logged. In the demo no model runs — a stored reading comes
+// back — but the TRADE MUST STILL LAND, because a reader that returns a result
+// without logging it is demonstrating the half that is easy, and it looks
+// identical on screen until you go and check the book.
+//
+// A real paste cannot be simulated (the clipboard is not writable from here), so
+// this drives the upload input, which is the same code path with the same
+// handler behind it.
+test('the demo reads a trade off a screenshot and logs it', async ({ page }) => {
+  const errors = [];
+  const record = (error) => errors.push(String(error));
+  page.on('pageerror', record);
+  try {
+    await page.goto('about:blank');
+    await page.goto(`${base}/?demo=1&device=desktop#funded`, { waitUntil: 'domcontentloaded' });
+    const main = page.locator('.vts-public-main');
+    await expect(main).toBeVisible();
+
+    const before = (await main.innerText()).includes('USD/CAD');
+    expect(before, 'the sample position is already on the book before the read').toBe(false);
+    // There are two screenshot controls on this screen — the history import,
+    // which is always on screen, and the open-position reader, which is behind
+    // the "Track live trade" toggle. This drives the SECOND, because that is the
+    // one that logs a live trade; the sample it returns is deliberately an
+    // instrument the seed does not hold, so finding it afterwards proves THIS
+    // read landed rather than finding a row that was already there.
+    await page.getByRole('button', { name: /Track live trade/ }).first().click();
+
+    // A one-pixel PNG. The demo never looks at the bytes — what is being tested
+    // is that the handler runs, answers, and writes.
+    const png = Buffer.from(
+      'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==',
+      'base64');
+    await page.locator('input[type="file"]').nth(1).setInputFiles({ name: 'trade.png', mimeType: 'image/png', buffer: png });
+
+    // The trade is on the book, which is the assertion that matters.
+    await expect(main).toContainText('USD/CAD', { timeout: 15000 });
+    // And the terminal says the reading was a sample rather than naming a model
+    // that never ran.
+    // AND THE SCREEN SAYS NO MODEL READ IT. The result line is all a visitor
+    // sees, so without this the demo shows something indistinguishable from a
+    // live AI read of their own image.
+    await expect(main).toContainText(/no AI read your image/i);
+  } finally {
+    page.off('pageerror', record);
+  }
+  expect(errors, 'the screenshot reader threw').toEqual([]);
+});
+
 test('the demo reaches no service and leaves nothing behind', async ({ page, context }) => {
   const requests = [];
   page.on('request', (request) => requests.push(request.url()));

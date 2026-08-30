@@ -26,6 +26,11 @@ export const publicAuth={
   savePreferences(patch:PublicPreferences){return publicRequest<{preferences:PublicPreferences}>('/preferences',{method:'PATCH',body:JSON.stringify(patch)})},
   changePassword(currentPassword:string,newPassword:string){return publicRequest<{ok:true;passwordChangeRequired:false}>('/auth/change-password',{method:'POST',body:JSON.stringify({currentPassword,newPassword})})},
   logout(){return publicRequest<{ok:true}>('/auth/logout',{method:'POST'})},
+  // Deletion is two calls because it is two acts: asking, which needs the
+  // session, and confirming, which needs the emailed link and nothing else —
+  // the link is opened wherever the person reads their mail.
+  requestDeletion(){return publicRequest<{message:string}>('/account/deletion',{method:'POST'})},
+  confirmDeletion(token:string){return publicRequest<{message:string}>('/account/deletion/confirm',{method:'POST',body:JSON.stringify({token})})},
   earlyAccess(email:string,note:string){
     if(demo)return Promise.resolve({message:'Request received. In the demo nothing is stored — on the live terminal this reaches the early-access list.'});
     return publicRequest<{message:string}>('/early-access',{method:'POST',body:JSON.stringify({email,note:note||undefined})});

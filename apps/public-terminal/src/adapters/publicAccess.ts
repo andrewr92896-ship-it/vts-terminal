@@ -1,3 +1,4 @@
+import { isDemo } from '../../../web/src/public/PublicRuntime';
 export const ALL_ROLES=['member'] as const;
 export const ROLE_LABELS={member:'Member'} as Record<string,string>;
 export const ROLE_DESCRIPTIONS={member:'Public terminal account'} as Record<string,string>;
@@ -13,6 +14,9 @@ export const TIER_GLYPHS={free:null,premium:'star',max:'gem'} as Record<string,s
 // No leaderboard exists in the public terminal, so Preferences must not offer
 // to hide you from one. See auth/access.ts for what this governs.
 export const HAS_LEADERBOARDS=false;
+// Only in the DEMO. A real public account's screenshot read is refused until the
+// provider migration, so it is not a sample either — it does not happen at all.
+export const screenshotReadsAreSamples=()=>isDemo();
 export const SECTION_FEATURE={} as Record<string,string>;export const WORKSPACE_FEATURE={} as Record<string,string>;export const ALL_WORKSPACES=['myportal','trading','finances','news','investments','studies','help'] as const;
 export const isFounder=()=>false;export const isAdmin=()=>false;export const canAccessWorkspace=()=>true;export const canAccessFunded=()=>false;
 export const isCompanyEmail=()=>false;export const canAccessEmployeePortal=()=>false;export const isWorkspaceReadOnly=()=>false;

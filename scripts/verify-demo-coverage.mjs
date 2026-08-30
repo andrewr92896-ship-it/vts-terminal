@@ -103,6 +103,20 @@ const DEMO_ONLY = {
   // private API serves them, and the same `canManage` gate decides who sees the
   // composer, so they are wired the ordinary way.)
   admin: ['publishPatchNote'],
+  // READING A TRADE OFF A SCREENSHOT. These three are AI-shaped and every other
+  // AI method in the public terminal is refused outright until the provider
+  // migration — but a showcase that answers the terminal's headline feature with
+  // "switched off" is showing the wrong product, so the demo returns a STORED
+  // reading and says so in `model`, which is the field the screens print as
+  // provenance. No model runs.
+  //
+  // THIS IS THE EXPENSIVE CLASS AND IT IS DELIBERATE. A real beta account still
+  // gets a 501 here, so the demo shows something a customer cannot yet do. That
+  // is the owner's decision (2026-08) rather than an oversight, and it is
+  // written down for exactly the reason this list exists: the gap resolves when
+  // the AI provider is wired, and until then it must not be rediscovered by
+  // somebody pasting a screenshot into a real account.
+  screenshots: ['analyzeFundedPosition', 'importFundedTrades', 'closeFundedTrade'],
   // The hand-kept trade log and the funded book. Both are real public-safe
   // features — a record of trades somebody typed in, with no broker behind them
   // — and both are storage that has not been built yet. Until it is, these three

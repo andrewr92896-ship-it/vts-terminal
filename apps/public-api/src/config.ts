@@ -4,6 +4,11 @@ export type PublicConfig = {
   challengePepper: string;
   trustedDeviceKey: string;
   allowedOrigins: Set<string>;
+  // Where the terminal is served, for links inside emails. Derived from the
+  // first allowed origin rather than a variable of its own: a separate one
+  // could disagree with the origin guard, and a deployment that got it wrong
+  // would send confirmation links pointing somewhere that refuses them.
+  siteUrl: string;
   cookieDomain?: string;
   cookieSecure: true;
   mailFrom: string;
@@ -39,6 +44,7 @@ export function loadPublicConfig(env: NodeJS.ProcessEnv = process.env): PublicCo
     challengePepper,
     trustedDeviceKey,
     allowedOrigins: new Set(origins),
+    siteUrl: origins[0] as string,
     cookieDomain: env.PUBLIC_COOKIE_DOMAIN?.trim() || undefined,
     cookieSecure: true,
     mailFrom: required(env, 'PUBLIC_MAIL_FROM'),

@@ -182,6 +182,21 @@ export function rolesSummary(roles: RoleKey[]): string {
 // screen forgetting to ask.
 export const HAS_LEADERBOARDS = true;
 
+// WHETHER A SCREENSHOT READ ON THIS SCREEN IS A STORED SAMPLE RATHER THAN A
+// MODEL ACTUALLY READING THE IMAGE.
+//
+// False here, always: the private terminal really does send the screenshot to a
+// model. True only inside the public DEMO, where the reading is canned so the
+// terminal's headline feature can be shown at all — a real public account still
+// gets a refusal, which is why this is a function of the runtime rather than a
+// constant of the build.
+//
+// It exists because the screens print the RESULT of a read ("Tracking Long
+// USD/CAD @ 1.3642") and never its provenance, so without this a demo visitor
+// watches what looks exactly like a live AI read. Showing what a feature
+// produces is fair; implying it ran is not.
+export const screenshotReadsAreSamples = () => false;
+
 export const TIER_LABELS: Record<MembershipTier, string> = {
   free: 'Free',
   premium: 'Premium',

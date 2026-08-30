@@ -105,7 +105,7 @@ export const PUBLIC_COOKIE_PATH='/public';
 
 const config=loadPublicConfig();
 const store=new PostgresPublicStore(config.databaseUrl);
-const auth=new PublicAuthService(store,new SmtpPublicMailer(config.smtpUrl,config.mailFrom),{session:config.sessionKey,challenge:config.challengePepper,trusted:config.trustedDeviceKey});
+const auth=new PublicAuthService(store,new SmtpPublicMailer(config.smtpUrl,config.mailFrom),{session:config.sessionKey,challenge:config.challengePepper,trusted:config.trustedDeviceKey,site:config.siteUrl});
 const market=new HttpPublicMarketProvider(config.marketProviderUrl,config.marketProviderToken);
 
 const cookies=(req:IncomingMessage)=>Object.fromEntries((req.headers.cookie||'').split(';').map((part)=>part.trim().split(/=(.*)/s)).filter((v)=>v[0]).map(([k,v])=>[k,decodeURIComponent(v||'')]));
@@ -518,7 +518,7 @@ async function authenticatedAccount(req:IncomingMessage,service:PublicAuthServic
 export async function handleRequest(req:IncomingMessage,res:ServerResponse,dependencies:PublicDependencies={store,market}) {
   // An injected store without an injected auth service would silently keep using
   // the module-level one, so a test would appear wired up and quietly not be.
-  const authService=dependencies.auth??(dependencies.store===store?auth:new PublicAuthService(dependencies.store,{sendVerification:async()=>{},sendTemporaryPassword:async()=>{}},{session:config.sessionKey,challenge:config.challengePepper,trusted:config.trustedDeviceKey}));
+  const authService=dependencies.auth??(dependencies.store===store?auth:new PublicAuthService(dependencies.store,{sendVerification:async()=>{},sendTemporaryPassword:async()=>{}, sendDeletionLink: async () => {}, sendDeletionComplete: async () => {},},{session:config.sessionKey,challenge:config.challengePepper,trusted:config.trustedDeviceKey,site:'https://public.example.com'}));
   try {
     guardOrigin(req); const path=route(req); const method=req.method||'GET'; const jar=cookies(req);
     if(method==='GET'&&path==='/public/v1/health')return json(res,200,{ok:true,service:'vts-public-api'});
@@ -563,6 +563,23 @@ export async function handleRequest(req:IncomingMessage,res:ServerResponse,depen
     if(method==='POST'&&path==='/public/v1/auth/change-password'){
       const body=await readBody(req);const result=await authService.changePassword(sessionCookie(req),String(body.currentPassword||''),String(body.newPassword||''));
       return json(res,200,{ok:true,passwordChangeRequired:false},{'Set-Cookie':cookie(PUBLIC_SESSION_COOKIE,result.sessionToken,12*60*60)});
+    }
+    // ---- account deletion ----------------------------------------------------
+    //
+    // Requesting needs the session; confirming does not, because the emailed
+    // link is opened wherever the person reads their mail — another browser,
+    // a phone, an hour later. The token is the authentication there, and the
+    // service treats it accordingly: hashed at rest, expiring, claimed once.
+    if(method==='POST'&&path==='/public/v1/account/deletion'){
+      return json(res,200,await authService.requestDeletion(sessionCookie(req)));
+    }
+    if(method==='POST'&&path==='/public/v1/account/deletion/confirm'){
+      const body=await readBody(req);
+      const result=await authService.confirmDeletion(String(body.token||''));
+      // The session cookie is cleared whether or not this browser held one, so
+      // the tab the link opened is not left holding a token for an account that
+      // no longer exists.
+      return json(res,200,result,{'Set-Cookie':[clearCookie(PUBLIC_SESSION_COOKIE),clearCookie(PUBLIC_TRUSTED_DEVICE_COOKIE)]});
     }
     if(method==='POST'&&path==='/public/v1/auth/logout'){await authService.logout(sessionCookie(req),jar[PUBLIC_TRUSTED_DEVICE_COOKIE]);return json(res,200,{ok:true},{'Set-Cookie':[clearCookie(PUBLIC_SESSION_COOKIE),clearCookie(PUBLIC_TRUSTED_DEVICE_COOKIE)]});}
     if(method==='GET'&&path==='/public/v1/market-data'){await authenticatedAccount(req,authService);return json(res,200,await dependencies.market.marketData())}
