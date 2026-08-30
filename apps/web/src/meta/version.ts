@@ -11,9 +11,18 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 7.75';
+export const APP_VERSION = 'Beta V 7.76';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 7.76',
+    date: '2026-08-30',
+    notes: [
+      'The public service now deletes what is past its keep-by date. A beta-access request goes six months after it was made, or the moment the person is admitted — whichever comes first — and expired sessions, used sign-in codes, rotated trusted devices, spent deletion links and stale rate-limit windows go with it.',
+      'Only spent or expired rows, never merely old ones: a live session and a remembered browser are untouched, which is tested on both sides of every cutoff.',
+      'The private terminal is unchanged — this is the public service only.',
+    ],
+  },
   {
     version: 'Beta V 7.75',
     date: '2026-08-29',

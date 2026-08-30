@@ -5,6 +5,7 @@ import { loadPublicConfig } from './config.js';
 import { PublicAuthService, AuthError } from './auth.js';
 import { PostgresPublicStore } from './postgresStore.js';
 import { keyedHash } from './security.js';
+import { startRetentionSweep } from './retention.js';
 import { HttpPublicMarketProvider, SmtpPublicMailer } from './adapters.js';
 import type { BudgetKind, FlashcardSetDetail, FlashcardSetRow, NetWorthCategory, NetWorthKind, PublicMarketProvider, PublicStore, StudyDeckDetail, StudyDeckRow, StudyGuideDetail, StudyGuideRow, TodoItemRow } from './types.js';
 import { NET_WORTH_CATEGORIES } from './types.js';
@@ -1509,5 +1510,9 @@ export async function handleRequest(req:IncomingMessage,res:ServerResponse,depen
 const startedDirectly=process.argv[1]?import.meta.url===pathToFileURL(process.argv[1]).href:false;
 if(startedDirectly){
   const server=createServer(handleRequest);
+  // Started with the server rather than gated on production — see the note in
+  // `retention.ts`. Code that deletes rows must not have its first execution be
+  // against the one database that matters.
+  startRetentionSweep(store);
   server.listen(config.port,'0.0.0.0',()=>console.log(JSON.stringify({event:'public_api.started',port:config.port})));
 }

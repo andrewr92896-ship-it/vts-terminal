@@ -102,6 +102,18 @@ export type NewFundedTrade=Omit<FundedTradeRow,'id'>;
 
 export type DeletionRequest={accountId:string;expiresAt:number;consumedAt?:number};
 
+// What one pass of the retention sweep removed, per table.
+//
+// COUNTS RATHER THAN A BOOLEAN, because the only way to know a scheduled
+// deletion is working is to see what it deleted. A sweep that silently does
+// nothing and a sweep that silently does everything log identically otherwise,
+// and this is the job whose whole purpose is that a promise in the Privacy
+// Policy is true rather than aspirational.
+export type RetentionSweep={
+  betaAccessRequests:number; sessions:number; challenges:number; trustedDevices:number;
+  recoveryEvents:number; deletionRequests:number; rateLimits:number;
+};
+
 export interface PublicStore {
   createAccount(v:{email:string;displayName:string;passwordHash:string}):Promise<string>;
   findAccountByEmail(email:string):Promise<PublicAccount|undefined>;
@@ -126,6 +138,14 @@ export interface PublicStore {
   getPreferences(accountId:string):Promise<Record<string,unknown>>;
   savePreferences(accountId:string,preferences:Record<string,unknown>):Promise<void>;
   recordEarlyAccessRequest(email:string,note:string|null):Promise<void>;
+  // Admitting somebody is the earliest of the three ends a beta-access request
+  // can come to, and the request has served its whole purpose the moment it
+  // does — keeping the address twice over, once as an account and once as a
+  // lead, is holding a record with nothing left to do.
+  deleteEarlyAccessRequest(email:string):Promise<void>;
+  // One pass of the retention sweep. See `retention.ts` for what each cutoff is
+  // and why. Returns what it removed rather than nothing.
+  sweepExpired(now:number):Promise<RetentionSweep>;
   // Account deletion. `deleteAccount` takes the EMAIL as well as the id because
   // the beta-access request is keyed by address and carries no account id — it
   // is the one row about a person that the account's own cascade cannot reach.

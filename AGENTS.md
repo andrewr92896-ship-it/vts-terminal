@@ -523,6 +523,51 @@ to meet. The password is printed once and is not recoverable.
   emailed code and `SmtpPublicMailer` has **no fallback that logs it**, unlike
   the employee portal's. With `PUBLIC_SMTP_URL` pointing at nothing, a correct
   password reaches the second factor and stops there, for everybody, permanently.
+- **Admitting somebody DELETES their beta-access request**, after the account
+  exists rather than before, so a failed admit leaves the lead for the next
+  attempt. That is the earliest of the three ends a request can come to — the
+  other two being the person asking for deletion, and the sweep below.
+
+**THE RETENTION SWEEP IS WHAT MAKES A SENTENCE IN THE PRIVACY POLICY TRUE**
+(`src/retention.ts`, `sweepExpired` in both stores). A published document saying
+beta-access requests are removed after six months is a **feature, not a wording
+choice**: until something deletes them the document is aspirational, which is
+the one failure mode a privacy policy must not have.
+- **Two kinds of rule, kept apart.** The **beta-access cutoff** (180 days) is a
+  commitment to somebody who is not a customer and whose address is the only
+  thing VTS holds about them. The **spent-authentication cutoff** is hygiene:
+  an expired session, a used sign-in code, a rotated trusted device and a spent
+  deletion link are already refused by name in `auth.ts`, so removing them
+  changes no answer the terminal gives — only how much dead material a database
+  copy contains.
+- **EXPIRED OR SPENT, NEVER MERELY OLD.** A trusted device is deliberately valid
+  for thirty days and a session for twelve hours, and the sweep must not become
+  a second, shorter opinion about either. There is no grace period, because
+  there is nothing to be gentle about — a request that already read a row is
+  unaffected, and one that reads it afterwards gets the refusal it would have
+  got anyway.
+- **IT IS NOT GATED ON PRODUCTION**, unlike every watch in the private API.
+  Those send notifications and spend money at a provider; this one deletes rows,
+  and code that deletes rows must not have its first ever execution be against
+  the one database that matters. It starts with the server, runs once
+  immediately, then every six hours, on an unref'd timer.
+- **A failed pass is logged, never thrown.** The terminal works perfectly well
+  with a day of dead rows in it and the next pass clears them —
+  `public_api.retention_failed` is what makes a sweep that has been failing for
+  a month findable.
+- **`public_recovery_events` is swept and nothing writes one.** The table
+  survives from the first migration and no code path has ever inserted a row;
+  the DELETE is there so a future writer inherits the rule, and the Postgres
+  suite hand-inserts a row so the statement is actually proved rather than
+  merely present.
+- **EVERY CUTOFF IS TESTED ON BOTH SIDES**, and the six-month period is written
+  out as a literal in the test rather than read from `RETENTION` — it is a
+  sentence in a published document, so shortening the constant has to fail a
+  test rather than silently move the goalposts with everything measured against
+  it. All seven DELETE predicates were proved load-bearing by breaking each one
+  in turn.
+- Audit events are deliberately **not** swept: they are the one intentionally
+  retained table, and the Privacy Policy says so.
 
 **THE INVESTMENTS WORKSPACE READS THREE THINGS THAT ARE NOT ON THE PORTFOLIO
 PAYLOAD** — `/investments/performance`, `/investments/dividends` and
