@@ -8,6 +8,7 @@
 // Unhandled names return an empty-but-correctly-shaped payload rather than
 // throwing: a demo visitor clicking into a corner nobody seeded should meet an
 // empty screen, never a stack trace.
+import { SAMPLE_CLOSE, SAMPLE_HISTORY, SAMPLE_MODEL, SAMPLE_OPEN } from './demoScreenshots';
 import { demoAccounts, demoHoldings, demoState, demoAgo, demoDay } from './demoSeed';
 import { DEMO_QUESTIONS } from './demoQuestions';
 
@@ -604,6 +605,67 @@ function fundedAccounts() {
 }
 const funded = () => ({ accounts: clone(fundedAccounts()), fundedTileColor: null });
 
+// ---- reading a trade off a screenshot ---------------------------------------
+//
+// The demo's answer to the terminal's headline feature. No model runs: these
+// return a STORED reading and say so in `model`, which is the field every screen
+// prints as provenance. See demoScreenshots.ts for why that is where it goes.
+//
+// They are WRITES, not canned responses: the trade they describe actually lands
+// in the demo's funded book, so the balance above it moves and the position
+// appears on the Live Wall. A reader that showed a result without logging it
+// would be demonstrating the half that is easy.
+function addFunded(accountId: string | undefined, row: Record<string, unknown>) {
+  const account = DEMO_FUNDED_ACCOUNTS.find((a) => a.id === accountId) ?? DEMO_FUNDED_ACCOUNTS[0];
+  if (!account) return;
+  account.trades.unshift({
+    id: nextId('demo-ft'), stopLoss: null, takeProfit: null, exitPrice: null, realizedPl: null,
+    openedAt: Date.now(), closedAt: null, ...row,
+  } as never);
+}
+
+const screenshots: Record<string, (args: any[]) => unknown> = {
+  // An OPEN position: logged live, so it shows on the wall with a running P/L.
+  analyzeFundedPosition: ([accountId]) => {
+    addFunded(accountId, {
+      instrument: SAMPLE_OPEN.instrument, side: SAMPLE_OPEN.side, units: SAMPLE_OPEN.units,
+      entryPrice: SAMPLE_OPEN.entryPrice, stopLoss: SAMPLE_OPEN.stopLoss, takeProfit: SAMPLE_OPEN.takeProfit,
+    });
+    return { funded: funded(), parsed: { ...SAMPLE_OPEN }, model: SAMPLE_MODEL };
+  },
+  // A whole history at once. `skipped` and `ignored` are the honest half: one
+  // row was already on the account and one was never a trade.
+  importFundedTrades: ([accountId]) => {
+    for (const row of SAMPLE_HISTORY) {
+      addFunded(accountId, { ...row, closedAt: Date.now() });
+    }
+    return {
+      funded: funded(), added: SAMPLE_HISTORY.length, skipped: 1, ignored: 1, balanceSet: null,
+      summary: `Read 4 rows: ${SAMPLE_HISTORY.length} logged, 1 already on the account, 1 that was not a trade.`,
+      model: SAMPLE_MODEL,
+    };
+  },
+  // CLOSING one: the exit price and the result come off the screenshot, and the
+  // trade stops being open rather than a second row appearing beside it.
+  closeFundedTrade: ([tradeId]) => {
+    for (const account of DEMO_FUNDED_ACCOUNTS) {
+      const trade = account.trades.find((t: any) => t.id === tradeId) ?? account.trades.find((t: any) => t.exitPrice == null);
+      if (trade) {
+        Object.assign(trade, { exitPrice: SAMPLE_CLOSE.exitPrice, realizedPl: SAMPLE_CLOSE.realizedPl, closedAt: Date.now() });
+        return { funded: funded(), closed: true,
+          result: { exitPrice: SAMPLE_CLOSE.exitPrice, realizedPl: SAMPLE_CLOSE.realizedPl, closedAt: Date.now() },
+          summary: `Read the close: out at ${SAMPLE_CLOSE.exitPrice}, ${SAMPLE_CLOSE.realizedPl > 0 ? '+' : ''}$${SAMPLE_CLOSE.realizedPl}.`,
+          model: SAMPLE_MODEL };
+      }
+    }
+    return { funded: funded(), closed: false, result: null, summary: 'No open position to close.', model: SAMPLE_MODEL };
+  },
+};
+
+// Named so the adapter can let exactly these past the AI refusal and nothing
+// else. A regex would eventually match a method nobody meant to demonstrate.
+export const DEMO_SCREENSHOT_METHODS = Object.keys(screenshots);
+
 const capitalTotal = (value: number) => ({ value, mode: 'manual' as const, stated: 1, unstated: 0, mixedCurrency: false });
 
 const reads: Record<string, () => unknown> = {
@@ -676,6 +738,8 @@ const reads: Record<string, () => unknown> = {
 export function demoCall(name: string, args: any[]): { handled: boolean; value?: unknown } {
   const write = writes[name];
   if (write) return { handled: true, value: write(args) };
+  const shot = screenshots[name];
+  if (shot) return { handled: true, value: shot(args) };
   const read = reads[name];
   if (read) return { handled: true, value: read() };
   return { handled: false };
