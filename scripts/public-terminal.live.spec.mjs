@@ -386,6 +386,27 @@ test('answering a study question is remembered by the server', async ({ page, br
   await expect.poll(answered, { message: 'answering did not move the count' }).toBe(before + 1);
   expect(errors, 'the study game threw while answering').toEqual([]);
 
+  // THE COUNT MOVING ON SCREEN SAYS NOTHING ABOUT THE SERVER HAVING BEEN TOLD.
+  // The player writes to the account on an 800ms debounce, fire and forget, so
+  // opening the second browser the moment the number changes is a race against
+  // that timer and the round trip behind it — one this test simply used to win,
+  // because building a context and loading a page took longer than a second.
+  // It stopped winning as soon as the suite got faster, which is exactly the
+  // kind of "fix one thing, a different test goes red" this would have become.
+  //
+  // Waiting for the write makes "was the server told" an awaited fact rather
+  // than a hope — and it fails HERE, naming the save, if the write never
+  // happens at all, which is the bug this test exists to catch. Registered
+  // after the click on purpose: the debounce guarantees the request has not
+  // been sent yet, and the effect clears its own pending timer on every change,
+  // so exactly one save is in flight and it is this answer's.
+  await page.waitForResponse(
+    (response) => /^\/public\/v1\/studies\/decks\/[^/]+\/game$/.test(new URL(response.url()).pathname)
+      && response.request().method() === 'PUT'
+      && response.ok(),
+    { timeout: 15_000 },
+  );
+
   // Reloading is what separates a counter held in the component from one the
   // server was actually told about.
   // A DIFFERENT BROWSER, not a reload. The player keeps its own per-deck state
