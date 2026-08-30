@@ -436,6 +436,34 @@ test('the demo asks which device it is on, and the answer picks the layout', asy
   expect(errors, 'the device door threw').toEqual([]);
 });
 
+// THE APP MUST NOT CLAIM AN EXPOSURE IT DOES NOT HAVE.
+//
+// Preferences is shared with the private terminal, where study leaderboards are
+// real and the opt-out is a real control. The public terminal has none — no
+// board route, every deck reports hasLeaderboard:false — and the card shipped
+// anyway, telling visitors "your display name and score are visible to anyone
+// playing the same game". That is a false statement about who can see a user's
+// data, which is the same fault as a privacy policy that over-promises, pointed
+// the other way. Asserted as an absence, on the screen a demo visitor reaches.
+test('Preferences does not claim a leaderboard the public terminal has no', async ({ page }) => {
+  const errors = [];
+  const record = (error) => errors.push(String(error));
+  page.on('pageerror', record);
+  try {
+    await page.goto('about:blank');
+    await page.goto(`${base}/?demo=1&device=desktop#my_prefs`, { waitUntil: 'domcontentloaded' });
+    const main = page.locator('.vts-public-main');
+    await expect(main).toBeVisible();
+    // The screen really did draw — otherwise an absence proves nothing.
+    await expect(main).toContainText(/time zone/i);
+    await expect(main).not.toContainText(/leaderboard/i);
+    await expect(main).not.toContainText(/visible to anyone/i);
+  } finally {
+    page.off('pageerror', record);
+  }
+  expect(errors, 'Preferences threw').toEqual([]);
+});
+
 test('the demo reaches no service and leaves nothing behind', async ({ page, context }) => {
   const requests = [];
   page.on('request', (request) => requests.push(request.url()));

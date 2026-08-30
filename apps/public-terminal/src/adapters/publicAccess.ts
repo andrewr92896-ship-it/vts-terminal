@@ -10,6 +10,9 @@ export const TIER_LABELS={free:'Free',premium:'Premium',max:'Max'} as Record<str
 // Premium is a gold star and Max an icy gem.
 export const TIER_COLORS={free:null,premium:'#EBCB74',max:'#B9F2FF'} as Record<string,string|null>;
 export const TIER_GLYPHS={free:null,premium:'star',max:'gem'} as Record<string,string|null>;
+// No leaderboard exists in the public terminal, so Preferences must not offer
+// to hide you from one. See auth/access.ts for what this governs.
+export const HAS_LEADERBOARDS=false;
 export const SECTION_FEATURE={} as Record<string,string>;export const WORKSPACE_FEATURE={} as Record<string,string>;export const ALL_WORKSPACES=['myportal','trading','finances','news','investments','studies','help'] as const;
 export const isFounder=()=>false;export const isAdmin=()=>false;export const canAccessWorkspace=()=>true;export const canAccessFunded=()=>false;
 export const isCompanyEmail=()=>false;export const canAccessEmployeePortal=()=>false;export const isWorkspaceReadOnly=()=>false;

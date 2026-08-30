@@ -11,9 +11,25 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 7.71';
+export const APP_VERSION = 'Beta V 7.73';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 7.73',
+    date: '2026-08-29',
+    notes: [
+      'The public terminal no longer draws the leaderboard opt-out on Preferences. It has no leaderboards — nothing an account does is visible to another person there — so the card was telling visitors their display name and score were visible when they were not. The private terminal does have them and is unchanged.',
+      'Public database housekeeping: the archived text from the old beta-access note field is cleared, the rate-limit rows written before that form hashed IP addresses are removed, and a password-recovery record now deletes with its account instead of outliving it.',
+    ],
+  },
+  {
+    version: 'Beta V 7.72',
+    date: '2026-08-29',
+    notes: [
+      'The public beta-access form collects an email address and nothing else. The optional note field is gone — a free-text box on a form that mentions trading invites somebody to volunteer their broker and their account size, which is personal data never asked for and then held forever.',
+      'That form no longer stores the submitter’s IP address. Every other rate-limited route already hashed it; this one passed it in raw, so a column named for a hash held a real address. The private terminal is unchanged.',
+    ],
+  },
   {
     version: 'Beta V 7.71',
     date: '2026-08-29',

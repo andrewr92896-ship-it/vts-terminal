@@ -164,6 +164,24 @@ export function rolesSummary(roles: RoleKey[]): string {
 // every paid endpoint and answers 402, so a client that skipped these calls
 // entirely would still be refused.
 
+// WHETHER THIS DEPLOYMENT HAS STUDY LEADERBOARDS AT ALL.
+//
+// True here: the private terminal ranks every copy of a built-in game across the
+// install, so a player's display name and accuracy really are visible to other
+// people, and the opt-out on Preferences is a real control over a real exposure.
+//
+// The PUBLIC terminal has no leaderboard — no board route, every deck reports
+// hasLeaderboard:false — so its adapter answers false and the card is not drawn.
+// It was drawn there for months, telling public visitors "your display name and
+// score are visible to anyone playing the same game", which was untrue: an app
+// making a false statement about who can see a user's data is the same fault as
+// a privacy policy that over-promises, pointed the other way.
+//
+// Read through the build seam rather than from a role or a runtime flag, so the
+// answer comes from which application was built and cannot be got wrong by a
+// screen forgetting to ask.
+export const HAS_LEADERBOARDS = true;
+
 export const TIER_LABELS: Record<MembershipTier, string> = {
   free: 'Free',
   premium: 'Premium',
