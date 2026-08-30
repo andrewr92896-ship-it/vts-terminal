@@ -6298,6 +6298,7 @@ defaults; the app runs locally with almost nothing set.
   (CORS), `DATABASE_URL` (default `file:./data/vts.db`), `SESSION_SECRET`
   (**required in production**, ≥16 chars; dev falls back to an insecure default),
   `SESSION_TTL_DAYS` (14), `COOKIE_SECURE` (`true` only over HTTPS),
+  `PRIVATE_MAINTENANCE` (unset; `true` closes the private portal — see below),
   `CREDENTIALS_KEY` (broker-credential encryption — **required in production**,
   32+ bytes of generated randomness in base64 or hex, and **must differ from
   `SESSION_SECRET`**; the API refuses to boot otherwise. Generate with
@@ -6832,6 +6833,59 @@ discovered the faults one at a time — set a variable, redeploy, hit the next �
 and each discovery was another outage. A single-fault environment behaves
 identically either way, which is why this needs `verify:config` rather than a
 passing boot to protect it.
+
+### MAINTENANCE MODE — the terminal, deliberately closed
+
+`PRIVATE_MAINTENANCE=true` (`apps/api/src/maintenance.ts`) takes the private
+portal off the air and serves a plain notice instead. Unset — or any other value
+— and nothing changes.
+
+**IT EXISTS BECAUSE THE ALTERNATIVE IS A LIE.** An account that cannot sign in
+is told "Invalid email or password", because that answer is deliberately generic
+and cannot distinguish a wrong password from a closed door. Somebody locked out
+for an afternoon should not spend it wondering whether they have forgotten their
+own password.
+
+- **AN ENVIRONMENT VARIABLE, NOT A DEPLOY.** You turn this on while something is
+  already wrong, and a code change means a build, a deploy and a rollback to
+  undo. One variable and a restart, in both directions, and it cannot be left
+  behind in the source tree.
+- **`/api/health` IS EXEMPT, AND THAT IS THE RULE THIS FEATURE DIES WITHOUT.**
+  Railway health-checks that path and rolls back a deploy that fails it — so a
+  maintenance mode which blocked it would refuse to deploy at the one moment it
+  is needed. Matched on the exact path, not a prefix: `startsWith('/api/health')`
+  would quietly leave a whole family of routes serving.
+- **IT ALSO STOPS THE WATCHES**, in `server.ts`, and that is the same switch
+  because it is the same decision: a terminal nobody can open must not still be
+  buzzing phones about trades, sessions and price levels. **This is how you stop
+  the notifications without deleting a row or disconnecting a broker** — the
+  alternative people reach for is destroying data, which is irreversible and
+  does not even achieve it faster.
+- **503 with `Retry-After` and `no-store`, never 200.** The condition is
+  temporary; a 200 lets a crawler record the notice as the site's content, and a
+  cacheable one outlives the maintenance.
+- **The notice references no asset.** Static files are behind the same gate, so
+  a page reaching for a stylesheet or a logo renders broken at the moment it has
+  to look deliberate.
+- **Only the exact string `true` closes it** (trimmed, case-insensitive). A
+  variable set to `1` or `yes` by somebody guessing the format must not take the
+  terminal down, and neither must one left behind reading `false`.
+- **It deletes nothing, disconnects nothing and revokes nothing.** Turn it off
+  and everything is exactly as it was.
+- **It carries a button to the PUBLIC DEMO** (`PUBLIC_TERMINAL_URL`, defaulting
+  to the same demo URL the marketing site links). The apex is the primary
+  domain, so the people who land on the notice are not only the three who can
+  sign in. The caption says outright that it is a separate site with sample data
+  and **not your account** — "demo" on a page about *your* terminal otherwise
+  reads as your terminal in a limited mode, which it is not. The URL is an
+  environment read rather than a trusted input, so it is refused unless it is
+  http(s) and is HTML-escaped before it reaches the href: this is the one page
+  served to everybody, signed in or not.
+
+`npm run verify:maintenance` checks all of it, and is in `verify` because these
+failures are only visible once the mode is needed — one of them (blocking the
+health check) makes the very deploy that enables it roll back. Every rule above
+was proved load-bearing by breaking it.
 
 **An allowlist entry may be an account ID, a username, or an email**
 (`auth/privateAccess.ts`, checked by `npm run verify:private-access`). It matched

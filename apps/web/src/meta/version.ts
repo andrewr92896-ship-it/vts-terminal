@@ -11,9 +11,19 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 7.79';
+export const APP_VERSION = 'Beta V 7.80';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 7.80',
+    date: '2026-08-30',
+    notes: [
+      'The private portal can be closed for maintenance from a single environment variable. Visitors get a plain "under maintenance" notice instead of a sign-in they cannot use — because an account that is locked out is told "Invalid email or password", which reads as a forgotten password rather than a closed door.',
+      'While it is on, none of the background watches run. A terminal nobody can open should not still be buzzing phones about trades, sessions and price levels — and that is how you stop the notifications without deleting anything or disconnecting a broker.',
+      'The notice carries a button to the public demo, so somebody who lands on the main domain during maintenance has somewhere to go. It says plainly that the demo is a separate site with sample data and not their account.',
+      'It deletes nothing and revokes nothing. Turn the variable off and everything is exactly as it was. The health check stays answering, so enabling it cannot roll its own deploy back.',
+    ],
+  },
   {
     version: 'Beta V 7.79',
     date: '2026-08-30',
