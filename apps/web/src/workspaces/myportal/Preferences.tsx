@@ -4,6 +4,7 @@ import { C } from '../../theme/tokens';
 import { SectionHeader, inputStyle, panel, panelLabel } from '../admin/adminUi';
 import { getTradeLayout, setTradeLayout, type Layout } from '../trading/preferences';
 import { ApiError } from '../../api/client';
+import { HAS_LEADERBOARDS } from '../../auth/access';
 import { useAuth } from '../../auth/AuthContext';
 import {
   AUTO,
@@ -40,7 +41,7 @@ export function Preferences({ theme }: { theme: Theme }) {
 
       <TimeZoneCard theme={theme} />
 
-      <LeaderboardCard theme={theme} />
+      {HAS_LEADERBOARDS && <LeaderboardCard theme={theme} />}
 
       <section style={{ ...panel(theme), marginTop: 16 }}>
         <div style={panelLabel}>
