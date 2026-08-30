@@ -599,6 +599,26 @@ affirmative act, and a row saying which words were on the screen.
   failure this exists to avoid.
 - The live-account suite seeds a SECOND account that has never ticked, which is
   what proves the gate stands in the browser; the demo never reaches it at all.
+- **THE TWO SERVICES MUST DEPLOY FROM THE SAME COMMIT, and nothing enforces
+  that.** The document TEXT ships in the public terminal's static bundle; the
+  VERSION and HASH live in the public API. They are separate Railway services
+  (`deploy/railway/public-terminal.json` and `public-api.json`), so a deploy
+  that moves one and not the other puts a reader in front of one wording while
+  the record pins another — the exact failure the hash exists to prevent, at
+  deployment level rather than code level. **Neither order is safe**: a newer
+  bundle means new text under an old hash, a newer API means a new version
+  recorded against text the reader never saw.
+  `verify:legal-hashes` checks the REPOSITORY and cannot see this.
+  - The mitigation today is operational: deploy both together, and treat a
+    legal-document change as a two-service release.
+  - **The real fix, before public launch:** have the gate hash its own
+    rendering in the browser and compare it with the hash the API is serving,
+    refusing to offer the box on a mismatch ("this terminal is being updated")
+    rather than recording one. That closes the window instead of asking
+    somebody to remember it. It needs a browser-safe copy of
+    `canonicalLegalText` plus `crypto.subtle.digest`, i.e. a documented mirror
+    like `sizing.ts`, with a `verify:*-mirror` check.
+  - The demo never reaches the API, so none of this touches it.
 
 **THE RETENTION SWEEP IS WHAT MAKES A SENTENCE IN THE PRIVACY POLICY TRUE**
 (`src/retention.ts`, `sweepExpired` in both stores). A published document saying
