@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { Readable } from 'node:stream';
 import { PublicAuthService, AuthError } from '../src/auth.js';
 import { MemoryPublicStore } from '../src/memoryStore.js';
-import { REQUIRED_DOCUMENTS, canonicalLegalText, sha256Hex } from '../src/legalDocuments.js';
+import { ACKNOWLEDGEMENT_STATEMENTS, REQUIRED_DOCUMENTS, canonicalLegalText, sha256Hex } from '../src/legalDocuments.js';
 import { hashPassword } from '../src/security.js';
 import type { PublicMailer } from '../src/types.js';
 
@@ -199,8 +199,16 @@ test('the documents route names what is outstanding and never the text itself',a
   // The acknowledgement is the exception, and deliberately so — it is owned by
   // this service and hashed from the same constants it is served from, so what
   // the person read and what the record pins cannot differ.
-  assert.equal(before.body.acknowledgement.statements.length,4);
+  // SERVED FROM THE HASHED CONSTANTS, byte for byte. That equality is the whole
+  // claim: what the person read and what the record pins are one thing, with
+  // nothing in between that could differ.
+  assert.deepEqual(before.body.acknowledgement.statements,[...ACKNOWLEDGEMENT_STATEMENTS]);
   assert.match(before.body.acknowledgement.confirm,/Terms of Service/);
+  // The eligibility representation specifically. Nothing verifies age or
+  // location, so this statement IS the record that somebody said they were
+  // eligible — dropping it would take that away silently.
+  assert.ok(ACKNOWLEDGEMENT_STATEMENTS.some((line)=>/18 or over/.test(line)&&/United States/.test(line)),
+    'the acknowledgement no longer asks anybody to confirm they are eligible');
   await call('POST','/public/v1/legal/accept');
   assert.deepEqual((await call('GET','/public/v1/legal/documents')).body.outstanding,[]);
 });

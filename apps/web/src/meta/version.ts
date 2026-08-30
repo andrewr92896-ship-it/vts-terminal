@@ -11,9 +11,18 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 7.78';
+export const APP_VERSION = 'Beta V 7.79';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 7.79',
+    date: '2026-08-30',
+    notes: [
+      'The public terminal now states who it is for: people aged 18 or over, in the United States. It is on the beta-access form before an address is asked for, in the Terms, and as a fifth statement on the acceptance screen that a person confirms.',
+      'It is a representation, not a check, and the documents say so outright. Nothing asks for a birthdate or a country — collecting a birthdate to enforce an age rule means collecting a birthdate. Admission is by hand, so the operator remains the only enforcement; what this adds is a record that somebody said they were eligible.',
+      'Both documents move to v2026-08-30.2 and the acknowledgement to version 2, so everyone is asked to accept once more.',
+    ],
+  },
   {
     version: 'Beta V 7.78',
     date: '2026-08-30',

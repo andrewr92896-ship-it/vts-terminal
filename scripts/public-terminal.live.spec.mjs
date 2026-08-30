@@ -272,6 +272,13 @@ test('a visitor with no account can ask for early access', async ({ browser }) =
   // what is held, which is a privacy request and has its own inbox.
   await expect(card).toContainText('privacy@vitalistradingsystems.com');
 
+  // AND WHO IT IS FOR IS SAID BEFORE THE ADDRESS IS ASKED FOR. Nothing verifies
+  // age or location — admission is by hand — so saying it here is what stops an
+  // ineligible person handing over an address that would only have to be
+  // refused and deleted.
+  await expect(card).toContainText(/18 or over/i);
+  await expect(card).toContainText(/United States/i);
+
   // AND NOTHING IS OFFERED IN EXCHANGE FOR IT (owner instruction, 2026-08). The
   // form used to lead with a free Max membership and three months free after
   // launch — an inducement to hand over an address, naming tiers the terminal
@@ -504,6 +511,10 @@ test('an account that has not accepted the terms gets the gate, not the terminal
   // The acknowledgement, and the terminal nowhere in sight.
   await expect(page.getByRole('heading', { name: /Before you start/i })).toBeVisible();
   await expect(page.locator('.vts-public-shell')).toHaveCount(0);
+
+  // The eligibility representation is on the screen somebody ticks. It is the
+  // only record that they said they were eligible, because nothing checks.
+  await expect(page.getByText(/18 or over and located in the United States/i)).toBeVisible();
 
   // AN AFFIRMATIVE ACT, which is the whole distinction the name points at: the
   // button does not work until the box is ticked.
