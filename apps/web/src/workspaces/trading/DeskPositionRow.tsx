@@ -1,7 +1,16 @@
 import type { CSSProperties } from 'react';
 import { OFF_BOOK_GRAY, fmtMoney, fmtPrice, tileTint } from './TradeCard';
 import { fmtPerStep, fmtPips, fmtSize, movementFor, movementLeg, sizeTitle, type Movement, type MovementLeg } from './pips';
-import { LegReading, PositionActions, ProtectionEditor, miniLabel, usePositionEditKind, usePositionEditor } from './positionEdit';
+import {
+  LegReading,
+  LinkedMark,
+  PositionActions,
+  PositionLinkControl,
+  ProtectionEditor,
+  miniLabel,
+  usePositionEditKind,
+  usePositionEditor,
+} from './positionEdit';
 import { TradeTimesCell, etSince } from './tradeTime';
 import type { LiveTrade } from '../../api/types';
 
@@ -185,8 +194,15 @@ export function DeskPositionRow({
         <span style={{ fontSize: 10.5, color: accent ?? FAINT, fontWeight: accent ? 700 : 400 }}>
           {own ? trade.brokerName : `${trade.owner} · ${trade.brokerName}`}
         </span>
+        {/* The same LINKED marker the card draws, from the same stamped field —
+            the two surfaces are one row of information at two sizes, so they
+            must not disagree about whether a level moved here reaches anybody. */}
+        <LinkedMark trade={trade} />
         <span style={{ flex: 1 }} />
         {editKind && <PositionActions trade={trade} kind={editKind} editor={editor} />}
+        {editKind === 'broker' && !editor.editing && (
+          <PositionLinkControl trade={trade} onChanged={onChanged} />
+        )}
       </div>
 
       {editKind && editor.editing && <ProtectionEditor kind={editKind} editor={editor} move={move} hideMoney={hideMoney} />}

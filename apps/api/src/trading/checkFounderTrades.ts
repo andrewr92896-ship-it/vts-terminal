@@ -45,6 +45,13 @@ import {
   createInvite,
   getFounderLinks,
   setFounderLink,
+  linkPositions,
+  listPositionLinks,
+  linksForPositions,
+  pairPositions,
+  unlinkPositions,
+  autoAmendAfterModify,
+  pickInstrumentMatch,
   declinePrimary,
   dueReminders,
   eligibleFounders,
@@ -55,8 +62,6 @@ import {
   markNotified,
   pendingForRecipient,
   setFounderPrefs,
-  setFundedDecision,
-  uploadProof,
 } from './founderTrades.js';
 import { SYSTEM } from './credentialAudit.js';
 import { DEFAULT_SHARE_CONFIG, getShareConfig, setShareConfig } from './founderTradeConfig.js';
@@ -140,7 +145,7 @@ async function makeConnection(userId: string): Promise<string> {
 }
 
 // A fill on the inviter's own order journal — what an invitation is raised from.
-async function makeOrder(userId: string, stopLoss: number | null): Promise<string> {
+async function makeOrder(userId: string, stopLoss: number | null, tradeId = 't1'): Promise<string> {
   const id = randomUUID();
   await db.insert(tradingOrders).values({
     id,
@@ -157,7 +162,7 @@ async function makeOrder(userId: string, stopLoss: number | null): Promise<strin
     stopLoss,
     status: 'filled',
     brokerOrderId: 'o1',
-    brokerTradeId: 't1',
+    brokerTradeId: tradeId,
     fillPrice: 1.1,
     realizedPl: null,
     errorCode: null,
@@ -355,36 +360,19 @@ async function main() {
   ok('and the recipient is told to check their broker first', (recovered?.primaryError ?? '').includes('Check your account'));
   ok('with the workflow still exactly where it was', recovered?.status === 'primary_pending');
 
-  section('declining the primary trade does NOT end the workflow');
+  section('ANSWERING IS FINISHING — the funded question left this workflow');
+  // Owner decision, 2026-08. A trade invitation used to advance to "are you also
+  // placing this on your funded account?" and then to a screenshot. Both are
+  // gone: either answer to the one question now ends it. Nothing about the
+  // funded BOOK changed, and this is the check that says so about the workflow.
   const declined = await declinePrimary(beta, inviteId);
   ok('the decline is recorded', declined.primaryDecision === 'declined');
-  ok('the funded question is still owed', declined.status === 'funded_pending');
-  ok('so the workflow is not complete', declined.completedAt === null);
+  ok('and it completes the workflow there and then', declined.status === 'complete');
+  ok('stamped', declined.completedAt !== null);
+  ok('with nothing left pending for the recipient', (await pendingForRecipient(beta)).length === 0);
   const repeat = await declinePrimary(beta, inviteId);
-  ok('a second decline converges instead of erroring', repeat.status === 'funded_pending');
-
-  section('the funded decision is separate, and YES completes nothing');
-  await expectRefusal('the inviter cannot answer it either', () => setFundedDecision(alpha, inviteId, 'no'));
-  const yes = await setFundedDecision(beta, inviteId, 'yes');
-  ok('YES moves to verification', yes.status === 'proof_pending');
-  ok('and deliberately does not complete the workflow', yes.completedAt === null);
-  const yesAgain = await setFundedDecision(beta, inviteId, 'no');
-  ok('a contradictory second answer does not overwrite the first', yesAgain.fundedDecision === 'yes');
-
-  section('the screenshot is what finishes it');
-  await expectRefusal('junk is not a screenshot', () => uploadProof(beta, inviteId, 'not-an-image'), 'image');
-  const done = await uploadProof(beta, inviteId, 'data:image/png;base64,aGVsbG8=');
-  ok('the workflow completes on the upload', done.status === 'complete');
-  ok('and it is stamped', done.completedAt !== null && done.hasProof);
-  ok('nothing is left pending for the recipient', (await pendingForRecipient(beta)).length === 0);
-
-  section('a declined funded leg completes without a screenshot');
-  const order2 = await makeOrder(alpha.id, null);
-  const second = await createInvite(alpha, { recipientUserId: beta.id, sourceOrderId: order2 });
-  ok('a trade with no stop is still shareable, and says so', second.stopLoss === null);
-  await declinePrimary(beta, second.id);
-  const no = await setFundedDecision(beta, second.id, 'no');
-  ok('NO completes the workflow there and then', no.status === 'complete' && no.completedAt !== null);
+  ok('a second decline converges instead of erroring', repeat.status === 'complete');
+  ok('and does not restamp the first answer', repeat.primaryDecidedAt === declined.primaryDecidedAt);
 
   section("what travels with an invitation is the GROUP's rule");
   const shipped = await getShareConfig();
@@ -409,12 +397,12 @@ async function main() {
   ok('so a fill raises nothing', (await autoInviteAfterFill(alpha, quiet, 'filled')).length === 0);
   await expectRefusal(
     'a trade cannot be sent to whoever placed it',
-    () => setFounderLink(alpha, alpha.id, alpha.id, true),
+    () => setFounderLink(alpha, alpha.id, alpha.id, { entries: true }),
     'cannot be sent',
   );
   await expectRefusal(
     'nor to somebody without Founder access',
-    () => setFounderLink(alpha, alpha.id, member.id, true),
+    () => setFounderLink(alpha, alpha.id, member.id, { entries: true }),
     'cannot take part',
   );
 
@@ -422,12 +410,12 @@ async function main() {
   // The receiving side sets this one up: beta asks for alpha's trades without
   // touching alpha's account, which is the whole point of a link over a
   // sender-only switch.
-  const asRecipient = await setFounderLink(beta, alpha.id, beta.id, true);
-  ok('the recipient can arrange it themselves', asRecipient.receiving.some((f) => f.userId === alpha.id));
-  ok('and it shows on the sender\'s screen too', (await getFounderLinks(alpha)).sending.some((f) => f.userId === beta.id));
+  const asRecipient = await setFounderLink(beta, alpha.id, beta.id, { entries: true });
+  ok('the recipient can arrange it themselves', asRecipient.receiving.some((f) => f.person.userId === alpha.id));
+  ok('and it shows on the sender\'s screen too', (await getFounderLinks(alpha)).sending.some((f) => f.person.userId === beta.id));
   await expectRefusal(
     'but nobody can arrange a link between two other people',
-    () => setFounderLink(beta, alpha.id, gamma.id, true),
+    () => setFounderLink(beta, alpha.id, gamma.id, { entries: true }),
     'part of',
   );
 
@@ -449,11 +437,11 @@ async function main() {
   ok('so their fill sends nothing back', (await autoInviteAfterFill(beta, betaOrder, 'filled')).length === 0);
 
   section('a sender can reach more than one Founder');
-  await setFounderLink(alpha, alpha.id, gamma.id, true);
+  await setFounderLink(alpha, alpha.id, gamma.id, { entries: true });
   const fanned = await autoInviteAfterFill(alpha, await makeOrder(alpha.id, 1.005), 'filled');
   ok('both are invited from one fill', fanned.length === 2);
   ok('each to their own person', new Set(fanned.map((i) => i.recipient.userId)).size === 2);
-  await setFounderLink(alpha, alpha.id, gamma.id, false);
+  await setFounderLink(alpha, alpha.id, gamma.id, { entries: false });
   ok('and switching one off leaves the other', (await getFounderLinks(alpha)).sending.length === 1);
 
   section('a TEST invitation comes to whoever ran it');
@@ -501,7 +489,175 @@ async function main() {
   ok('and they drop out of the link list', (await getFounderLinks(alpha)).sending.length === 0);
   await db.update(users).set({ roles: JSON.stringify(['software_developer']) }).where(eq(users.id, beta.id));
   ok('coming back restores it', (await getFounderLinks(alpha)).sending.length === 1);
-  await setFounderLink(alpha, alpha.id, beta.id, false);
+  await setFounderLink(alpha, alpha.id, beta.id, { entries: false });
+
+  section('THE TWO SWITCHES ON A LINK ARE INDEPENDENT');
+  // Owner instruction, 2026-08: separate switches per direction, full custom.
+  // Opening a trade and moving a stop on one are different things to want, and a
+  // Founder can take either without the other.
+  const amendsOnly = await setFounderLink(alpha, alpha.id, beta.id, { entries: false, amends: true });
+  const linkAB = amendsOnly.sending.find((l) => l.person.userId === beta.id);
+  ok('a link can carry level moves and nothing else', linkAB?.amends === true && linkAB?.entries === false);
+  const entriesOff = await makeOrder(alpha.id, 1.09, 'no-entries');
+  ok('so a FILL raises nothing', (await autoInviteAfterFill(alpha, entriesOff, 'filled')).length === 0);
+  // A PATCH over what is stored: a browser on an old cached bundle changing one
+  // switch must never silently reset the other.
+  const patched = await setFounderLink(beta, alpha.id, beta.id, { entries: true });
+  const bothOn = patched.receiving.find((l) => l.person.userId === alpha.id);
+  ok('changing one switch leaves the other exactly as it was', bothOn?.entries === true && bothOn?.amends === true);
+  // BOTH OFF IS NOT A STATE — the row is the link, so the last switch going off
+  // removes it. That is what keeps "a disabled link and no link are the same
+  // fact", the property this table was built on.
+  const gone = await setFounderLink(alpha, alpha.id, beta.id, { entries: false, amends: false });
+  ok('turning both off removes the link entirely', gone.sending.length === 0);
+  await setFounderLink(alpha, alpha.id, beta.id, { entries: true, amends: true });
+
+  section('LEVEL MOVES: what is sent, and what is deliberately not');
+  const moved = (over: Partial<Parameters<typeof autoAmendAfterModify>[1]>) =>
+    ({
+      orderRecordId: randomUUID(),
+      instrument: 'EUR_USD',
+      side: 'long' as const,
+      previousStopLoss: 1.09,
+      previousTakeProfit: null,
+      stopLoss: 1.095,
+      takeProfit: null,
+      entryPrice: 1.1,
+      units: 50_000,
+      changedStopLoss: true,
+      changedTakeProfit: false,
+      ...over,
+    });
+  // A REMOVAL IS NOT SENT (owner asked for "moves or adds"). One press that
+  // strips the protection off somebody else's live position is a different risk
+  // from one that tightens it.
+  ok(
+    'taking a stop OFF raises nothing',
+    (await autoAmendAfterModify(alpha, moved({ stopLoss: null }), 'conn-inviter', 'pos-a')).length === 0,
+  );
+  // A level re-sent at the value it already had is not a move.
+  ok(
+    'a level saved again unchanged raises nothing',
+    (await autoAmendAfterModify(alpha, moved({ stopLoss: 1.09 }), 'conn-inviter', 'pos-a')).length === 0,
+  );
+  // Nothing is invented from a position the venue would not report.
+  ok(
+    'a change with no known direction raises nothing',
+    (await autoAmendAfterModify(alpha, moved({ side: null }), 'conn-inviter', 'pos-a')).length === 0,
+  );
+
+  section('a level move is raised, and it never guesses which position it is about');
+  // No pairing, and this scratch database has no broker to match an instrument
+  // against — so the target resolves to NOTHING rather than to a plausible
+  // guess. The invitation is still raised: the recipient is told what changed,
+  // and simply gets no button.
+  const [unaimed] = await autoAmendAfterModify(alpha, moved({}), 'conn-inviter', 'pos-a');
+  ok('the invitation is raised', unaimed?.kind === 'amend');
+  ok('carrying the new level', unaimed?.stopLoss === 1.095);
+  ok('and the one it moved from', unaimed?.prevStopLoss === 1.09);
+  ok('with no position of theirs to apply it to', unaimed?.hasTarget === false);
+  ok('so nothing claims a match', unaimed?.targetMatch === null);
+  await expectRefusal(
+    'and pressing apply refuses rather than moving something at random',
+    () => joinPrimary(beta, unaimed!.id, SYSTEM),
+    'no position of yours',
+  );
+  // The same move sent twice while the first is still unanswered queues one
+  // modal, not two.
+  ok(
+    'the same move repeated while unanswered is folded in',
+    (await autoAmendAfterModify(alpha, moved({}), 'conn-inviter', 'pos-a')).length === 0,
+  );
+  const dismissed = await declinePrimary(beta, unaimed!.id);
+  ok('dismissing it completes the workflow', dismissed.status === 'complete');
+  ok('and records leaving their own levels alone', dismissed.primaryDecision === 'declined');
+  await settle();
+  ok('the timeline says it was a level move', (await kinds(unaimed!.id)).includes('amend.created'));
+  ok('and that no position could be aimed at', (await kinds(unaimed!.id)).includes('amend.target_unresolved'));
+  ok('and that it was dismissed rather than joined', (await kinds(unaimed!.id)).includes('amend.dismissed'));
+
+  section('MATCHING ON INSTRUMENT: exactly one, or nothing');
+  // The rule that decides whether a level move can be applied without a
+  // pairing, and the most important one in this half — moving a stop on the
+  // wrong position is the failure it exists to prevent. Checked as a pure
+  // function because the ambiguity case is unreachable from anything that has
+  // to read a real broker account.
+  const pos = (tradeId: string, instrument: string, side: 'long' | 'short') => ({ tradeId, instrument, side });
+  const one = [pos('a', 'EUR/USD', 'long')];
+  ok('one match is a match', pickInstrumentMatch(one, 'EUR_USD', 'long')?.tradeId === 'a');
+  ok('spelled either way', pickInstrumentMatch(one, 'EUR/USD', 'long')?.tradeId === 'a');
+  ok('the opposite direction is not the same trade', pickInstrumentMatch(one, 'EUR_USD', 'short') === null);
+  ok('and neither is another instrument', pickInstrumentMatch(one, 'GBP_USD', 'long') === null);
+  ok('an empty book matches nothing', pickInstrumentMatch([], 'EUR_USD', 'long') === null);
+  // TWO OR MORE IS NONE. Picking one would be picking at random.
+  const two = [pos('a', 'EUR/USD', 'long'), pos('b', 'EUR_USD', 'long')];
+  ok('TWO candidates resolve to NOTHING rather than the first', pickInstrumentMatch(two, 'EUR_USD', 'long') === null);
+  // The narrowing still has to work around the ambiguity: two positions in the
+  // pair, one each way, is one match per direction and not an ambiguous book.
+  const opposite = [pos('a', 'EUR/USD', 'long'), pos('b', 'EUR/USD', 'short')];
+  ok('a hedged pair is one match each way', pickInstrumentMatch(opposite, 'EUR_USD', 'long')?.tradeId === 'a');
+  ok('and the other way round', pickInstrumentMatch(opposite, 'EUR_USD', 'short')?.tradeId === 'b');
+
+  section('a PAIRING is what makes a level move land in one press');
+  await pairPositions({
+    a: { userId: alpha.id, connectionId: 'conn-inviter', tradeId: 'pos-a' },
+    b: { userId: beta.id, connectionId: 'conn-joiner', tradeId: 'pos-b' },
+    instrument: 'EUR_USD',
+    side: 'long',
+    source: 'manual',
+    createdByUserId: alpha.id,
+  });
+  const [aimed] = await autoAmendAfterModify(alpha, moved({ stopLoss: 1.0975 }), 'conn-inviter', 'pos-a');
+  ok('the paired position is found', aimed?.hasTarget === true);
+  ok('and it says the two are provably the same trade', aimed?.targetMatch === 'chain');
+  await settle();
+  ok('recorded on the timeline', (await kinds(aimed!.id)).includes('amend.target_resolved'));
+
+  section('a pairing is one row however many times it is made');
+  await pairPositions({
+    // The same pair, stated the other way round. The canonical ordering is what
+    // makes it one row rather than two that could later disagree.
+    a: { userId: beta.id, connectionId: 'conn-joiner', tradeId: 'pos-b' },
+    b: { userId: alpha.id, connectionId: 'conn-inviter', tradeId: 'pos-a' },
+    instrument: 'EUR_USD',
+    side: 'long',
+    source: 'manual',
+    createdByUserId: beta.id,
+  });
+  const alphaLinks = await listPositionLinks(alpha);
+  ok('pairing it again in reverse adds nothing', alphaLinks.length === 1);
+  ok('the viewer sees their OWN side of the pair', alphaLinks[0]?.tradeId === 'pos-a');
+  ok('and who it is with', alphaLinks[0]?.person.userId === beta.id);
+  const betaLinks = await listPositionLinks(beta);
+  ok('the other end sees theirs', betaLinks[0]?.tradeId === 'pos-b');
+  ok('and it is the same pairing', betaLinks[0]?.id === alphaLinks[0]?.id);
+
+  section('the LINKED marker is per position and per viewer');
+  const marks = await linksForPositions(alpha.id, ['pos-a', 'pos-unlinked']);
+  ok('a paired position is marked', (marks.get('pos-a') ?? []).length === 1);
+  ok('an unpaired one is not', marks.has('pos-unlinked') === false);
+  ok('and the mark names the other Founder', marks.get('pos-a')?.[0]?.person.userId === beta.id);
+  ok('somebody outside the pair sees nothing', (await linksForPositions(gamma.id, ['pos-a'])).size === 0);
+
+  section('EITHER party may break a pairing');
+  await expectRefusal(
+    'and somebody outside it cannot',
+    () => unlinkPositions(gamma, alphaLinks[0]!.id),
+    'not on your account',
+  );
+  const afterUnlink = await unlinkPositions(beta, alphaLinks[0]!.id);
+  ok('the receiving end can break it themselves', afterUnlink.length === 0);
+  ok('and it is gone for the other side too', (await listPositionLinks(alpha)).length === 0);
+  await expectRefusal(
+    'pairing a position with your own is refused',
+    () => linkPositions(alpha, { withUserId: alpha.id, myTradeId: 'x', theirTradeId: 'y' }, SYSTEM),
+    'itself',
+  );
+  await expectRefusal(
+    'and so is pairing with somebody who is not a Founder',
+    () => linkPositions(alpha, { withUserId: member.id, myTradeId: 'x', theirTradeId: 'y' }, SYSTEM),
+    'cannot take part',
+  );
 
   section('reminders are paced, and stop when the work is done');
   const order3 = await makeOrder(alpha.id, 1.08);
@@ -513,7 +669,6 @@ async function main() {
   const soon = await dueReminders();
   ok('and it is not due again a moment later', !soon.some((d) => d.id === third.id));
   await declinePrimary(beta, third.id);
-  await setFundedDecision(beta, third.id, 'no');
   const after = await dueReminders();
   ok('finishing it stops the reminders with nothing to unschedule', !after.some((d) => d.id === third.id));
 
@@ -524,9 +679,6 @@ async function main() {
     'source_trade.placed',
     'invite.created',
     'primary.declined',
-    'funded.accepted',
-    'proof.requested',
-    'proof.uploaded',
     'workflow.completed',
   ]) {
     ok(`the timeline records ${k}`, timeline.includes(k));

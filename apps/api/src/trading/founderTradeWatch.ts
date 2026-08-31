@@ -40,29 +40,30 @@ function messageFor(r: DueReminder): { title: string; body: string; url: string;
   // reads like a real fill gets acted on — the rule every other test
   // notification in the terminal follows.
   const t = (title: string) => (r.isTest ? `TEST · ${title}` : title);
-  switch (r.status) {
-    case 'primary_pending':
-      return {
-        title: t(`${r.inviterName} invited you to a trade`),
-        body: `${r.instrument} ${dir} — open the terminal to JOIN or decline.${repeat}`,
-        url: '/?screen=live',
-        tag: `founder-primary-${r.id}`,
-      };
-    case 'funded_pending':
-      return {
-        title: t('Funded account decision needed'),
-        body: `${r.instrument} ${dir} — are you placing this on your funded account?${repeat}`,
-        url: '/?screen=prop',
-        tag: `founder-funded-${r.id}`,
-      };
-    default:
-      return {
-        title: t('Funded trade verification required'),
-        body: `${r.instrument} ${dir} — upload a screenshot of your funded trade.${repeat}`,
-        url: '/?screen=prop',
-        tag: `founder-proof-${r.id}`,
-      };
+  // A LEVEL MOVE AND A TRADE INVITATION READ DIFFERENTLY ON A LOCK SCREEN, and
+  // they have to: one is asking somebody to take a position, the other to change
+  // one they are already in. A single wording for both is how a half-awake
+  // recipient opens the terminal expecting the wrong decision.
+  if (r.kind === 'amend') {
+    const moved = [
+      r.stopLoss == null ? null : `stop → ${r.stopLoss}`,
+      r.takeProfit == null ? null : `target → ${r.takeProfit}`,
+    ]
+      .filter(Boolean)
+      .join(' · ');
+    return {
+      title: t(`${r.inviterName} moved their levels`),
+      body: `${r.instrument} ${dir} — ${moved || 'levels changed'}. Open the terminal to match it.${repeat}`,
+      url: '/?screen=live',
+      tag: `founder-amend-${r.id}`,
+    };
   }
+  return {
+    title: t(`${r.inviterName} invited you to a trade`),
+    body: `${r.instrument} ${dir} — open the terminal to JOIN or decline.${repeat}`,
+    url: '/?screen=live',
+    tag: `founder-primary-${r.id}`,
+  };
 }
 
 // One pass. Exported so it can be driven directly rather than only on a timer.

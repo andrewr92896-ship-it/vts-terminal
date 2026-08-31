@@ -6,7 +6,9 @@ import { TradeTimes, etSince } from './tradeTime';
 import { fmtMoney, fmtPips, fmtPrice, usd } from './tradeFormat';
 import { fmtPerStep, fmtSize, sizeTitle } from './pips';
 import {
+  LinkedMark,
   PositionActions,
+  PositionLinkControl,
   ProtectionEditor,
   usePositionEditKind,
   usePositionEditor,
@@ -200,6 +202,10 @@ export function TradeCard({
           <span style={{ fontSize: 15, fontWeight: 700, color: '#fff' }}>{t.instrument}</span>
           <span style={{ ...sideBadge, color: sideColor, border: `1px solid ${sideColor}` }}>{long ? 'LONG' : 'SHORT'}</span>
           {isBreakeven && <span style={{ ...sideBadge, color: GOLD, border: `1px solid ${GOLD}` }} title="Break-even — inside the desk's break-even band">B/E</span>}
+          {/* Whether a level moved here reaches anybody. Beside the instrument
+              rather than in the actions row, because it is a fact about the
+              trade rather than something to press. */}
+          <LinkedMark trade={t} />
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
           {/* On the viewer's own card the broker name already identifies it, so
@@ -312,6 +318,12 @@ export function TradeCard({
           {!closing && (
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
               {editKind && <PositionActions trade={t} kind={editKind} editor={editor} />}
+              {/* Pairing is offered on a real broker position only: a funded or
+                  hand-kept row has no venue trade id for the other end's level
+                  move to be applied to. */}
+              {editKind === 'broker' && !editor.editing && (
+                <PositionLinkControl trade={t} onChanged={onChanged} />
+              )}
               {canClose && !editor.editing && (
                 <button onClick={() => { setCloseErr(null); setClosing(true); }} style={closeTradeBtn}>{"Close trade"}</button>
               )}
