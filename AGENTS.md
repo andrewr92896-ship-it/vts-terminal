@@ -6355,7 +6355,14 @@ defaults; the app runs locally with almost nothing set.
   `search.list` fallback, opt-in only). See the Market News section for why the
   cheap detection path matters.
 - **Notifications:** `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT`,
-  `PUSHOVER_APP_TOKEN`, `PUSHOVER_SOUND`, `SESSION_WATCH_SECONDS` (session-notif
+  `PUSHOVER_APP_TOKEN` (one application token for the whole install, created at
+  pushover.net/apps/build — unset means the Alert Settings panel says Pushover
+  is not set up on the server, and every `sendPushover*` call is a no-op),
+  `PUSHOVER_SOUND`, `PUSHOVER_CALLBACK_ORIGIN` (where Pushover POSTs when a
+  **repeating** alert is acknowledged on the phone; falls back to `WEB_ORIGIN`,
+  and the callback is omitted unless one of them is a public `https://` address
+  — the terminal's own Acknowledge button still works either way, which is why
+  this is optional rather than required), `SESSION_WATCH_SECONDS` (session-notif
   poll cadence, default 30).
 - **Email — two transports, Resend first.** `RESEND_API_KEY` (an HTTPS send API
   on port **443**) is the preferred path and wins when set; `SMTP_*` is the
