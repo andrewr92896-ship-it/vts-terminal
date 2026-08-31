@@ -11,9 +11,16 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 7.81';
+export const APP_VERSION = 'Beta V 7.82';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 7.82',
+    date: '2026-08-31',
+    notes: [
+      'The Pushover panel no longer claims Pushover is unset up on the server when it simply could not reach the server. Any failed check — the terminal closed for maintenance, a dropped connection — read as "Pushover isn\u2019t set up on the server yet", which points you at the wrong thing entirely. It now says it could not check, and says outright that this tells you nothing about your Pushover account.',
+    ],
+  },
   {
     version: 'Beta V 7.81',
     date: '2026-08-30',

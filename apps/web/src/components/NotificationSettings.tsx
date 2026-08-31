@@ -275,7 +275,16 @@ export function PushoverSection({
   // is what puts it at Max. Disconnecting is never gated, so somebody whose tier
   // lapsed can always take their key back out.
   const canConnect = !!user && hasEntitlement(user, 'pushover');
-  const [configured, setConfigured] = useState<boolean | null>(null);
+  // THREE STATES, NOT TWO. `false` is the server SAYING it holds no application
+  // token; 'unreachable' is not having been able to ask. They were one value,
+  // so every failure of this request — a 503 while the terminal is closed for
+  // maintenance, a dropped connection, a 500 — rendered "Pushover isn't set up
+  // on the server yet": a claim about the server's configuration that the
+  // client was in no position to make, and one that sends somebody to look at
+  // the wrong thing. It cost an evening pointed at a token that was there all
+  // along. Same rule as the Live Wall's `unavailable` and Market Data's
+  // `sample`: what could not be read must never be reported as what was read.
+  const [configured, setConfigured] = useState<boolean | null | 'unreachable'>(null);
   const [connected, setConnected] = useState(false);
   const [keyInput, setKeyInput] = useState('');
   const [busy, setBusy] = useState(false);
@@ -290,8 +299,11 @@ export function PushoverSection({
         setConfigured(s.configured);
         setConnected(s.connected);
         onConnectedChange?.(s.configured && s.connected);
+        // Deliberately left alone on failure: the test panel reads this to
+        // decide whether its button can do anything, and an unread status is
+        // not evidence that Pushover is disconnected.
       })
-      .catch(() => alive && setConfigured(false));
+      .catch(() => alive && setConfigured('unreachable'));
     return () => {
       alive = false;
     };
@@ -374,6 +386,11 @@ export function PushoverSection({
         <UpgradeNotice feature="pushover" compact />
       ) : configured === false ? (
         <div style={hintStyle}>Pushover isn’t set up on the server yet.</div>
+      ) : configured === 'unreachable' ? (
+        <div style={hintStyle}>
+          Couldn’t reach the server to check whether Pushover is set up. This says nothing about
+          your Pushover account — try again in a moment.
+        </div>
       ) : configured == null ? (
         <div style={hintStyle}>Checking…</div>
       ) : connected ? (
