@@ -6818,6 +6818,64 @@ Because of that:
   `method: 'get_status'`, or `actions_list` on the branch.
 - **Squash-merge the PR** (see Deploy mechanics below).
 
+## WHERE THE PRIVATE TERMINAL ACTUALLY RUNS
+
+**The live private portal is the Railway service `vts-private-staging`, in the
+VTS Terminal project's `staging` ENVIRONMENT.** It serves
+`portal.vitalistradingsystems.com`, holds the volume `vts-private-staging-data`,
+and is the box every partner signs in to. Established 2026-08-31, by reading
+Settings ▸ Networking on it.
+
+**`@vts/api`, in that same project's `production` environment, is NOT it.** It
+serves the apex (`vitalistradingsystems.com`) and
+`vtsapi-production.up.railway.app`, and its database is the empty one the split
+left behind. It looks like the private portal from every angle that matters —
+same repo, same branch, same build, `Online`, 32 production-looking variables,
+and it is the service the project canvas opens on.
+
+**SO: EVERY ENVIRONMENT VARIABLE FOR THE PRIVATE TERMINAL GOES ON
+`vts-private-staging`, IN `staging`.** A Railway environment has its own
+services and its own variables; setting one in `production` changes nothing any
+user sees. **Never tell the owner to edit a variable without naming the service
+AND the environment.**
+
+That is not a hypothetical. On 2026-08-31 it cost an evening on one setting:
+
+- `PUSHOVER_APP_TOKEN` was set on `@vts/api`, so the terminal went on reporting
+  "Pushover isn't set up on the server yet" with a perfectly good token sitting
+  in Railway.
+- `PRIVATE_MAINTENANCE=true` closed the **apex**, not the portal, which is why
+  the owner kept using the terminal right through what was supposed to be a
+  closed site — and why partners were never actually shown the notice.
+- `PRIVATE_ACCESS_USER_IDS` was edited there too, so the allowlist being tuned
+  was not the one gating anybody's sign-in.
+
+**Two dashboard facts that make this easy to get wrong, and both fooled a
+session that had every screenshot it asked for:**
+
+- **A Railway service card prints ONE domain.** `@vts/api`'s card reads
+  `vitalistradingsystems.com`, and that says nothing about what else is attached
+  — or, here, about the host that is not. The full list is **Settings ▸
+  Networking**. Read it before concluding anything about which service serves a
+  host.
+- **The environment dropdown hides an entire second canvas.** The project card
+  said "1/1 service online", which is true of `production` and says nothing
+  about `staging`. A project is not one canvas.
+
+**Never infer which service serves a host from a project name.**
+`docs/handoff/RAILWAY_RESTORE_DATA.md` guessed from Railway's auto-generated
+naming that `extraordinary-vitality` or `daring-appreciation` held the data;
+both were Discord bots, and both have since been deleted while the portal kept
+running. A later session repeated that guess as if it were established and sent
+the owner through three projects for nothing. **The authority is Settings ▸
+Networking on the service, or the DNS record for the host — nothing else.**
+
+Consequence worth stating: the terminal everyone depends on runs on a service
+named `-staging` in an environment named `staging`. That is a naming hazard, not
+a technical one, but it is exactly the sort of thing that gets "cleaned up" by
+somebody tidying environments. **Do not rename, prune or migrate it casually**;
+if it is ever moved, update this section in the same change.
+
 ## Deploy mechanics
 
 - Railway builds and deploys whatever is on `main` (`npm install && npm run

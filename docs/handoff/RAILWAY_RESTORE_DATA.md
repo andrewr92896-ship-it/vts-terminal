@@ -1,5 +1,24 @@
 # Handoff — find and restore the VTS private terminal's real data
 
+> ## RESOLVED 2026-08-31 — READ THIS BEFORE THE REST
+>
+> **The live private terminal is the service `vts-private-staging`, in the VTS
+> Terminal project's `staging` ENVIRONMENT.** It serves
+> `portal.vitalistradingsystems.com` and holds the volume
+> `vts-private-staging-data`. `@vts/api`, in `production`, serves the apex only
+> and is the empty one this document was written about.
+>
+> **The suspect table below is WRONG and cost a later session an evening.** It
+> guessed from Railway's auto-generated project naming that
+> `extraordinary-vitality` or `daring-appreciation` held the data. They were
+> Discord bots. Both have since been deleted and the portal kept running. Never
+> infer which service serves a host from a project name — read Settings ▸
+> Networking on the service, or the DNS record for the host.
+>
+> The rest of this file is kept as the record of how the question was
+> approached. Do not act on its conclusions.
+
+
 Written for whoever can operate the Railway dashboard. The Claude Code session
 that wrote this cannot: its sandbox blocks `railway.com`, `backboard.railway.com`
 and every `vitalistradingsystems.com` host, so it can ship code and nothing else.
