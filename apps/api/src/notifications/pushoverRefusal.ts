@@ -19,6 +19,15 @@ export function classifyRefusal(body: unknown): { status: RefusalStatus; detail:
   // reading it the other way round would delete a correct key on the strength
   // of a request that could not have succeeded with any key in it.
   if (json.token === 'invalid') return { status: 'invalid-app', detail };
+  // AN EXPIRED OR DEACTIVATED APPLICATION IS THE SAME PROBLEM WITH DIFFERENT
+  // WORDING, and Pushover reports it ONLY in the errors array — no `token` key
+  // at all. Read on the message, because it is the one shape this actually
+  // arrived as in production: the terminal logged it (which is how it was
+  // found) and then told the trader "couldn't reach Pushover", when what was
+  // needed was a new application token.
+  if (/application token .*(expired|deactivat)/i.test(detail)) {
+    return { status: 'invalid-app', detail };
+  }
   if (json.user === 'invalid') return { status: 'invalid-user', detail };
   // Anything else — an unparseable body, a rate limit, a shape we do not know —
   // is an error, deliberately NOT 'invalid-user'. This is the default, and it is

@@ -11,9 +11,16 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 7.83';
+export const APP_VERSION = 'Beta V 7.84';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 7.84',
+    date: '2026-08-31',
+    notes: [
+      'A Pushover application that has expired or been deactivated now says so. It is the same problem as a wrong token, but Pushover words it differently and only in its error text, so the terminal reported it as "couldn\u2019t reach Pushover" — which points at the network rather than at the one thing that needs replacing.',
+    ],
+  },
   {
     version: 'Beta V 7.83',
     date: '2026-08-31',
