@@ -8,6 +8,7 @@ import { recipientLevelsForEvent, LEVEL_PRIORITY, type NotifEvent } from './pref
 import { filterAccountAlerts, getRepeatPrefs } from './alertPrefs.js';
 import { liveReceiptRows, markResolved, newCallbackToken, recordReceipt } from './pushoverReceipts.js';
 import { entitledUserIds } from '../memberships/service.js';
+import { classifyRefusal } from './pushoverRefusal.js';
 
 // Pushover delivery for trade/alert notifications with a custom, attention-
 // grabbing sound (the whole reason we use it over plain web push: Pushover lets
@@ -88,7 +89,23 @@ export interface PushoverMessage {
 // Pushover accepted — it is the handle that lets the repeats be cancelled
 // later, so losing it means an alert nobody can silence from this side.
 export interface SendResult {
-  status: 'ok' | 'invalid' | 'error';
+  // WHY THIS DISTINGUISHES THE TWO WAYS A SEND IS REFUSED. Pushover answers 4xx
+  // for a bad USER KEY and for a bad APPLICATION TOKEN alike, and this used to
+  // read every 4xx as the user's key being bad — which had two consequences,
+  // both of them bad and neither of them visible:
+  //
+  //   • the terminal DELETED the trader's stored key (see `deliver`), so a
+  //     misconfigured server key put somebody in a loop — paste the key, press
+  //     test, watch it be thrown away, paste it again;
+  //   • the message told them to check their own key, which is a claim about
+  //     the cause that nothing had established. The one thing that DOES know is
+  //     Pushover's own reply, and it was being discarded.
+  //
+  // Pushover names the offending parameter in the body (`"user":"invalid"` /
+  // `"token":"invalid"`, plus a human `errors` array), so that is what decides.
+  // Same rule as the Live Wall's `unavailable` and Market Data's `sample`: what
+  // could not be established must never be reported as though it had been.
+  status: 'ok' | 'invalid-user' | 'invalid-app' | 'error';
   receipt?: string;
 }
 
@@ -146,8 +163,23 @@ async function sendOne(
       }
       return { status: 'ok' };
     }
-    // 4xx with an errors array usually means the user key is bad/disabled.
-    if (res.status >= 400 && res.status < 500) return { status: 'invalid' };
+    if (res.status >= 400 && res.status < 500) {
+      let body: unknown = null;
+      try {
+        body = await res.json();
+      } catch {
+        /* an unparseable refusal is one we have not understood — see below */
+      }
+      const { status: refused, detail } = classifyRefusal(body);
+      // Logged because an application-token problem is the operator's to fix and
+      // is otherwise invisible: nothing about it belongs to any one user, and
+      // the trader's screen cannot say more than "the server's setup is wrong".
+      // No secret is in this — Pushover's errors name parameters, not values.
+      if (refused !== 'invalid-user') {
+        console.error(`pushover.refused status=${res.status} kind=${refused} ${detail}`);
+      }
+      return { status: refused };
+    }
     return { status: 'error' };
   } catch {
     return { status: 'error' };
@@ -221,7 +253,11 @@ async function deliver(
   }
 
   const result = await sendOne(userKey, out, token ? callbackUrlFor(token) : undefined);
-  if (result.status === 'invalid') {
+  // ONLY a key Pushover named as the bad one is pruned. A rejected APPLICATION
+  // token is the server's problem and says nothing whatever about this trader's
+  // key; throwing it away there would destroy something correct and put them in
+  // a loop they cannot get out of by trying harder.
+  if (result.status === 'invalid-user') {
     await removePushoverKey(userId).catch(() => {});
     return result.status;
   }
@@ -341,9 +377,15 @@ export type PushoverTestKind = 'standard' | 'repeating';
 // at 3am reads the first line on a lock screen and nothing more — if that line
 // is indistinguishable from a real fill they will act on it, and a notification
 // system that cries wolf is worse than one that stays quiet.
-export async function sendPushoverTest(userId: string, kind: PushoverTestKind = 'standard'): Promise<boolean> {
+// Returns the OUTCOME rather than a boolean, so the route can say which of the
+// two credentials Pushover refused. A boolean cannot carry that, which is how
+// "check your own key" came to be printed for a server-side token fault.
+export async function sendPushoverTest(
+  userId: string,
+  kind: PushoverTestKind = 'standard',
+): Promise<SendResult['status'] | 'no-key'> {
   const key = await getPushoverKey(userId);
-  if (!key) return false;
+  if (!key) return 'no-key';
   const repeating = kind === 'repeating';
   // Goes through `deliver` like every other send, so a repeating TEST uses the
   // user's own repeat timing and is recorded as a cancellable receipt. A test
@@ -363,7 +405,7 @@ export async function sendPushoverTest(userId: string, kind: PushoverTestKind = 
     },
     'test',
   );
-  return status === 'ok';
+  return status;
 }
 
 // Acknowledge from the terminal: stop every repeating alert this user still has
