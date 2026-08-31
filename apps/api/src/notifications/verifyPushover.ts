@@ -22,6 +22,31 @@ const checks: Array<[string, () => void]> = [
     assert.match(detail, /application token/, 'Pushover’s own words are what make this diagnosable');
   }],
 
+  ['an EXPIRED or DEACTIVATED application is the same problem, worded differently', () => {
+    // The shape this actually arrived as in production. Pushover names it only
+    // in the errors array — there is no `token` key to match on — so a reader
+    // that checks the keys alone falls through to a generic error, and the
+    // trader is told the terminal could not reach Pushover when what they need
+    // is a new application token.
+    for (const message of [
+      'application token has expired or been deactivated, see https://pushover.net/api',
+      'application token is expired',
+      'Application token has been deactivated',
+    ]) {
+      assert.equal(
+        classifyRefusal({ errors: [message], status: 0 }).status,
+        'invalid-app',
+        `"${message}" must read as the application's problem`,
+      );
+    }
+    // But it must not swallow a USER-key refusal that happens to mention the
+    // word token — the destructive path stays reachable only on a named user.
+    assert.equal(
+      classifyRefusal({ user: 'invalid', errors: ['user identifier is not a valid user'] }).status,
+      'invalid-user',
+    );
+  }],
+
   ['a rejected USER KEY is the one case that may prune', () => {
     const { status } = classifyRefusal({
       user: 'invalid',
