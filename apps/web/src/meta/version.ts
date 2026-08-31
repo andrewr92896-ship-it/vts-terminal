@@ -11,9 +11,22 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 7.84';
+export const APP_VERSION = 'Beta V 7.85';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 7.85',
+    date: '2026-08-31',
+    notes: [
+      'A stop or take profit that would trigger the moment it was set is now refused, on the ticket and on any live position. A buy is filled at the ask and its stop is watched against the bid, so a level typed at the price on the screen sat below the fill and at the trigger — it looked right and took the trade out on arrival. Every protective level now has to sit at least a pip (a point on anything that is not a currency pair) clear of the price it is measured against.',
+      'Moving a stop or target on a live position is checked at all now. It never was: the desk only ever judged a level when an order was placed, so anything amended afterwards went straight to the broker unexamined.',
+      'A Founder link can now send your stop and target MOVES as well as your new trades. When you move or add a level, whoever you are linked to gets the same pop-up they get for a trade, and one press moves theirs to match. Only the level you actually moved is sent, and taking a level off is deliberately not sent at all.',
+      'The two are separate switches per direction, so you can share level moves without sharing new trades, or either on its own. Both people can set either one.',
+      'A level move never guesses which of your positions it is about. It uses the position linked to theirs, or your single open position in that instrument and direction — and if you hold two, it tells you what they changed and offers no button rather than moving the wrong one.',
+      'Positions can be linked by hand from the trade card, for when you placed the same trade separately instead of joining. Linked positions are marked on the Live Wall and on Live Trades, so you can see whether a level moved there reaches anybody.',
+      'Joining a trade no longer asks about your funded account or a screenshot. Answering the one question finishes it. Nothing about the Funded Trades screen or the funded book changed.',
+    ],
+  },
   {
     version: 'Beta V 7.84',
     date: '2026-08-31',

@@ -1,4 +1,4 @@
-import { sqliteTable, text, integer, real, primaryKey, unique, index } from 'drizzle-orm/sqlite-core';
+import { sqliteTable, text, integer, real, primaryKey, unique, uniqueIndex, index } from 'drizzle-orm/sqlite-core';
 
 // The four roles match the prototype's access matrix exactly.
 export const ROLES = ['Admin', 'Trader', 'Sales', 'Viewer'] as const;
@@ -1285,13 +1285,38 @@ export type RolloverPlanRow = typeof rolloverPlans.$inferSelect;
 // There is deliberately no role column here. Who may take part is read from
 // `users.roles` through the existing authorization on every request, so
 // revoking Founder takes effect immediately rather than leaving a stale grant.
-export const FOUNDER_TRADE_STATUSES = [
-  'primary_pending',
-  'funded_pending',
-  'proof_pending',
-  'complete',
-] as const;
+// TWO STATES, and that is the whole workflow now (owner decision, 2026-08).
+// 'funded_pending' and 'proof_pending' are GONE: joining a trade no longer asks
+// whether it is also going on a funded account, and no longer demands a
+// screenshot. Migration 0139 completed every row still sitting on one of them,
+// so nothing in the database carries either — leaving them in this list would
+// only let a state nothing can reach back into the code. The funded COLUMNS
+// below are kept as the archive of what was decided while the step existed, and
+// nothing about the funded book or the Funded Trades screen changed.
+export const FOUNDER_TRADE_STATUSES = ['primary_pending', 'complete'] as const;
 export type FounderTradeStatus = (typeof FOUNDER_TRADE_STATUSES)[number];
+
+// What an invitation is ABOUT.
+//
+//   • 'entry'  — a trade the sender just opened. Every invitation that existed
+//                before this column did, which is why it is the default.
+//   • 'amend'  — the sender moved or added a stop or a target on a position they
+//                are already in. The recipient applies the same change to their
+//                OWN position in one press, so the invitation additionally
+//                carries which position that is.
+export const FOUNDER_TRADE_KINDS = ['entry', 'amend'] as const;
+export type FounderTradeKind = (typeof FOUNDER_TRADE_KINDS)[number];
+
+// How the recipient's own position was found for an 'amend' invitation.
+//
+//   • 'chain'      — the two positions are explicitly paired, either because the
+//                    recipient joined the sender's trade or because somebody
+//                    paired them by hand. The precise answer.
+//   • 'instrument' — no pairing existed, so the recipient's single open position
+//                    in the same instrument and direction was matched. Named on
+//                    the invitation rather than presented as certainty.
+export const FOUNDER_TARGET_MATCHES = ['chain', 'instrument'] as const;
+export type FounderTargetMatch = (typeof FOUNDER_TARGET_MATCHES)[number];
 
 export const FOUNDER_PRIMARY_DECISIONS = ['joined', 'declined'] as const;
 export type FounderPrimaryDecision = (typeof FOUNDER_PRIMARY_DECISIONS)[number];
@@ -1327,6 +1352,24 @@ export const founderTradeInvites = sqliteTable('founder_trade_invites', {
   // order. Identical in every respect except that everything the recipient sees
   // says so: a test indistinguishable from a real fill gets acted on.
   isTest: integer('is_test', { mode: 'boolean' }).notNull().default(false),
+  // What this invitation is about. 'entry' is what every invitation raised
+  // before this column existed was, so the default is what it would have said
+  // had it always been there.
+  kind: text('kind', { enum: FOUNDER_TRADE_KINDS }).notNull().default('entry'),
+  // An 'amend' only: the levels the sender's position was on BEFORE the change.
+  // Kept so the recipient reads "1.0820 → 1.0840" rather than a bare new number
+  // — what moved is the decision, not where it landed.
+  prevStopLoss: real('prev_stop_loss'),
+  prevTakeProfit: real('prev_take_profit'),
+  // An 'amend' only: the RECIPIENT'S OWN position the change would be applied
+  // to, resolved when the invitation was raised. Null means one could not be
+  // found, and the invitation then says what changed without offering to apply
+  // it — an amend aimed at a guessed position is the one failure this must not
+  // have. No foreign key, like `source_ref`: the invitation is a record of what
+  // was asked and outlives the position it names.
+  targetConnectionId: text('target_connection_id'),
+  targetTradeId: text('target_trade_id'),
+  targetMatch: text('target_match', { enum: FOUNDER_TARGET_MATCHES }),
   status: text('status', { enum: FOUNDER_TRADE_STATUSES }).notNull().default('primary_pending'),
   primaryDecision: text('primary_decision', { enum: FOUNDER_PRIMARY_DECISIONS }),
   primaryDecidedAt: integer('primary_decided_at', { mode: 'timestamp_ms' }),
@@ -1395,10 +1438,66 @@ export const founderTradeLinks = sqliteTable('founder_trade_links', {
   recipientUserId: text('recipient_user_id')
     .notNull()
     .references(() => users.id, { onDelete: 'cascade' }),
+  // WHAT TRAVELS, as two independent switches (owner decision, 2026-08).
+  // Opening a trade and moving a stop on one are different things to want, so a
+  // Founder can take the second without the first or either alone. Both off is
+  // not a state: the row is still the link, so turning the last one off removes
+  // it. Existing links took entries ON and level-moves OFF (migration 0139), so
+  // nothing anybody had set changed on deploy.
+  sendEntries: integer('send_entries', { mode: 'boolean' }).notNull().default(true),
+  sendAmends: integer('send_amends', { mode: 'boolean' }).notNull().default(false),
   createdByUserId: text('created_by_user_id'),
   createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
 });
 export type FounderTradeLinkRow = typeof founderTradeLinks.$inferSelect;
+
+// Two Founders' positions, paired — "your EUR/USD buy and mine are the same
+// trade". It is what lets a stop moved on one raise a one-press invitation to
+// move it on the other, and what draws the LINKED marker on a position tile.
+//
+// **CREATED TWO WAYS AND STORED ONE WAY.** Joining an invitation pairs the two
+// positions automatically; two Founders who each placed the same trade
+// independently pair theirs by hand. `source` records which, because "we ended
+// up in the same trade" and "the terminal put me in it" read very differently
+// afterwards.
+//
+// **THE PAIR IS CANONICALISED BY USER ID** — the lexicographically smaller id is
+// always side A — so pairing A with B and B with A is one row rather than two
+// that could later disagree. The unique index is what enforces it.
+//
+// **NO FOREIGN KEY ON A CONNECTION OR A TRADE ID**, deliberately, and for the
+// same reason `founder_trade_invites.source_ref` carries none: a position closes
+// and the pairing is the record that the two were linked. Removing a connection
+// must not silently rewrite that history.
+export const founderLinkedPositions = sqliteTable(
+  'founder_linked_positions',
+  {
+    id: text('id').primaryKey(),
+    aUserId: text('a_user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    aConnectionId: text('a_connection_id').notNull(),
+    aTradeId: text('a_trade_id').notNull(),
+    bUserId: text('b_user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    bConnectionId: text('b_connection_id').notNull(),
+    bTradeId: text('b_trade_id').notNull(),
+    instrument: text('instrument').notNull(),
+    side: text('side', { enum: TRADE_SIDES }).notNull(),
+    /** 'join' when the terminal placed it, 'manual' when somebody paired it. */
+    source: text('source').notNull().default('manual'),
+    inviteId: text('invite_id'),
+    createdByUserId: text('created_by_user_id'),
+    createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+  },
+  (t) => ({
+    pair: uniqueIndex('founder_linked_positions_pair').on(t.aUserId, t.aTradeId, t.bUserId, t.bTradeId),
+    aSide: index('founder_linked_positions_a').on(t.aUserId, t.aTradeId),
+    bSide: index('founder_linked_positions_b').on(t.bUserId, t.bTradeId),
+  }),
+);
+export type FounderLinkedPositionRow = typeof founderLinkedPositions.$inferSelect;
 
 // The recipient's own size for this workflow. A null `defaultUnits` is "not
 // stated" and is NEVER read as a number: a JOIN with no configured size is

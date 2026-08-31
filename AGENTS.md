@@ -1151,6 +1151,44 @@ workspaces list** (see `theme/nav.ts` order).
       checked against the price the order will actually transact at — the **ask**
       for a buy, the **bid** for a sell — not the mid, and a **stop entry** is
       checked to be on the far side of the market (above to buy, below to sell).
+    - **A LEVEL THAT WOULD FIRE THE MOMENT IT WAS SET IS REFUSED, AND THAT IS A
+      SECOND QUESTION FROM THE ONE ABOVE** (`trading/protection.ts`, mirrored in
+      `workspaces/trading/protection.ts`; owner report, 2026-08 after it took one
+      of the desk's own positions out). The check above asks whether a level is
+      on the right side of the price the trade **opens** at, which is what makes
+      a trade coherent. This one asks whether it is on the right side of the
+      price it is **watched** against — and they are not the same price.
+      - **A LONG'S PROTECTIVE ORDERS FIRE ON THE BID AND A SHORT'S ON THE ASK.**
+        A long is filled at the ask and closed at the bid, so a stop measured
+        against the ask reads safely below the market while already sitting at
+        the price it triggers on. **Every spread is a band in which a level
+        passes the entry-side check and fires on arrival**, which is exactly what
+        happened: a stop typed at the price on the screen.
+      - **The minimum distance is ONE PIP** (owner's own figure), or one whole
+        **point** on anything that is not a genuine currency pair — the same
+        `forexPair` switch the rest of the desk reads movement by, and
+        deliberately not the instrument's `pipLocation`, which would quote gold's
+        point in cents.
+      - **ONLY A MARKET ORDER IS JUDGED AGAINST THE LIVE MARKET.** A resting
+        entry is not on the book, so its levels are measured against its own
+        trigger price and cannot fire on anything until it fills.
+      - **DIRECTION AGAINST THE ENTRY IS NOT ASKED ON AN AMEND.** Moving a long's
+        stop above its entry is a trader taking risk off, which must stay
+        allowed; what is refused there is a level on the wrong side of the
+        *current* market.
+      - **A MISSING QUOTE IS NOT A REFUSAL.** With no price to judge against
+        there is no judgement to make, and blocking a stop because a quote failed
+        would be a terminal that stops somebody protecting a live position at the
+        moment the feed is worst. The venue still rules on what it receives.
+      - **THE AMEND PATH WAS UNCHECKED ENTIRELY UNTIL THIS LANDED**, and could
+        not have been checked: the modify payload carries no direction. It now
+        reads the position from the venue (`DeskBroker.positions()`) rather than
+        taking a side from the client — the account is the authority, an amend is
+        a deliberate human action rather than a poll, and the same read supplies
+        the levels the position was on before, which is what a Founder level-move
+        invitation is built from. **A position the venue does not report is not
+        judged and not invented.**
+      - `npm run verify:protection` runs BOTH mirrors over the same fixtures.
     - Two guards worth keeping: identical entry tickets inside a **5-second
       window** are refused (a double-click at a broker means two positions, not
       one), and any successful action **drops the team's cached desk snapshot**
@@ -1543,19 +1581,38 @@ workspaces list** (see `theme/nav.ts` order).
   - **FOUNDER TRADE COORDINATION — one Founder invites another onto a trade**
     (`trading/founderTrades.ts` + `founderTradeWatch.ts`, routes
     `/api/founder-trades/*`; `founder_trade_invites` / `founder_trade_events` /
-    `founder_trade_prefs`, migration `0131`. On the web:
-    `components/FounderTradeModal.tsx` mounted in `Portal.tsx` and
-    `FounderTradePanel.tsx` on Live Trades). The inviter places a trade and is
-    asked whether to invite another Founder onto it; the recipient authorizes
-    their **own** primary trade, answers **separately** about their funded
-    account, and proves the funded leg with a screenshot.
+    `founder_trade_prefs` / `founder_trade_links` / `founder_linked_positions`,
+    migrations `0131`–`0139`. On the web: `components/FounderTradeModal.tsx`
+    mounted in `Portal.tsx` and `FounderTradePanel.tsx` on Live Trades). One
+    Founder places a trade — or moves a level on one they are already in — and
+    the other is asked, on a blocking modal, whether to do the same. One press
+    does it.
+    - **TWO KINDS OF INVITATION** (`kind`, migration `0139`): an **`entry`** is a
+      trade the sender opened, and an **`amend`** is a stop or target they moved
+      or added on a position they already hold. They share the row, the claim,
+      the reminders, the modal, the audit timeline and the two decision routes —
+      what differs is the question and what the press does. A second workflow for
+      the second kind would be a second place for all of that to drift.
     - **THE DATABASE ROW IS THE WORKFLOW, and every other property here follows
-      from that.** `status` (`primary_pending` → `funded_pending` →
-      `proof_pending` → `complete`) is the single statement of what is still
-      owed, and the blocking modal renders it and nothing it remembers itself —
-      so an unresolved invitation survives a refresh, a relogin, a second tab
-      and a redeploy. **Do not add a client-side "seen" or "dismissed" flag**;
-      there is nothing for one to mean.
+      from that.** `status` (`primary_pending` → `complete`) is the single
+      statement of what is still owed, and the blocking modal renders it and
+      nothing it remembers itself — so an unresolved invitation survives a
+      refresh, a relogin, a second tab and a redeploy. **Do not add a
+      client-side "seen" or "dismissed" flag**; there is nothing for one to mean.
+    - **ANSWERING IS FINISHING. THE FUNDED QUESTION LEFT THIS WORKFLOW** (owner
+      decision, 2026-08). Joining a trade used to advance to "are you also
+      placing this on your funded account?" and then to a screenshot; both are
+      gone, and either answer to the one question now ends it. **Nothing about
+      the funded book, the Funded Trades screen or any funded route changed** —
+      what was removed is this workflow's demand that the recipient answer for it
+      before the invitation would close. The funded COLUMNS are kept as the
+      archive of what was decided while the step existed, and migration `0139`
+      completed every row still standing on one of the two removed steps: an
+      unresolved row keeps a blocking modal up and a phone repeating, so leaving
+      them would have stranded somebody in a workflow with no exit.
+      `funded_pending` and `proof_pending` are **deleted from
+      `FOUNDER_TRADE_STATUSES`** rather than left unused, so a state nothing can
+      reach cannot find its way back into the code.
     - **ELIGIBILITY IS READ FROM THE ROLES, EVERY TIME, AND THERE IS NO NAME
       ANYWHERE.** `eligibleFounders()` is the one computation — founder-level
       (`founder` or the permission-equivalent `software_developer`), active,
@@ -1632,12 +1689,62 @@ workspaces list** (see `theme/nav.ts` order).
       (a request that never reported back) is **released with a recorded warning
       rather than retried silently**: the previous order may have reached the
       broker, so the recipient is told to check before it happens again.
-    - **DECLINING THE PRIMARY TRADE DOES NOT END THE WORKFLOW**, and neither
-      does saying YES to the funded one. Both answers advance to
-      `funded_pending`, because the funded question is genuinely separate — all
-      four combinations are valid. YES moves to `proof_pending`, and **the
-      SCREENSHOT is what completes that branch**, which is the whole reason the
-      reminders go on after it. Only NO completes the workflow outright.
+    - **A LEVEL MOVE NEVER GUESSES WHICH POSITION IT IS ABOUT.** An `amend`
+      invitation carries the RECIPIENT'S OWN position, resolved when it was
+      raised, and `resolveAmendTarget` is the one computation:
+      - an explicit **pairing** first (`chain`) — they joined this trade, or the
+        two positions were paired by hand. Exact.
+      - failing that, the recipient's open positions in the same instrument and
+        direction (`instrument`). **Exactly one is a match; two or more is
+        NONE.** An ambiguous book is where picking would be picking at random,
+        and moving a stop on the wrong position is the one failure this half must
+        not have. The invitation is still raised — knowing what a partner did is
+        worth knowing either way — it simply offers no button.
+      - `targetMatch` travels to the recipient, because "we are provably in the
+        same trade" and "you have one position that looks like it" are different
+        degrees of confidence and they should read which before they press.
+      - **The position's ID is deliberately NOT on the client payload.** The
+        apply route reads it off the row it stored, so nothing sent from the
+        browser can redirect an order — the same rule the size follows on an
+        entry.
+    - **A MOVE OR AN ADD, NEVER A REMOVAL** (owner request, 2026-08 — "whenever
+      that individual moves or adds a stop loss or take profit"). Taking a level
+      OFF raises nothing: one press that strips the protection from somebody
+      else's live position is a different risk from one that tightens it, and it
+      is not what was asked for. A level re-saved at the value it already had is
+      not a move either.
+    - **ONLY THE LEVEL THAT MOVED TRAVELS.** A stop the sender did not touch is
+      left `undefined` rather than sent, so applying a target change never
+      cancels and re-places the recipient's stop at the broker — the same rule
+      the position editor already follows.
+    - **APPLYING CALLS THE SERVICE, NOT THE ROUTE**, which is what stops a chain
+      ping-ponging: `autoAmendAfterModify` is wired to the HTTP route, and the
+      recipient's own amend therefore never fans back out over their links.
+    - **`founder_linked_positions` PAIRS TWO POSITIONS** (migration `0139`). A
+      join pairs them automatically; two Founders who each placed the same trade
+      independently pair theirs by hand from the trade card — the case the owner
+      named, where the invitation came, was not joined, and the trade was placed
+      separately anyway.
+      - **Canonicalised by user id** (the lexicographically smaller is always
+        side A), so pairing A with B and B with A is one row rather than two that
+        could later disagree. The unique index enforces it.
+      - **No foreign key on a connection or a trade id**, deliberately, for the
+        same reason `source_ref` carries none: a position closes and the pairing
+        is the record that the two were linked.
+      - **Both positions are read from each account** before a manual pairing is
+        written — instrument and direction checked there rather than taken from
+        the request. A pairing built on what a client asserted is a pairing that
+        could later move a stop on a position nobody meant. **A long and a short
+        in the same pair are refused**: copying one's stop onto the other puts it
+        on the wrong side of the market every time.
+      - **Either party may break one**, exactly as either may set a link.
+      - **`LiveTrade.linkedWith` is the LINKED marker** on the Live Wall card and
+        the Live Trades row, stamped in `getLiveWall` beside the tile colours and
+        for the same reason — `buildLiveWall` returns from four places, so a
+        stamp applied inside it is a wall that loses its markers whenever a
+        broker goes quiet. **Founder-level viewers, own positions only**: a
+        pairing is between two accounts, and the marker's whole job is to say
+        whether a level moved HERE reaches anybody.
     - **PUSHOVER ACKNOWLEDGEMENT IS NOT AN ANSWER, and `founderTradeWatch.ts` is
       what makes that true.** Pushover's own emergency retries stop when
       somebody acknowledges on their phone; this watch reads the DATABASE on
@@ -1654,10 +1761,10 @@ workspaces list** (see `theme/nav.ts` order).
     - **THE MODAL IS MOUNTED IN `Portal.tsx`, NOT ON A SCREEN**, and it has no
       close button, no backdrop click handler and no Escape handler anywhere in
       the file. An invitation has to be answerable from wherever the recipient
-      is, and the funded question outlives the walk to the Funded section. After
-      the primary decision it routes to **`prop`** (Funded Trades) — once per
-      workflow — and the modal deliberately does not depend on that working, so
-      navigating elsewhere or a failed route never loses it.
+      is, and a level move arrives while they are looking at something else
+      entirely. It takes **no navigation callback**: the funded question that
+      used to follow a decision is gone, so answering finishes the workflow where
+      the reader is standing.
     - **IT IS BUILT FOR SOMEBODY WHO WAS JUST WOKEN UP**: one question per
       screen, the direction and instrument set larger than anything else, the
       trade's facts **restated on every step** rather than remembered from the
@@ -1685,10 +1792,23 @@ workspaces list** (see `theme/nav.ts` order).
       to click past. **Do not reintroduce a per-trade prompt.**
       - **`founder_trade_links` IS THE SWITCH, AND EITHER END MAY SET IT**
         (migration `0134`; the `Links` card on the Live Trades panel). One row
-        per direction between two Founders: present means that sender's fills
-        raise an invitation to that recipient, absent means they do not. There
-        is no enabled column — a disabled link and no link are the same fact,
-        and two ways of saying it would eventually disagree.
+        per direction between two Founders, carrying **two independent
+        switches** for what travels (`send_entries` / `send_amends`, migration
+        `0139`): new trades, stop and target moves, either, or both. Opening a
+        trade and moving a stop on one are different things to want (owner
+        instruction, 2026-08 — "separate switches per link direction, full
+        custom"), so neither implies the other.
+        - **BOTH OFF IS NOT A STATE.** The row is still the link, so the last
+          switch going off REMOVES it — which keeps "a disabled link and no link
+          are the same fact", the property this table was built on, now that
+          there is more than one thing a link can say.
+        - **A PATCH, not a replace.** The terminal is a service-worker-cached
+          PWA, so a browser on an old bundle changing one switch must never
+          silently reset the other. The route also reads a legacy `on` field as
+          the entries switch, which is exactly what it meant when it was the
+          only one.
+        - Existing links took entries **ON** and level-moves **OFF**, so nobody's
+          link changed behaviour on deploy.
         - It replaced `founder_trade_prefs.auto_invite` / `auto_invite_user_id`
           (migration `0132`), which could only say "I send to ONE person" and
           could only be set by the sender. Those columns are **kept as the
@@ -1702,11 +1822,12 @@ workspaces list** (see `theme/nav.ts` order).
           can be sending or receiving through something they cannot see.
         - **A→B and B→A are separate rows.** Switching one on says nothing about
           the other, which is what lets trades flow one way only.
-      - **The invitation is raised SERVER-SIDE, from the fill**
-        (`autoInviteAfterFill`, called fire-and-forget from the place route), so
-        it happens whether or not the tab that placed the order is still open,
-        and can never delay or fail the order response. It fans out over every
-        link, and one recipient failing never stops the others being invited.
+      - **The invitation is raised SERVER-SIDE**, fire-and-forget from the
+        route — `autoInviteAfterFill` from the place route, `autoAmendAfterModify`
+        from the amend one — so it happens whether or not the tab that acted is
+        still open, and can never delay or fail the response. Each fans out over
+        every link on its own channel, and one recipient failing never stops the
+        others being told.
       - **Only a FILL is sent, never a resting order.** The recipient joins at
         market, so inviting off an untriggered limit/stop would put them in at a
         price the inviter has not paid, against a stop set for a different
@@ -1782,29 +1903,36 @@ workspaces list** (see `theme/nav.ts` order).
     - **`founder_trade_events` is the audit timeline**, append-only, and a null
       actor means the terminal acted on its own schedule (a reminder, a released
       claim) — the convention `credential_audit` already uses. It records the
-      source trade, the invitation, every reminder, both decisions, the order
-      result, the screenshot and the completion, **plus the refusals**: a JOIN
-      refused before anything was sent, a duplicate blocked by the claim, and a
-      repeat invitation folded into the existing one. All of it is fire and
-      forget — the timeline must never be what stops a decision being recorded.
-    - **VTS never places the funded trade** and never will: the recipient places
-      it at the firm by hand, and the terminal handles the reminders, the
-      routing, the decision state, the screenshot and the log. There is no
-      Funded Trading Plus integration and no Match-Trader automation.
+      source trade, the invitation, every reminder, the decision, the order
+      result and the completion, **plus the refusals**: a JOIN or an apply
+      refused before anything was sent, a duplicate blocked by the claim, a
+      repeat invitation folded into the existing one, and — on a level move —
+      whether a position of the recipient's could be aimed at at all
+      (`amend.target_resolved` / `amend.target_unresolved`). All of it is fire
+      and forget: the timeline must never be what stops a decision being
+      recorded.
+    - **VTS never places a funded trade** and never will. That is unchanged; what
+      changed is that this workflow no longer ASKS about one — see "answering is
+      finishing" above. There is no Funded Trading Plus integration and no
+      Match-Trader automation.
     - Reading a workflow is **the two parties and nobody else** — not a
       teammate, not a plain admin, not another Founder — and an id that is not
       the caller's answers **404**, so a guessed id cannot be probed. **Only the
       recipient can decide**; the inviter may read and never answer.
-    - Screenshots are stored inline as client-scaled JPEG data URLs, like
-      avatars and study-guide slides (this deploy has no blob store), and served
-      from their own route so a list never carries every image on the desk.
+    - Screenshots from the removed funded branch are still stored inline on the
+      rows that carry one, as client-scaled JPEG data URLs (this deploy has no
+      blob store). Nothing writes or serves one any more — the route and the
+      client method are gone rather than left as an unreachable surface.
     - `npm run db:check-founder-trades` walks the whole state machine through
-      the real services against a scratch database — the decline that does not
-      end the workflow, the YES that completes nothing, the refused JOIN that
-      leaves the row where it was, the size that is never the inviter's, the
-      two-party read boundary and the reminder pacing. Like `db:check-sharing`
-      it **writes**, so it refuses any database that already holds a user. In
-      `verify:db`, so CI runs it.
+      the real services against a scratch database — that answering finishes it,
+      the refused JOIN that leaves the row where it was, the size that is never
+      the inviter's, the two-party read boundary and the reminder pacing, plus
+      the level-move half: the two switches being independent, both off removing
+      the link, a removal and an unchanged level raising nothing, an unaimed
+      move offering no button, a pairing being one row however it is stated, and
+      either party breaking it. Like `db:check-sharing` it **writes**, so it
+      refuses any database that already holds a user. In `verify:db`, so CI runs
+      it.
   - **Alert Settings** (`alerts`, `workspaces/trading/AlertSettings.tsx` over
     `components/NotificationSettings.tsx` + `workspaces/trading/alertPanels.tsx`)
     is the **ONE home for everything the terminal can buzz you about** (owner
@@ -6652,6 +6780,16 @@ fails it fails at one of them and that one is the fastest thing to re-run:
 - **Trade movement: `npm run verify:movement`** after touching `pips.ts`,
   `tradeBreakdown.tsx` or `tradeStats.ts`. See the rule below — the fault it
   pins is invisible on a forex-only desk, which is the owner's own.
+- **Protective-order triggers: `npm run verify:protection`** after touching
+  either `protection.ts`. It is the only check that imports the web copy AND the
+  server copy and runs both through the same fixtures, so it is what stops those
+  two mirrors drifting — and drift there is silent in the worst direction: the
+  ticket would accept a level the desk refuses, or refuse one it would take.
+  What it pins is the rule that a stop is watched against the OPPOSITE side of
+  the book from the one the trade filled at, which is what made a level typed at
+  the price on the screen pass validation and fire on arrival. Every fixture in
+  it was proved load-bearing by breaking the server mirror alone and watching
+  36 checks fail.
 - **Position sizing: `npm run verify:sizing`** after touching either
   `sizing.ts`. It is the only check that imports the web copy AND the server
   copy and runs both through the same fixtures, so it is what stops the two
@@ -6745,13 +6883,15 @@ guard, same scratch-file rule:
     DATABASE_URL="file:/tmp/x.db" npm run db:check-rollover
 
 **Founder trades:** `npm run db:check-founder-trades` walks the whole state
-machine through the real services, and exists for the four rules that make it a
-workflow rather than a sequence of pop-ups: **declining the primary trade does
-not end it** (the funded question is separate and still owed), **funded YES
-completes nothing** (the screenshot does), **a second JOIN cannot reach the
-broker**, and **the recipient's size is never the inviter's** — an unset one is
-refused rather than defaulted. It also pins the two-party read boundary and the
-reminder pacing. Same writing guard, same scratch-file rule:
+machine through the real services, and exists for the rules that make it a
+workflow rather than a sequence of pop-ups: **a second JOIN cannot reach the
+broker**, **the recipient's size is never the inviter's** (an unset one is
+refused rather than defaulted), and — on the level-move half — **a move is never
+aimed at a guessed position**, **a removal and an unchanged level raise
+nothing**, and **the two switches on a link are independent, with both off
+removing it**. It also pins the two-party read boundary, the reminder pacing,
+that answering now finishes the workflow, and that a pairing is one row however
+it is stated. Same writing guard, same scratch-file rule:
 
     DATABASE_URL="file:/tmp/x.db" npm run db:migrate
     DATABASE_URL="file:/tmp/x.db" npm run db:check-founder-trades

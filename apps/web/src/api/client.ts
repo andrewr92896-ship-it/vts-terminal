@@ -40,7 +40,10 @@ import type {
   SupportRequest,
   BrokerConnection,
   FounderAccountView,
+  FounderLinkPatch,
   FounderLinks,
+  PairablePosition,
+  PositionLink,
   FounderShareConfig,
   FounderTestPlan,
   FounderInvite,
@@ -736,11 +739,42 @@ export const api = {
   founderLinks(): Promise<{ links: FounderLinks }> {
     return request('/api/founder-trades/links');
   },
-  setFounderLink(senderUserId: string, recipientUserId: string, on: boolean): Promise<{ links: FounderLinks }> {
+  // A PATCH: only the switch being changed is sent, so changing one never
+  // resets the other. Turning both off removes the link, which is what keeps
+  // "a disabled link and no link are the same fact".
+  setFounderLink(
+    senderUserId: string,
+    recipientUserId: string,
+    patch: FounderLinkPatch,
+  ): Promise<{ links: FounderLinks }> {
     return request('/api/founder-trades/links', {
       method: 'PUT',
-      body: JSON.stringify({ senderUserId, recipientUserId, on }),
+      body: JSON.stringify({ senderUserId, recipientUserId, ...patch }),
     });
+  },
+  // ---- linked positions ----
+  // A pairing is what turns a level move into one press: the terminal knows
+  // exactly which of the recipient's positions is the same trade rather than
+  // matching on instrument and hoping.
+  positionLinks(): Promise<{ links: PositionLink[] }> {
+    return request('/api/founder-trades/positions/links');
+  },
+  pairablePositions(withUserId: string): Promise<{ mine: PairablePosition[]; theirs: PairablePosition[] }> {
+    return request(`/api/founder-trades/positions/pairable?withUserId=${encodeURIComponent(withUserId)}`);
+  },
+  linkPositions(input: {
+    withUserId: string;
+    myTradeId: string;
+    theirTradeId: string;
+  }): Promise<{ links: PositionLink[] }> {
+    return request('/api/founder-trades/positions/links', {
+      method: 'POST',
+      body: JSON.stringify(input),
+    });
+  },
+  // Either party may break a pairing, exactly as either may set one.
+  unlinkPositions(id: string): Promise<{ links: PositionLink[] }> {
+    return request(`/api/founder-trades/positions/links/${encodeURIComponent(id)}`, { method: 'DELETE' });
   },
   // What travels with an invitation — Founder-set and applying to everybody.
   founderConfig(): Promise<{ config: FounderShareConfig }> {
@@ -773,9 +807,6 @@ export const api = {
   founderInvite(id: string): Promise<{ invite: FounderInvite; events: FounderTradeEvent[] }> {
     return request(`/api/founder-trades/${id}`);
   },
-  founderProof(id: string): Promise<{ image: string }> {
-    return request(`/api/founder-trades/${id}/proof`);
-  },
   // Raising the same invitation twice returns the one that already exists, so a
   // retried request never puts a second modal in front of the recipient.
   createFounderInvite(recipientUserId: string, sourceOrderId: string): Promise<{ invite: FounderInvite }> {
@@ -784,25 +815,19 @@ export const api = {
       body: JSON.stringify({ recipientUserId, sourceOrderId }),
     });
   },
-  // The press that authorizes one order: the instrument, direction and stop come
-  // from the invitation, the size from the caller's own settings.
+  // The press that authorizes one action, for either kind of invitation. On a
+  // trade the instrument, direction and stop come from the invitation and the
+  // size from the caller's own settings; on a level move, the position the
+  // change reaches was resolved by the server when the invitation was raised
+  // and nothing sent from here can redirect it.
   joinFounderTrade(id: string): Promise<{ invite: FounderInvite }> {
     return request(`/api/founder-trades/${id}/join`, { method: 'POST' });
   },
-  // Declining deliberately does not end the workflow — the funded question is
-  // separate and still owed afterwards.
+  // Declining a trade, or leaving your own levels as they are. Either answer
+  // ends the workflow now — the funded question that used to follow it was
+  // removed from this chain.
   declineFounderTrade(id: string): Promise<{ invite: FounderInvite }> {
     return request(`/api/founder-trades/${id}/decline`, { method: 'POST' });
-  },
-  founderFundedDecision(id: string, decision: 'yes' | 'no'): Promise<{ invite: FounderInvite }> {
-    return request(`/api/founder-trades/${id}/funded`, {
-      method: 'POST',
-      body: JSON.stringify({ decision }),
-    });
-  },
-  // The screenshot is what completes the funded branch — not the YES before it.
-  uploadFounderProof(id: string, image: string): Promise<{ invite: FounderInvite }> {
-    return request(`/api/founder-trades/${id}/proof`, { method: 'POST', body: JSON.stringify({ image }) });
   },
   // ---- Home-screen widget token (read-only bearer for the phone widget) ----
   widgetTokenStatus(): Promise<WidgetTokenStatus> {

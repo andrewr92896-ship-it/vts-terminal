@@ -967,6 +967,13 @@
       "when": 1787692300000,
       "tag": "0138_my_terminal_sections",
       "breakpoints": true
+    },
+    {
+      "idx": 138,
+      "version": "6",
+      "when": 1787692400000,
+      "tag": "0139_founder_trade_chains",
+      "breakpoints": true
     }
   ]
 }

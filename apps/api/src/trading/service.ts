@@ -23,6 +23,8 @@ import { resolveOandaPricingConfig } from './priceSource.js';
 import { isDemoUser } from '../demo/identity.js';
 import { getDeskSettings } from './settings.js';
 import { paintTiles, resolveTilePalette } from './tileColors.js';
+import { linksForPositions } from './founderTrades.js';
+import { isFounder, parseRoles } from '../auth/rbac.js';
 import { pushConfigured } from '../notifications/push.js';
 import { pushoverConfigured } from '../notifications/pushover.js';
 import { config } from '../config.js';
@@ -303,7 +305,50 @@ async function loadConnection(
 export async function getLiveWall(user: UserRow): Promise<LiveWall> {
   const wall = await buildLiveWall(user);
   const palette = await resolveTilePalette(user.id);
-  return { ...wall, trades: paintTiles(wall.trades, palette) };
+  return { ...wall, trades: await stampPositionLinks(user, paintTiles(wall.trades, palette)) };
+}
+
+// Mark the viewer's own positions that are paired with another Founder's.
+//
+// **WRAPPED AROUND THE BUILD, LIKE THE COLOURS, RATHER THAN LIVING INSIDE IT.**
+// `buildLiveWall` returns from four places — the sample feed, the unreadable
+// feed, the empty desk and the live one — so a stamp applied at three of them is
+// a wall that loses its markers whenever a broker goes quiet.
+//
+// **FOUNDER-LEVEL VIEWERS ONLY, AND ONLY THEIR OWN POSITIONS.** A pairing is
+// between two people's accounts; a teammate watching the same wall has no
+// business reading it, and there would be nothing for them to do with it — the
+// marker exists to say whether a level moved HERE reaches anybody. The demo
+// never reaches it: its feed is the sample one, whose ids belong to no account.
+async function stampPositionLinks(user: UserRow, trades: LiveTrade[]): Promise<LiveTrade[]> {
+  if (isDemoUser(user) || !isFounder(parseRoles(user))) return trades;
+  const own = trades.filter((t) => t.ownerId === user.id);
+  if (own.length === 0) return trades;
+  // The desk's own trade id is the last segment of the wall's namespaced id —
+  // `<connectionId>:<broker>:<tradeId>` — which is what a pairing stores.
+  const idOf = (id: string) => id.slice(id.lastIndexOf(':') + 1);
+  try {
+    const links = await linksForPositions(user.id, [...new Set(own.map((t) => idOf(t.id)))]);
+    if (links.size === 0) return trades;
+    return trades.map((t) => {
+      if (t.ownerId !== user.id) return t;
+      const found = links.get(idOf(t.id));
+      if (!found || found.length === 0) return t;
+      return {
+        ...t,
+        linkedWith: found.map((l) => ({
+          id: l.id,
+          displayName: l.person.displayName,
+          source: l.source,
+        })),
+      };
+    });
+  } catch (err) {
+    // A marker is decoration on a wall that must render. Losing it is a missing
+    // chip; failing here would be a blank Live Wall.
+    console.error('Position link marking failed:', err);
+    return trades;
+  }
 }
 
 async function buildLiveWall(user: UserRow): Promise<LiveWall> {

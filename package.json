@@ -46,6 +46,7 @@
     "verify:study-categories": "npm --workspace @vts/web run verify:study-categories",
     "verify:movement": "npm --workspace @vts/web run verify:movement",
     "verify:sizing": "npm --workspace @vts/web run verify:sizing",
+    "verify:protection": "npm --workspace @vts/web run verify:protection",
     "verify:desk-layout": "npm --workspace @vts/web run verify:desk-layout",
     "build:private": "npm --workspace @vts/api run build && npm --workspace @vts/web run build",
     "build:marketing": "node scripts/build-static-app.mjs apps/marketing",

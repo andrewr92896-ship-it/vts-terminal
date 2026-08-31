@@ -3,15 +3,18 @@ import { and, asc, desc, eq, inArray, isNull, or, sql } from 'drizzle-orm';
 import { db } from '../db/index.js';
 import {
   brokerConnections,
+  founderLinkedPositions,
   founderTradeEvents,
   founderTradeLinks,
   founderTradePrefs,
   founderTradeInvites,
   tradingOrders,
   users,
-  type FounderFundedDecision,
+  type FounderLinkedPositionRow,
   type FounderPrimaryDecision,
+  type FounderTargetMatch,
   type FounderTradeInviteRow,
+  type FounderTradeKind,
   type FounderTradeStatus,
   type TradeSide,
   type UserRow,
@@ -22,7 +25,17 @@ import { sendPushoverToUsers } from '../notifications/pushover.js';
 import { featuresForUser } from '../features/service.js';
 import { isDemoUser } from '../demo/identity.js';
 import { LEVEL_PRIORITY, NOTIF_LEVELS, type NotifLevel } from '../notifications/prefs.js';
-import { DeskError, deskInstruments, deskQuotes, listDeskAccounts, placeDeskOrder } from './orderDesk.js';
+import {
+  DeskError,
+  deskInstruments,
+  deskQuotes,
+  listDeskAccounts,
+  listDeskPositions,
+  modifyDeskPosition,
+  placeDeskOrder,
+  type DeskPosition,
+  type ModifyResult,
+} from './orderDesk.js';
 import { getShareConfig } from './founderTradeConfig.js';
 import { forexPair } from './forex.js';
 import {
@@ -34,7 +47,7 @@ import {
   type AccountPctSize,
   type SizingInputs,
 } from './sizing.js';
-import type { AuditActor } from './credentialAudit.js';
+import { SYSTEM, type AuditActor } from './credentialAudit.js';
 
 // Founder trade coordination — one Founder invites another onto a trade, and
 // the recipient authorizes their own.
@@ -61,6 +74,14 @@ import type { AuditActor } from './credentialAudit.js';
 //   4. **A JOIN IS CLAIMED BEFORE IT IS SENT.** One conditional UPDATE decides
 //      which caller reaches the broker, so two tabs, a double-click and a
 //      retried request cannot become two positions.
+//
+//   5. **AN 'AMEND' NEVER GUESSES WHICH POSITION IT IS ABOUT.** A level-move
+//      invitation carries the recipient's OWN position, resolved when it was
+//      raised — from an explicit pairing first, and only failing that from a
+//      single unambiguous match on instrument and direction. Two candidates
+//      resolve to NONE: the invitation then says what the sender changed and
+//      offers no button, which is the honest answer. Moving a stop on the wrong
+//      position is the one failure this half must not have.
 
 export class FounderTradeError extends Error {
   constructor(
@@ -387,6 +408,11 @@ async function assertOwnConnection(userId: string, connectionId: string): Promis
 export interface FounderInviteView {
   id: string;
   status: FounderTradeStatus;
+  /**
+   * What this invitation is about: a trade the sender opened, or a stop/target
+   * they moved on one they are already in.
+   */
+  kind: FounderTradeKind;
   /** A drill. Real in every respect, and everything the recipient sees says so. */
   isTest: boolean;
   inviter: FounderPerson;
@@ -404,16 +430,31 @@ export interface FounderInviteView {
   primaryFillPrice: number | null;
   primaryUnits: number | null;
   primaryError: string | null;
-  fundedDecision: FounderFundedDecision | null;
-  fundedDecidedAt: number | null;
-  hasProof: boolean;
-  proofUploadedAt: number | null;
   completedAt: number | null;
   createdAt: number;
   /** The recipient's own configured size, so the modal can state it up front. */
   recipientUnits: number | null;
   /** Whether a JOIN is being sent right now (from this or another tab). */
   sending: boolean;
+  // ---- 'amend' only ----
+  /** The levels the sender's position was on BEFORE the change, so the
+   *  recipient reads what MOVED rather than only where it landed. */
+  prevStopLoss: number | null;
+  prevTakeProfit: number | null;
+  /**
+   * Whether the recipient's own position was found, and how.
+   *
+   * **THE POSITION'S ID IS DELIBERATELY NOT ON THIS VIEW.** The apply route
+   * reads it from the row it stored; nothing the client sends chooses which
+   * position an order reaches, exactly as nothing it sends chooses the size.
+   * `targetMatch` is here because the recipient should be told whether their
+   * position was paired or merely matched on instrument before they press.
+   */
+  hasTarget: boolean;
+  targetMatch: FounderTargetMatch | null;
+  /** The account that position sits on, named so the recipient can see it is
+   *  the one they expect. */
+  targetAccount: string | null;
 }
 
 function shape(
@@ -421,11 +462,13 @@ function shape(
   people: Map<string, FounderPerson>,
   viewerId: string,
   recipientUnits: number | null,
+  accounts?: Map<string, string>,
 ): FounderInviteView {
   const unknown = (id: string): FounderPerson => ({ userId: id, displayName: 'A Founder', username: '' });
   return {
     id: row.id,
     status: row.status,
+    kind: row.kind,
     isTest: row.isTest,
     inviter: people.get(row.inviterUserId) ?? unknown(row.inviterUserId),
     recipient: people.get(row.recipientUserId) ?? unknown(row.recipientUserId),
@@ -441,14 +484,16 @@ function shape(
     primaryFillPrice: row.primaryFillPrice,
     primaryUnits: row.primaryUnits,
     primaryError: row.primaryError,
-    fundedDecision: row.fundedDecision ?? null,
-    fundedDecidedAt: row.fundedDecidedAt?.getTime() ?? null,
-    hasProof: !!row.proofImage,
-    proofUploadedAt: row.proofUploadedAt?.getTime() ?? null,
     completedAt: row.completedAt?.getTime() ?? null,
     createdAt: row.createdAt.getTime(),
     recipientUnits,
     sending: isClaimLive(row),
+    prevStopLoss: row.prevStopLoss,
+    prevTakeProfit: row.prevTakeProfit,
+    hasTarget: !!row.targetTradeId,
+    targetMatch: row.targetMatch ?? null,
+    targetAccount:
+      row.targetConnectionId == null ? null : accounts?.get(row.targetConnectionId) ?? null,
   };
 }
 
@@ -685,12 +730,31 @@ async function notifyInviterOfResponse(
 
 // ---- links: whose trades reach whom ----
 
-export interface FounderLinks {
-  /** Founders my fills are sent to. */
-  sending: FounderPerson[];
-  /** Founders whose fills are sent to me. */
-  receiving: FounderPerson[];
+/** One direction of one link, and what travels along it. */
+export interface FounderLinkView {
+  person: FounderPerson;
+  /** A fill raises an invitation to open the same trade. */
+  entries: boolean;
+  /** A stop or target moved on an open position raises an invitation to move
+   *  the same level on the other end's own position. */
+  amends: boolean;
 }
+
+export interface FounderLinks {
+  /** Founders my trades are sent to. */
+  sending: FounderLinkView[];
+  /** Founders whose trades are sent to me. */
+  receiving: FounderLinkView[];
+}
+
+/** Which half of a link is being changed. Both false removes the link. */
+export interface FounderLinkPatch {
+  entries?: boolean;
+  amends?: boolean;
+}
+
+/** What a link may carry, as the one list every read and write agrees on. */
+export type FounderLinkChannel = 'entries' | 'amends';
 
 // Every link this Founder is part of, in both directions.
 //
@@ -707,18 +771,24 @@ export async function getFounderLinks(user: UserRow): Promise<FounderLinks> {
   // who has lost the role drops out of both lists instead of lingering as a link
   // that silently does nothing.
   const eligible = new Map((await eligibleFounders()).map((f) => [f.userId, f]));
-  const sending: FounderPerson[] = [];
-  const receiving: FounderPerson[] = [];
+  const sending: FounderLinkView[] = [];
+  const receiving: FounderLinkView[] = [];
   for (const r of rows) {
+    const view = (person: FounderPerson): FounderLinkView => ({
+      person,
+      entries: r.sendEntries,
+      amends: r.sendAmends,
+    });
     if (r.senderUserId === user.id) {
       const p = eligible.get(r.recipientUserId);
-      if (p) sending.push(p);
+      if (p) sending.push(view(p));
     } else {
       const p = eligible.get(r.senderUserId);
-      if (p) receiving.push(p);
+      if (p) receiving.push(view(p));
     }
   }
-  const byName = (a: FounderPerson, b: FounderPerson) => a.displayName.localeCompare(b.displayName);
+  const byName = (a: FounderLinkView, b: FounderLinkView) =>
+    a.person.displayName.localeCompare(b.person.displayName);
   return { sending: sending.sort(byName), receiving: receiving.sort(byName) };
 }
 
@@ -733,7 +803,7 @@ export async function setFounderLink(
   actor: UserRow,
   senderUserId: string,
   recipientUserId: string,
-  on: boolean,
+  patch: FounderLinkPatch,
 ): Promise<FounderLinks> {
   assertFounder(actor);
   if (actor.id !== senderUserId && actor.id !== recipientUserId) {
@@ -748,39 +818,66 @@ export async function setFounderLink(
   await assertEligible(senderUserId);
   await assertEligible(recipientUserId);
 
-  if (!on) {
-    await db
-      .delete(founderTradeLinks)
-      .where(
-        and(
-          eq(founderTradeLinks.senderUserId, senderUserId),
-          eq(founderTradeLinks.recipientUserId, recipientUserId),
-        ),
-      );
+  const where = and(
+    eq(founderTradeLinks.senderUserId, senderUserId),
+    eq(founderTradeLinks.recipientUserId, recipientUserId),
+  );
+  const existing = (await db.select().from(founderTradeLinks).where(where).limit(1))[0] ?? null;
+
+  // A PATCH over what is stored, so a browser on an old service-worker-cached
+  // bundle changing one switch never silently resets the other. A link that does
+  // not exist yet starts from both off, so `{amends: true}` creates a link that
+  // carries level-moves and nothing else — which is the whole point of the two
+  // being independent.
+  const entries = patch.entries ?? existing?.sendEntries ?? false;
+  const amends = patch.amends ?? existing?.sendAmends ?? false;
+
+  // **BOTH OFF IS NOT A STATE.** The row is the link, so the last switch going
+  // off removes it — which keeps "a disabled link and no link are the same
+  // fact", the property this table was built on.
+  if (!entries && !amends) {
+    if (existing) await db.delete(founderTradeLinks).where(where);
     return getFounderLinks(actor);
   }
-  // The unique index makes this idempotent: switching on a link that is already
-  // on is a no-op rather than a second row or an error.
+  if (existing) {
+    await db.update(founderTradeLinks).set({ sendEntries: entries, sendAmends: amends }).where(where);
+    return getFounderLinks(actor);
+  }
   await db
     .insert(founderTradeLinks)
     .values({
       id: crypto.randomUUID(),
       senderUserId,
       recipientUserId,
+      sendEntries: entries,
+      sendAmends: amends,
       createdByUserId: actor.id,
       createdAt: new Date(),
     })
-    .onConflictDoNothing();
+    // The unique index makes this idempotent under a race: whoever lost simply
+    // set the same values a moment earlier.
+    .onConflictDoUpdate({
+      target: [founderTradeLinks.senderUserId, founderTradeLinks.recipientUserId],
+      set: { sendEntries: entries, sendAmends: amends },
+    });
   return getFounderLinks(actor);
 }
 
-// Who this sender's fills go to. The one read `autoInviteAfterFill` uses.
-async function recipientsFor(senderUserId: string): Promise<string[]> {
+// Who this sender's trades go to, for ONE channel. The single read behind both
+// `autoInviteAfterFill` and `autoAmendAfterModify`, so a link's two switches are
+// honoured in exactly one place.
+async function recipientsFor(senderUserId: string, channel: FounderLinkChannel): Promise<string[]> {
   const rows = await db
-    .select({ recipientUserId: founderTradeLinks.recipientUserId })
+    .select({
+      recipientUserId: founderTradeLinks.recipientUserId,
+      entries: founderTradeLinks.sendEntries,
+      amends: founderTradeLinks.sendAmends,
+    })
     .from(founderTradeLinks)
     .where(eq(founderTradeLinks.senderUserId, senderUserId));
-  return rows.map((r) => r.recipientUserId);
+  return rows
+    .filter((r) => (channel === 'entries' ? r.entries : r.amends))
+    .map((r) => r.recipientUserId);
 }
 
 // ---- the test drill ----
@@ -968,7 +1065,7 @@ export async function autoInviteAfterFill(
   try {
     if (status !== 'filled') return [];
     if (isDemoUser(inviter) || !isFounder(parseRoles(inviter))) return [];
-    const recipients = await recipientsFor(inviter.id);
+    const recipients = await recipientsFor(inviter.id, 'entries');
     if (recipients.length === 0) return [];
     // Eligibility is re-read here rather than trusted from the stored link, so a
     // recipient who has lost the role simply stops receiving trades.
@@ -996,6 +1093,514 @@ export async function autoInviteAfterFill(
     console.error('Founder auto-send failed:', err);
     return [];
   }
+}
+
+// ---- linked positions ----
+//
+// Two Founders' positions, paired: "your EUR/USD buy and mine are the same
+// trade". A join pairs them by itself; two Founders who each placed the trade
+// independently pair theirs by hand. The pairing is what turns a level-move into
+// a one-press decision instead of a guess, and what draws the LINKED marker on a
+// position tile.
+
+export interface PositionRef {
+  userId: string;
+  connectionId: string;
+  tradeId: string;
+}
+
+/** The pair, with the lexicographically smaller user id always on side A.
+ *  Pairing A with B and B with A is then one row rather than two that could
+ *  later disagree, and the unique index is what enforces it. */
+function canonicalPair(x: PositionRef, y: PositionRef): [PositionRef, PositionRef] {
+  return x.userId <= y.userId ? [x, y] : [y, x];
+}
+
+/** Instruments arrive spelled two ways — "EUR/USD" from the wall and "EUR_USD"
+ *  from a venue — so anything comparing them has to normalise first. The same
+ *  reason `normSym` exists for the hand-kept position marks. */
+function normInstrument(v: string): string {
+  return v.trim().toUpperCase().replace(/[/_-]/g, '');
+}
+
+// Record a pairing. Idempotent: pairing two positions that are already paired is
+// a no-op rather than a second row.
+export async function pairPositions(input: {
+  a: PositionRef;
+  b: PositionRef;
+  instrument: string;
+  side: TradeSide;
+  source: 'join' | 'manual';
+  inviteId?: string | null;
+  createdByUserId: string | null;
+}): Promise<void> {
+  const [a, b] = canonicalPair(input.a, input.b);
+  await db
+    .insert(founderLinkedPositions)
+    .values({
+      id: crypto.randomUUID(),
+      aUserId: a.userId,
+      aConnectionId: a.connectionId,
+      aTradeId: a.tradeId,
+      bUserId: b.userId,
+      bConnectionId: b.connectionId,
+      bTradeId: b.tradeId,
+      instrument: input.instrument,
+      side: input.side,
+      source: input.source,
+      inviteId: input.inviteId ?? null,
+      createdByUserId: input.createdByUserId,
+      createdAt: new Date(),
+    })
+    .onConflictDoNothing();
+}
+
+export interface PositionLinkView {
+  id: string;
+  /** The other Founder in the pair. */
+  person: FounderPerson;
+  /** The VIEWER'S own side of the pair — which of their positions is linked. */
+  connectionId: string;
+  tradeId: string;
+  /** The other end's position, so the panel can name it. */
+  theirTradeId: string;
+  instrument: string;
+  side: TradeSide;
+  source: string;
+  createdAt: number;
+}
+
+function pairView(row: FounderLinkedPositionRow, viewerId: string, people: Map<string, FounderPerson>) {
+  const mine = row.aUserId === viewerId;
+  const otherId = mine ? row.bUserId : row.aUserId;
+  return {
+    id: row.id,
+    person: people.get(otherId) ?? { userId: otherId, displayName: 'A Founder', username: '' },
+    connectionId: mine ? row.aConnectionId : row.bConnectionId,
+    tradeId: mine ? row.aTradeId : row.bTradeId,
+    theirTradeId: mine ? row.bTradeId : row.aTradeId,
+    instrument: row.instrument,
+    side: row.side,
+    source: row.source,
+    createdAt: row.createdAt.getTime(),
+  };
+}
+
+// Every pairing this Founder is part of, either side.
+export async function listPositionLinks(user: UserRow): Promise<PositionLinkView[]> {
+  assertFounder(user);
+  const rows = await db
+    .select()
+    .from(founderLinkedPositions)
+    .where(
+      or(eq(founderLinkedPositions.aUserId, user.id), eq(founderLinkedPositions.bUserId, user.id)),
+    )
+    .orderBy(desc(founderLinkedPositions.createdAt));
+  if (rows.length === 0) return [];
+  const ids = [...new Set(rows.flatMap((r) => [r.aUserId, r.bUserId]))];
+  const found = await db
+    .select({ id: users.id, displayName: users.displayName, username: users.username })
+    .from(users)
+    .where(inArray(users.id, ids));
+  const people = new Map(
+    found.map((u) => [u.id, { userId: u.id, displayName: u.displayName, username: u.username }]),
+  );
+  return rows.map((r) => pairView(r, user.id, people));
+}
+
+/**
+ * The pairings that apply to a set of the viewer's own positions, keyed by the
+ * venue trade id. What the Live Wall stamps its LINKED marker from.
+ *
+ * Takes the ids rather than reading everything so a wall poll costs one bounded
+ * query, and returns a Map because the wall stamps hundreds of rows.
+ */
+export async function linksForPositions(
+  viewerId: string,
+  tradeIds: string[],
+): Promise<Map<string, PositionLinkView[]>> {
+  const out = new Map<string, PositionLinkView[]>();
+  if (tradeIds.length === 0) return out;
+  const rows = await db
+    .select()
+    .from(founderLinkedPositions)
+    .where(
+      or(
+        and(eq(founderLinkedPositions.aUserId, viewerId), inArray(founderLinkedPositions.aTradeId, tradeIds)),
+        and(eq(founderLinkedPositions.bUserId, viewerId), inArray(founderLinkedPositions.bTradeId, tradeIds)),
+      ),
+    );
+  if (rows.length === 0) return out;
+  const ids = [...new Set(rows.flatMap((r) => [r.aUserId, r.bUserId]))];
+  const found = await db
+    .select({ id: users.id, displayName: users.displayName, username: users.username })
+    .from(users)
+    .where(inArray(users.id, ids));
+  const people = new Map(
+    found.map((u) => [u.id, { userId: u.id, displayName: u.displayName, username: u.username }]),
+  );
+  for (const r of rows) {
+    const view = pairView(r, viewerId, people);
+    const list = out.get(view.tradeId) ?? [];
+    list.push(view);
+    out.set(view.tradeId, list);
+  }
+  return out;
+}
+
+/**
+ * Pair two positions by hand.
+ *
+ * **THE CASE THIS EXISTS FOR:** the invitation came, it was not joined, and the
+ * trade was placed separately anyway — or both Founders reached the same trade
+ * independently. Without a pairing a later level-move falls back to matching on
+ * instrument, which is a guess; with one it is exact.
+ *
+ * Both positions are checked to be OPEN and to be the instrument and direction
+ * they are claimed to be, read from each account rather than taken from the
+ * request — a pairing built on what a client asserted is a pairing that could
+ * later move a stop on a position nobody meant.
+ */
+export async function linkPositions(
+  actor: UserRow,
+  input: { withUserId: string; myTradeId: string; theirTradeId: string },
+  auditActor: AuditActor,
+): Promise<PositionLinkView[]> {
+  assertFounder(actor);
+  if (input.withUserId === actor.id) {
+    throw new FounderTradeError('A position cannot be linked to itself');
+  }
+  const other = await assertEligible(input.withUserId);
+
+  const [mine, theirs] = await Promise.all([
+    listDeskPositions(actor.id, { purpose: 'desk_read', actor: auditActor }),
+    // Their book is read on the terminal's own initiative rather than because
+    // they asked for it, so it is recorded as background polling with a null
+    // actor — the convention every other read of somebody else's account here
+    // follows.
+    listDeskPositions(input.withUserId, { purpose: 'wall_read', actor: SYSTEM }),
+  ]);
+  const a = mine.find((p) => p.tradeId === input.myTradeId);
+  const b = theirs.find((p) => p.tradeId === input.theirTradeId);
+  if (!a) throw new FounderTradeError('That position is not open on your account', 404);
+  if (!b) throw new FounderTradeError(`That position is not open on ${other.displayName}'s account`, 404);
+  if (normInstrument(a.instrument) !== normInstrument(b.instrument)) {
+    throw new FounderTradeError('Those two positions are in different instruments');
+  }
+  // Direction is checked as well as instrument: a long and a short in the same
+  // pair are opposite trades, and copying one's stop onto the other would put it
+  // on the wrong side of the market every time.
+  if (a.side !== b.side) {
+    throw new FounderTradeError('Those two positions are in opposite directions');
+  }
+
+  await pairPositions({
+    a: { userId: actor.id, connectionId: a.connectionId, tradeId: a.tradeId },
+    b: { userId: input.withUserId, connectionId: b.connectionId, tradeId: b.tradeId },
+    instrument: a.instrument,
+    side: a.side,
+    source: 'manual',
+    createdByUserId: actor.id,
+  });
+  return listPositionLinks(actor);
+}
+
+/**
+ * Break a pairing. **Either party may**, like the links themselves: being able
+ * to stop your own position being reached must never depend on the other person.
+ */
+export async function unlinkPositions(actor: UserRow, id: string): Promise<PositionLinkView[]> {
+  assertFounder(actor);
+  const row = (
+    await db.select().from(founderLinkedPositions).where(eq(founderLinkedPositions.id, id)).limit(1)
+  )[0];
+  // 404 rather than 403, so a guessed id cannot be probed for.
+  if (!row || (row.aUserId !== actor.id && row.bUserId !== actor.id)) {
+    throw new FounderTradeError('That link is not on your account', 404);
+  }
+  await db.delete(founderLinkedPositions).where(eq(founderLinkedPositions.id, id));
+  return listPositionLinks(actor);
+}
+
+/** Both sides' open positions, for the pairing picker. */
+export async function pairablePositions(
+  actor: UserRow,
+  withUserId: string,
+  auditActor: AuditActor,
+): Promise<{ mine: DeskPosition[]; theirs: DeskPosition[] }> {
+  assertFounder(actor);
+  await assertEligible(withUserId);
+  if (withUserId === actor.id) return { mine: [], theirs: [] };
+  const [mine, theirs] = await Promise.all([
+    listDeskPositions(actor.id, { purpose: 'desk_read', actor: auditActor }),
+    listDeskPositions(withUserId, { purpose: 'wall_read', actor: SYSTEM }),
+  ]);
+  return { mine, theirs };
+}
+
+// ---- level-move invitations ----
+
+/**
+ * Which of the recipient's own positions a level-move applies to.
+ *
+ * **TWO WAYS, IN ORDER, AND NEITHER OF THEM GUESSES.**
+ *
+ *   1. An explicit PAIRING — the recipient joined this trade, or somebody paired
+ *      the two positions by hand. Exact.
+ *   2. Failing that, the recipient's open positions in the same instrument and
+ *      direction. **Exactly one is a match; two or more is NONE.** An ambiguous
+ *      book is the case where picking would be picking at random, and moving a
+ *      stop on the wrong position is the one failure this must not have. The
+ *      invitation is still raised — the recipient is told what the sender
+ *      changed — it simply offers no button.
+ *
+ * `targetMatch` travels to the recipient so they know which of the two answered,
+ * because "we are provably in the same trade" and "you have one position that
+ * looks like it" are different degrees of confidence and they should see which.
+ */
+async function resolveAmendTarget(
+  recipientUserId: string,
+  source: PositionRef,
+  instrument: string,
+  side: TradeSide,
+): Promise<{ connectionId: string; tradeId: string; match: FounderTargetMatch } | null> {
+  const paired = await db
+    .select()
+    .from(founderLinkedPositions)
+    .where(
+      or(
+        and(
+          eq(founderLinkedPositions.aUserId, source.userId),
+          eq(founderLinkedPositions.aTradeId, source.tradeId),
+          eq(founderLinkedPositions.bUserId, recipientUserId),
+        ),
+        and(
+          eq(founderLinkedPositions.bUserId, source.userId),
+          eq(founderLinkedPositions.bTradeId, source.tradeId),
+          eq(founderLinkedPositions.aUserId, recipientUserId),
+        ),
+      ),
+    )
+    .limit(1);
+  const row = paired[0];
+  if (row) {
+    const mine = row.aUserId === recipientUserId;
+    return {
+      connectionId: mine ? row.aConnectionId : row.bConnectionId,
+      tradeId: mine ? row.aTradeId : row.bTradeId,
+      match: 'chain',
+    };
+  }
+
+  const open = await listDeskPositions(recipientUserId, { purpose: 'wall_read', actor: SYSTEM }).catch(
+    (): DeskPosition[] => [],
+  );
+  const found = pickInstrumentMatch(open, instrument, side);
+  return found && { connectionId: found.connectionId, tradeId: found.tradeId, match: 'instrument' };
+}
+
+/**
+ * The one position in this book that could BE the trade, or nothing.
+ *
+ * **EXACTLY ONE IS A MATCH; TWO OR MORE IS NONE.** That is the whole rule, and
+ * it is pulled out as a pure function precisely so it can be checked without a
+ * broker — the ambiguity case is the one that matters most here and it is
+ * unreachable from any test that has to read a real account.
+ *
+ * Instruments arrive spelled two ways ("EUR/USD" from the wall, "EUR_USD" from a
+ * venue), so both sides are normalised. Direction is matched as well: a long and
+ * a short in the same pair are opposite trades, and copying one's stop onto the
+ * other puts it on the wrong side of the market every time.
+ */
+export function pickInstrumentMatch<T extends { instrument: string; side: TradeSide }>(
+  open: T[],
+  instrument: string,
+  side: TradeSide,
+): T | null {
+  const wanted = normInstrument(instrument);
+  const candidates = open.filter((p) => normInstrument(p.instrument) === wanted && p.side === side);
+  return candidates.length === 1 ? candidates[0]! : null;
+}
+
+/**
+ * Raise a level-move invitation, because the sender has a standing link asking
+ * for their stop and target changes to reach somebody.
+ *
+ * **A MOVE OR AN ADD, NEVER A REMOVAL** (owner request, 2026-08 — "whenever that
+ * individual moves or adds a stop loss or take profit"). Taking a level OFF is
+ * deliberately not sent: one press that strips the protection from somebody
+ * else's live position is a different risk from one press that tightens it, and
+ * it is not what was asked for. A removal still happens on the sender's own
+ * account exactly as before; it simply raises nothing.
+ *
+ * Everything about it fails QUIETLY, exactly as `autoInviteAfterFill` does: it
+ * is a side effect of somebody else's amend going through, so a founder-trade
+ * problem must never surface as an error on the amend or delay it.
+ */
+export async function autoAmendAfterModify(
+  sender: UserRow,
+  result: ModifyResult,
+  connectionId: string,
+  tradeId: string,
+): Promise<FounderInviteView[]> {
+  try {
+    if (isDemoUser(sender) || !isFounder(parseRoles(sender))) return [];
+    // The venue did not report the position, so there is no direction to send
+    // and no previous level to say what moved. Nothing is invented from it.
+    if (!result.side) return [];
+    const movedStop = result.changedStopLoss && result.stopLoss != null;
+    const movedTarget = result.changedTakeProfit && result.takeProfit != null;
+    if (!movedStop && !movedTarget) return [];
+    // A level re-sent at the value it already had is not a move.
+    const realStop = movedStop && result.stopLoss !== result.previousStopLoss;
+    const realTarget = movedTarget && result.takeProfit !== result.previousTakeProfit;
+    if (!realStop && !realTarget) return [];
+
+    const recipients = await recipientsFor(sender.id, 'amends');
+    if (recipients.length === 0) return [];
+    const eligible = new Set((await eligibleFounders()).map((f) => f.userId));
+
+    const raised: FounderInviteView[] = [];
+    for (const recipientUserId of recipients) {
+      if (!eligible.has(recipientUserId)) continue;
+      try {
+        const target = await resolveAmendTarget(
+          recipientUserId,
+          { userId: sender.id, connectionId, tradeId },
+          result.instrument,
+          result.side,
+        );
+        const invite = await createAmendInvite(sender, {
+          recipientUserId,
+          sourceOrderId: result.orderRecordId,
+          connectionId,
+          tradeId,
+          result,
+          side: result.side,
+          stopLoss: realStop ? result.stopLoss : null,
+          takeProfit: realTarget ? result.takeProfit : null,
+          target,
+        });
+        if (invite) raised.push(invite);
+      } catch (err) {
+        // One recipient failing must not stop the others being told.
+        console.error('Founder level-move to one recipient failed:', err);
+      }
+    }
+    return raised;
+  } catch (err) {
+    console.error('Founder level-move send failed:', err);
+    return [];
+  }
+}
+
+async function createAmendInvite(
+  sender: UserRow,
+  input: {
+    recipientUserId: string;
+    sourceOrderId: string;
+    connectionId: string;
+    tradeId: string;
+    result: ModifyResult;
+    side: TradeSide;
+    stopLoss: number | null;
+    takeProfit: number | null;
+    target: { connectionId: string; tradeId: string; match: FounderTargetMatch } | null;
+  },
+): Promise<FounderInviteView | null> {
+  const { result } = input;
+
+  // Suppress a repeat of a move that is already sitting unanswered on the
+  // recipient's screen. An amend is a deliberate press and each one writes its
+  // own journal row, so `sourceRef` cannot dedupe them the way it does for an
+  // entry — two saves of the same levels seconds apart would otherwise queue two
+  // identical modals.
+  const open = await db
+    .select()
+    .from(founderTradeInvites)
+    .where(
+      and(
+        eq(founderTradeInvites.recipientUserId, input.recipientUserId),
+        eq(founderTradeInvites.inviterUserId, sender.id),
+        eq(founderTradeInvites.kind, 'amend'),
+        eq(founderTradeInvites.status, 'primary_pending'),
+      ),
+    );
+  const duplicate = open.find(
+    (r) =>
+      r.sourceTradeId === input.tradeId &&
+      r.stopLoss === input.stopLoss &&
+      r.takeProfit === input.takeProfit,
+  );
+  if (duplicate) {
+    logEvent(
+      duplicate.id,
+      'invite.duplicate_suppressed',
+      sender.id,
+      'The same level change was sent again while this one was still unanswered',
+    );
+    return null;
+  }
+
+  const now = new Date();
+  const id = crypto.randomUUID();
+  await db.insert(founderTradeInvites).values({
+    id,
+    inviterUserId: sender.id,
+    recipientUserId: input.recipientUserId,
+    sourceRef: input.sourceOrderId,
+    sourceConnectionId: input.connectionId,
+    sourceTradeId: input.tradeId,
+    kind: 'amend',
+    instrument: result.instrument,
+    side: input.side,
+    entryPrice: result.entryPrice,
+    // The levels AS THEY NOW STAND on the sender's position, and what they were
+    // before — the recipient reads the move rather than a bare new number.
+    stopLoss: input.stopLoss,
+    takeProfit: input.takeProfit,
+    prevStopLoss: result.previousStopLoss,
+    prevTakeProfit: result.previousTakeProfit,
+    inviterUnits: result.units,
+    targetConnectionId: input.target?.connectionId ?? null,
+    targetTradeId: input.target?.tradeId ?? null,
+    targetMatch: input.target?.match ?? null,
+    isTest: false,
+    status: 'primary_pending',
+    notifyCount: 0,
+    createdAt: now,
+    updatedAt: now,
+  });
+
+  const moved = [
+    input.stopLoss == null ? null : `stop ${result.previousStopLoss ?? '—'} → ${input.stopLoss}`,
+    input.takeProfit == null ? null : `target ${result.previousTakeProfit ?? '—'} → ${input.takeProfit}`,
+  ]
+    .filter(Boolean)
+    .join(' · ');
+  logEvent(id, 'amend.created', sender.id, `${result.instrument} ${input.side} · ${moved}`);
+  logEvent(id, 'invite.auto_sent', null, 'Sent by a standing Founder trade link');
+  if (input.target) {
+    logEvent(
+      id,
+      'amend.target_resolved',
+      null,
+      input.target.match === 'chain'
+        ? 'Applies to the linked position on the recipient\'s account'
+        : 'Matched the recipient\'s only open position in this instrument and direction',
+    );
+  } else {
+    logEvent(
+      id,
+      'amend.target_unresolved',
+      null,
+      'No linked position and no single instrument match, so no change can be applied in one press',
+    );
+  }
+  const full = (
+    await db.select().from(founderTradeInvites).where(eq(founderTradeInvites.id, id)).limit(1)
+  )[0]!;
+  return shape(full, await peopleFor([full]), sender.id, await unitsOf(input.recipientUserId));
 }
 
 // The fixed size a recipient has stated, for display on an invitation. A
@@ -1251,7 +1856,11 @@ export function isUnresolved(status: FounderTradeStatus): boolean {
   return status !== 'complete';
 }
 
-const UNRESOLVED: FounderTradeStatus[] = ['primary_pending', 'funded_pending', 'proof_pending'];
+// The one list of statuses that still owe the recipient something. Since the
+// funded question left this workflow (owner decision, 2026-08) there is exactly
+// one of them, and it is kept as a list rather than folded into an equality
+// because the modal queue, the reminder watch and the pending read all read it.
+const UNRESOLVED: FounderTradeStatus[] = ['primary_pending'];
 
 // Everything still waiting on this recipient, OLDEST FIRST.
 //
@@ -1273,7 +1882,14 @@ export async function pendingForRecipient(user: UserRow): Promise<FounderInviteV
   if (rows.length === 0) return [];
   const people = await peopleFor(rows);
   const units = await unitsOf(user.id);
-  return rows.map((r) => shape(r, people, user.id, units));
+  // Name the account a level move would reach. Read from the connection rows
+  // (no credential, no broker call) and only when something on the queue
+  // actually needs it — the modal polls this every few seconds on every screen
+  // in the terminal, and the quiet case is the overwhelmingly common one.
+  const accounts = rows.some((r) => r.targetConnectionId)
+    ? new Map((await founderAccounts(user.id)).map((a) => [a.connectionId, a.label]))
+    : undefined;
+  return rows.map((r) => shape(r, people, user.id, units, accounts));
 }
 
 // The invites this Founder sent or received, newest first — the history behind
@@ -1320,14 +1936,6 @@ export async function getInvite(
   };
 }
 
-// The funded screenshot. Same two-party rule as the timeline: the recipient owns
-// it, and the inviter is the one it exists to prove the trade to.
-export async function getProofImage(user: UserRow, id: string): Promise<string> {
-  const row = await loadForParty(user, id);
-  if (!row.proofImage) throw new FounderTradeError('No screenshot has been uploaded for this trade', 404);
-  return row.proofImage;
-}
-
 async function loadForParty(user: UserRow, id: string): Promise<FounderTradeInviteRow> {
   assertFounder(user);
   const row = (
@@ -1363,11 +1971,21 @@ async function reload(user: UserRow, id: string): Promise<FounderInviteView> {
 
 // ---- the primary decision ----
 
-// Take the workflow past its primary decision. Advancing to the funded question
-// is what BOTH answers do: declining the primary trade is not declining the
-// funded one, and treating it as though it were would silently drop half of what
-// the recipient was asked.
-async function advanceToFunded(
+// Answering IS finishing (owner decision, 2026-08).
+//
+// This used to advance to a funded question — "are you also placing this at the
+// prop firm?" — and then to a screenshot. Both are gone from this workflow: a
+// trade invitation is now one question with two answers, and either one ends it.
+// **Nothing about the funded book, the Funded Trades screen or any funded route
+// changed**; what was removed is this workflow's demand that the recipient
+// answer for it before the invitation would close.
+//
+// The funded columns are left on the row as the archive of what was decided
+// while the step existed, and migration 0139 completed every workflow that was
+// still standing on one of the two removed steps — an unresolved row keeps a
+// blocking modal up and a phone repeating, so leaving them would have stranded
+// somebody in a workflow with no exit.
+async function completeInvite(
   id: string,
   decision: FounderPrimaryDecision,
   extra: Partial<FounderTradeInviteRow> = {},
@@ -1376,13 +1994,12 @@ async function advanceToFunded(
   await db
     .update(founderTradeInvites)
     .set({
-      status: 'funded_pending',
+      status: 'complete',
       primaryDecision: decision,
       primaryDecidedAt: now,
+      completedAt: now,
       claimToken: null,
       claimedAt: null,
-      // A new reminder cycle starts for the funded question rather than
-      // inheriting the primary one's pacing.
       lastNotifiedAt: null,
       notifyCount: 0,
       updatedAt: now,
@@ -1397,16 +2014,166 @@ export async function declinePrimary(user: UserRow, id: string): Promise<Founder
   // state rather than an error, so both tabs converge on the same screen.
   if (row.status !== 'primary_pending') return reload(user, id);
   if (isClaimLive(row)) {
-    throw new FounderTradeError('A JOIN is being sent for this trade right now', 409, 'IN_FLIGHT');
+    throw new FounderTradeError(
+      row.kind === 'amend'
+        ? 'A change is being sent for this position right now'
+        : 'A JOIN is being sent for this trade right now',
+      409,
+      'IN_FLIGHT',
+    );
   }
-  await advanceToFunded(id, 'declined', { primaryError: null });
-  logEvent(id, 'primary.declined', user.id, 'The recipient did not join the primary trade');
-  void notifyInviterOfResponse(row, 'did not join your trade');
+  const amend = row.kind === 'amend';
+  await completeInvite(id, 'declined', { primaryError: null });
+  logEvent(
+    id,
+    amend ? 'amend.dismissed' : 'primary.declined',
+    user.id,
+    amend ? 'The recipient left their own levels as they were' : 'The recipient did not join the trade',
+  );
+  logEvent(id, 'workflow.completed', user.id, amend ? 'Completed without changing anything' : 'Completed without joining');
+  void notifyInviterOfResponse(row, amend ? 'left their levels as they were' : 'did not join your trade');
   return reload(user, id);
 }
 
-// Join the trade. The recipient pressing JOIN is the authorization for this one
-// order and nothing else.
+// Apply the sender's level change to the recipient's OWN position.
+//
+// **THE POSITION IS THE ONE STORED ON THE ROW, NOT ONE THE CLIENT NAMES.** It
+// was resolved when the invitation was raised — from an explicit pairing, or
+// from a single unambiguous instrument match — and nothing in the request can
+// redirect it. That is the same rule the size follows on an entry: the press
+// authorizes one action, and which action it is was settled by the server.
+//
+// **ONLY THE LEVELS THAT MOVED TRAVEL.** A stop that the sender did not touch is
+// left `undefined` rather than sent, so applying a target change never cancels
+// and re-places the recipient's stop at the broker — the same rule the position
+// editor already follows.
+//
+// **IT CALLS THE SERVICE, NOT THE ROUTE**, which is what stops a chain from
+// ping-ponging: the recipient's own amend does not fan back out over their
+// links. `autoAmendAfterModify` is wired to the HTTP route, and this is not it.
+async function applyAmendImpl(
+  user: UserRow,
+  row: FounderTradeInviteRow,
+  actor: AuditActor,
+): Promise<FounderInviteView> {
+  const id = row.id;
+  // Validated BEFORE the claim, so a refusal costs nothing and can be retried at
+  // once — and is audited either way, because a press that produced no change is
+  // exactly what somebody reconstructing "why was this stop not moved?" needs.
+  try {
+    if (!row.targetTradeId || !row.targetConnectionId) {
+      throw new FounderTradeError(
+        'There is no position of yours to apply this to. Link your position to theirs from the trade card, then ask them to send it again.',
+        409,
+        'NO_TARGET',
+      );
+    }
+    if (!(await canSendOrders(user))) {
+      throw new FounderTradeError(
+        'Turn Advanced Trading on in My Terminal ▸ Premium Features before changing a live position',
+        403,
+        'NO_DESK',
+      );
+    }
+    await assertOwnConnection(user.id, row.targetConnectionId);
+  } catch (e) {
+    logEvent(id, 'amend.apply_refused', user.id, e instanceof Error ? e.message : 'Refused before sending');
+    throw e;
+  }
+
+  const token = crypto.randomUUID();
+  const now = new Date();
+  const stale = new Date(Date.now() - CLAIM_WINDOW_MS);
+  const claimed = await db
+    .update(founderTradeInvites)
+    .set({ claimToken: token, claimedAt: now, updatedAt: now })
+    .where(
+      and(
+        eq(founderTradeInvites.id, id),
+        eq(founderTradeInvites.status, 'primary_pending'),
+        isNull(founderTradeInvites.primaryDecision),
+        or(isNull(founderTradeInvites.claimToken), sql`${founderTradeInvites.claimedAt} < ${stale.getTime()}`),
+      ),
+    );
+  if (claimed.rowsAffected === 0) {
+    const fresh = await loadForRecipient(user, id);
+    if (fresh.status !== 'primary_pending') return reload(user, id);
+    logEvent(id, 'amend.duplicate_blocked', user.id, 'A second apply arrived while one was already being sent');
+    throw new FounderTradeError(
+      'This change is already being sent — give it a moment rather than sending it twice',
+      409,
+      'IN_FLIGHT',
+    );
+  }
+  // A claim taken over from a stale one may be the second attempt rather than
+  // the first, so it is released unsent and refused once — the same rule a JOIN
+  // follows, for the same reason.
+  if (row.claimToken && row.claimedAt) {
+    const warning =
+      'Your last attempt never finished, so it may or may not have reached your broker. Check the position, then press again.';
+    await db
+      .update(founderTradeInvites)
+      .set({ claimToken: null, claimedAt: null, primaryError: warning, updatedAt: new Date() })
+      .where(eq(founderTradeInvites.id, id));
+    logEvent(id, 'amend.claim_recovered', null, 'A previous apply did not report back; its claim was released unsent');
+    throw new FounderTradeError(warning, 409, 'CLAIM_RECOVERED');
+  }
+
+  const levels = {
+    ...(row.stopLoss == null ? {} : { stopLoss: row.stopLoss }),
+    ...(row.takeProfit == null ? {} : { takeProfit: row.takeProfit }),
+  };
+  logEvent(
+    id,
+    'amend.apply_submitted',
+    user.id,
+    `${row.instrument} ${row.side} · ${row.stopLoss == null ? '' : `stop ${row.stopLoss} `}${row.takeProfit == null ? '' : `target ${row.takeProfit}`}`.trim(),
+  );
+
+  try {
+    await modifyDeskPosition(
+      user,
+      {
+        connectionId: row.targetConnectionId!,
+        tradeId: row.targetTradeId!,
+        instrument: row.instrument,
+        ...levels,
+      },
+      actor,
+    );
+    await completeInvite(id, 'joined', { primaryError: null });
+    logEvent(id, 'amend.applied', user.id, 'The change was applied to their own position');
+    logEvent(id, 'workflow.completed', user.id, 'Completed on applying the change');
+    void notifyInviterOfResponse(row, 'moved their levels to match');
+    return reload(user, id);
+  } catch (e) {
+    const message = e instanceof Error ? e.message : 'The change could not be applied';
+    // The workflow stays exactly where it was, with the reason on the row so it
+    // is on screen when the recipient comes back to it. The refusal that lands
+    // here most often is the terminal's own: a level that would trigger the
+    // moment it was set, which is worth reading rather than retrying.
+    await db
+      .update(founderTradeInvites)
+      .set({ claimToken: null, claimedAt: null, primaryError: message.slice(0, 300), updatedAt: new Date() })
+      .where(eq(founderTradeInvites.id, id));
+    logEvent(id, 'amend.apply_failed', user.id, message);
+    throw new FounderTradeError(
+      message,
+      e instanceof DeskError ? e.status : 502,
+      (e instanceof DeskError ? e.code : undefined) ?? undefined,
+    );
+  }
+}
+
+// Join the trade, or apply the level change. The recipient pressing the button
+// is the authorization for this one action and nothing else.
+//
+// **ONE ENTRY POINT FOR BOTH KINDS, DELIBERATELY.** An 'entry' sends an order and
+// an 'amend' moves a level, which are different acts — but everything around
+// them is identical: the same claim that stops two tabs both reaching the
+// broker, the same refusal audit, the same completion, the same reminder
+// pacing, the same modal and the same route. A second decision endpoint would be
+// a second place for all of that to drift.
 export async function joinPrimary(
   user: UserRow,
   id: string,
@@ -1414,6 +2181,7 @@ export async function joinPrimary(
 ): Promise<FounderInviteView> {
   const row = await loadForRecipient(user, id);
   if (row.status !== 'primary_pending') return reload(user, id);
+  if (row.kind === 'amend') return applyAmendImpl(user, row, actor);
 
   // Everything is validated BEFORE the claim is taken, so a refusal costs
   // nothing, leaves the workflow exactly where it was, and can be retried at
@@ -1562,7 +2330,7 @@ export async function joinPrimary(
       },
       actor,
     );
-    await advanceToFunded(id, 'joined', {
+    await completeInvite(id, 'joined', {
       primaryOrderRef: res.orderRecordId,
       primaryFillPrice: res.fillPrice,
       primaryUnits: res.units ?? size.units,
@@ -1576,6 +2344,30 @@ export async function joinPrimary(
       user.id,
       `${res.status} · ${res.units ?? size.units} units${res.fillPrice == null ? '' : ` at ${res.fillPrice}`}`,
     );
+    logEvent(id, 'workflow.completed', user.id, 'Completed on joining');
+    // PAIR THE TWO POSITIONS. This is what makes a later level-move a one-press
+    // decision rather than a guess: the sender moves their stop and the terminal
+    // knows exactly which of the recipient's positions is the same trade.
+    //
+    // Fire and forget, like the timeline: a pairing that could not be written
+    // must never turn a placed order into a reported failure. A join with
+    // nothing to pair (a resting order, or a venue that reports no position id)
+    // simply records nothing, and the two can still be paired by hand.
+    if (res.tradeId && row.sourceTradeId && row.sourceConnectionId) {
+      void pairPositions({
+        a: {
+          userId: row.inviterUserId,
+          connectionId: row.sourceConnectionId,
+          tradeId: row.sourceTradeId,
+        },
+        b: { userId: user.id, connectionId: prefs.defaultConnectionId!, tradeId: res.tradeId },
+        instrument: row.instrument,
+        side: row.side,
+        source: 'join',
+        inviteId: id,
+        createdByUserId: user.id,
+      }).catch(() => {});
+    }
     void notifyInviterOfResponse(row, 'joined your trade');
     return reload(user, id);
   } catch (e) {
@@ -1596,109 +2388,6 @@ export async function joinPrimary(
   }
 }
 
-// ---- the funded decision ----
-
-export async function setFundedDecision(
-  user: UserRow,
-  id: string,
-  decision: FounderFundedDecision,
-): Promise<FounderInviteView> {
-  const row = await loadForRecipient(user, id);
-  if (row.status === 'complete') return reload(user, id);
-  if (row.status === 'primary_pending') {
-    throw new FounderTradeError('Answer the trade invitation first', 409, 'PRIMARY_PENDING');
-  }
-  // Already answered (a second tab, a retried request) — converge rather than
-  // letting the second press overwrite the first with a different answer.
-  if (row.fundedDecision) return reload(user, id);
-
-  const now = new Date();
-  const next: FounderTradeStatus = decision === 'yes' ? 'proof_pending' : 'complete';
-  const updated = await db
-    .update(founderTradeInvites)
-    .set({
-      fundedDecision: decision,
-      fundedDecidedAt: now,
-      status: next,
-      // 'no' ends the workflow here. 'yes' does NOT: the screenshot is what
-      // completes that branch, so the reminders keep going and a fresh cycle
-      // starts for them.
-      completedAt: next === 'complete' ? now : null,
-      lastNotifiedAt: null,
-      notifyCount: 0,
-      updatedAt: now,
-    })
-    .where(
-      and(
-        eq(founderTradeInvites.id, id),
-        eq(founderTradeInvites.status, 'funded_pending'),
-        isNull(founderTradeInvites.fundedDecision),
-      ),
-    );
-  if (updated.rowsAffected === 0) return reload(user, id);
-
-  logEvent(
-    id,
-    decision === 'yes' ? 'funded.accepted' : 'funded.declined',
-    user.id,
-    decision === 'yes'
-      ? 'The recipient is placing this on their funded account — a screenshot is now required'
-      : 'The recipient is not placing this on their funded account',
-  );
-  if (decision === 'yes') logEvent(id, 'proof.requested', null, 'Screenshot verification required');
-  else logEvent(id, 'workflow.completed', user.id, 'Completed without a funded trade');
-  void notifyInviterOfResponse(
-    row,
-    decision === 'yes' ? 'is placing it on their funded account' : 'is not placing it on their funded account',
-  );
-  return reload(user, id);
-}
-
-// ---- the funded screenshot ----
-
-// What a stored screenshot may weigh. The client scales before it uploads, so
-// this is the runaway-input guard rather than the working limit.
-const MAX_PROOF_CHARS = 4_000_000;
-const PROOF_PATTERN = /^data:image\/(png|jpeg|webp|gif);base64,[A-Za-z0-9+/=\s]+$/;
-
-// The screenshot is what completes the funded branch — not the YES that
-// preceded it. That is the whole point of this step: pressing YES is a statement
-// of intent, and reminders go on until there is proof the trade was placed.
-export async function uploadProof(user: UserRow, id: string, dataUrl: string): Promise<FounderInviteView> {
-  const row = await loadForRecipient(user, id);
-  if (row.status === 'complete') return reload(user, id);
-  if (row.status !== 'proof_pending') {
-    throw new FounderTradeError('This trade is not waiting on a screenshot', 409);
-  }
-  const image = dataUrl.trim();
-  if (!PROOF_PATTERN.test(image)) {
-    throw new FounderTradeError('That does not look like an image — upload a screenshot of the funded trade');
-  }
-  if (image.length > MAX_PROOF_CHARS) {
-    throw new FounderTradeError('That screenshot is too large — try a smaller image');
-  }
-
-  const now = new Date();
-  const updated = await db
-    .update(founderTradeInvites)
-    .set({
-      proofImage: image,
-      proofUploadedAt: now,
-      status: 'complete',
-      completedAt: now,
-      updatedAt: now,
-    })
-    .where(and(eq(founderTradeInvites.id, id), eq(founderTradeInvites.status, 'proof_pending')));
-  // Lost the race to another tab's upload. The first screenshot stands — a
-  // completed verification is not overwritten by a second one arriving late.
-  if (updated.rowsAffected === 0) return reload(user, id);
-
-  logEvent(id, 'proof.uploaded', user.id, `Screenshot saved (${Math.round(image.length / 1024)} KB)`);
-  logEvent(id, 'workflow.completed', user.id, 'Funded trade verified');
-  void notifyInviterOfResponse(row, 'sent their funded trade screenshot');
-  return reload(user, id);
-}
-
 // ---- the reminder watch's half ----
 
 export interface DueReminder {
@@ -1707,6 +2396,13 @@ export interface DueReminder {
   inviterName: string;
   instrument: string;
   side: TradeSide;
+  /** What it is asking for. A trade invitation and a level move want different
+   *  words on a lock screen. */
+  kind: FounderTradeKind;
+  /** An 'amend': the levels being asked for, so the notification can say what
+   *  moved without the recipient opening anything. */
+  stopLoss: number | null;
+  takeProfit: number | null;
   status: FounderTradeStatus;
   level: NotifLevel;
   notifyCount: number;
@@ -1753,6 +2449,9 @@ export async function dueReminders(now = new Date()): Promise<DueReminder[]> {
       inviterName: people.get(row.inviterUserId)?.displayName ?? 'A Founder',
       instrument: row.instrument,
       side: row.side,
+      kind: row.kind,
+      stopLoss: row.stopLoss,
+      takeProfit: row.takeProfit,
       status: row.status,
       level: p.reminderLevel,
       notifyCount: row.notifyCount,

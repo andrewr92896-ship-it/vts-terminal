@@ -925,14 +925,14 @@ export function Portal() {
           {/* The Founder trade coordination modal — the terminal's one blocking
               alert, and the reason it is mounted HERE rather than on a screen:
               an invitation has to be answerable from wherever the recipient
-              happens to be, and the funded question outlives the walk to the
-              Funded section. It renders nothing for anybody who is not
+              happens to be, and a level move arrives while they are looking at
+              something else entirely. It renders nothing for anybody who is not
               founder-level, and nothing at all when nothing is pending.
 
-              `goToSection` is what takes the recipient to Funded once the
-              primary decision is made — the modal does not depend on that
-              working, so navigating away or a failed route never loses it. */}
-          <FounderTradeModal onGoFunded={() => goToSection('prop')} />
+              It takes no navigation callback any more: the funded question that
+              used to follow a decision left this workflow (owner decision,
+              2026-08), so answering finishes it where the reader is standing. */}
+          <FounderTradeModal />
           {/* My Terminal's own section list, edited in place. Mounted here rather
               than on a screen because the control that opens it is a sidebar row —
               the workspace is customized from the list being customized. */}

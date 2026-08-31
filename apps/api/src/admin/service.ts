@@ -27,7 +27,9 @@ import {
   sessionAlertPrefs,
   rolloverPlans,
   founderTradeEvents,
+  founderLinkedPositions,
   founderTradeInvites,
+  founderTradeLinks,
   founderTradePrefs,
   alertPrefs,
   pushoverReceipts,
@@ -529,10 +531,10 @@ export async function deleteUser(actingUserId: string, targetId: string): Promis
     await tx.delete(sessionAlertPrefs).where(eq(sessionAlertPrefs.userId, targetId));
     await tx.delete(rolloverPlans).where(eq(rolloverPlans.userId, targetId));
     // Founder trade coordination. The invitations this account raised or was
-    // sent go with it — each one carries a trade snapshot and, on the funded
-    // branch, a screenshot of their own account, so it is personal on both
-    // sides. The audit timeline is keyed to the invitation and follows it out
-    // through the cascade. Their own default size goes too.
+    // sent go with it — each one carries a trade snapshot, and the older ones a
+    // screenshot of their own funded account from when this workflow still asked
+    // for one — so it is personal on both sides. The audit timeline is keyed to
+    // the invitation and follows it out. Their own default size goes too.
     //
     // The timeline is removed EXPLICITLY rather than left to its declared
     // cascade: foreign keys never fire on this database (PRAGMA foreign_keys is
@@ -553,6 +555,28 @@ export async function deleteUser(actingUserId: string, targetId: string): Promis
       await tx.delete(founderTradeInvites).where(inArray(founderTradeInvites.id, founderInviteIds));
     }
     await tx.delete(founderTradePrefs).where(eq(founderTradePrefs.userId, targetId));
+    // The standing links naming this account in either direction, and every
+    // pairing between one of their positions and somebody else's. Both declare
+    // an ON DELETE cascade and neither would fire — foreign keys are off on this
+    // database, exactly as the note above says — so both are removed by hand.
+    // Leaving a link behind is worse than untidy: it would go on raising
+    // invitations from, or to, an account that no longer exists.
+    await tx
+      .delete(founderTradeLinks)
+      .where(
+        or(
+          eq(founderTradeLinks.senderUserId, targetId),
+          eq(founderTradeLinks.recipientUserId, targetId),
+        ),
+      );
+    await tx
+      .delete(founderLinkedPositions)
+      .where(
+        or(
+          eq(founderLinkedPositions.aUserId, targetId),
+          eq(founderLinkedPositions.bUserId, targetId),
+        ),
+      );
     // Trading Notes — their predictions, observations and reflections. Personal
     // writing, so it goes with the person: unlike credential_audit and the
     // employee audit log, nothing here records access to money or to a hardened

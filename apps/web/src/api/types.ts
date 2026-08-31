@@ -614,6 +614,23 @@ export interface LiveTrade {
   // whose trade is whose. Absent/null = no wash, the appearance every tile had
   // before the group set any colours.
   tileColor?: string | null;
+  // Which other Founders' positions this one is paired with — the LINKED marker
+  // on a trade card. Stamped only for a founder-level viewer and only on their
+  // OWN positions: a pairing is between two people's accounts, and there is
+  // nothing to draw on a position the viewer cannot act on anyway.
+  //
+  // Absent/null means "not linked, or not the viewer's to know" — deliberately
+  // one answer, because the marker's whole job is to say whether a level moved
+  // here would reach anybody.
+  linkedWith?: PositionLinkMark[] | null;
+}
+
+// One end of a pairing, as a position tile needs it.
+export interface PositionLinkMark {
+  /** The pairing's own id, so the tile can offer to break it. */
+  id: string;
+  displayName: string;
+  source: string;
 }
 
 export interface BrokerLiveResult {
@@ -3150,9 +3167,22 @@ export interface StudyLibraryEntry {
 // funded leg with a screenshot. The SERVER owns every bit of this state — the
 // blocking modal renders `status` and nothing it remembers itself, which is what
 // makes an unresolved invitation survive a refresh, a relogin and a redeploy.
-export type FounderTradeStatus = 'primary_pending' | 'funded_pending' | 'proof_pending' | 'complete';
+// TWO STATES, and that is the whole workflow (owner decision, 2026-08). The
+// funded question and its screenshot left this chain: either answer to the one
+// question now finishes it. Nothing about the funded book or the Funded Trades
+// screen changed with it.
+export type FounderTradeStatus = 'primary_pending' | 'complete';
 export type FounderPrimaryDecision = 'joined' | 'declined';
-export type FounderFundedDecision = 'yes' | 'no';
+
+// What an invitation is ABOUT: a trade the sender opened, or a stop/target they
+// moved on one they are already in.
+export type FounderTradeKind = 'entry' | 'amend';
+
+// How the recipient's own position was found for a level move. 'chain' is an
+// explicit pairing (they joined it, or the two were paired by hand); 'instrument'
+// is their single open position in the same instrument and direction. The
+// difference is shown, because they are different degrees of confidence.
+export type FounderTargetMatch = 'chain' | 'instrument';
 
 export interface FounderPerson {
   userId: string;
@@ -3163,6 +3193,8 @@ export interface FounderPerson {
 export interface FounderInvite {
   id: string;
   status: FounderTradeStatus;
+  /** A trade to open, or a level to move on one already open. */
+  kind: FounderTradeKind;
   /** A drill. Real in every respect, and every surface here says so. */
   isTest: boolean;
   inviter: FounderPerson;
@@ -3181,16 +3213,27 @@ export interface FounderInvite {
   primaryUnits: number | null;
   /** The last failed JOIN, kept on the row so it is still on screen at the retry. */
   primaryError: string | null;
-  fundedDecision: FounderFundedDecision | null;
-  fundedDecidedAt: number | null;
-  hasProof: boolean;
-  proofUploadedAt: number | null;
   completedAt: number | null;
   createdAt: number;
   /** The recipient's OWN configured size, so the modal states it before they press JOIN. */
   recipientUnits: number | null;
   /** A JOIN is being sent right now — from this tab or another one. */
   sending: boolean;
+  // ---- 'amend' only ----
+  /** The levels the sender's position was on BEFORE the change, so the modal
+   *  shows what MOVED rather than only where it landed. */
+  prevStopLoss: number | null;
+  prevTakeProfit: number | null;
+  /**
+   * Whether one of the recipient's own positions was found for this change.
+   * False draws no button — the invitation still says what the sender did, and
+   * moving a stop on a guessed position is what that refusal exists to prevent.
+   * The position's ID is deliberately absent: the server reads it from the row
+   * it stored, so nothing sent from here can redirect an order.
+   */
+  hasTarget: boolean;
+  targetMatch: FounderTargetMatch | null;
+  targetAccount: string | null;
 }
 
 export interface FounderTradeEvent {
@@ -3226,11 +3269,62 @@ export interface FounderTradePrefs {
 // Whose trades reach whom. A link appears on BOTH parties' screens, and either
 // of them can switch it on or off — wanting somebody's trades sent to you does
 // not depend on them changing a setting on their own device.
+/** One direction of one link, and what travels along it. */
+export interface FounderLinkView {
+  person: FounderPerson;
+  /** A fill raises an invitation to open the same trade. */
+  entries: boolean;
+  /** A stop or target moved on an open position raises an invitation to move
+   *  the same level on the other end's own position. */
+  amends: boolean;
+}
+
 export interface FounderLinks {
-  /** Founders my fills are sent to. */
-  sending: FounderPerson[];
-  /** Founders whose fills are sent to me. */
-  receiving: FounderPerson[];
+  /** Founders my trades are sent to. */
+  sending: FounderLinkView[];
+  /** Founders whose trades are sent to me. */
+  receiving: FounderLinkView[];
+}
+
+/** Which half of a link is being changed. Both false removes it. */
+export interface FounderLinkPatch {
+  entries?: boolean;
+  amends?: boolean;
+}
+
+// Two Founders' positions, paired — "your EUR/USD buy and mine are the same
+// trade". A join pairs them automatically; two Founders who each placed the
+// trade independently pair theirs by hand. It is what turns a level move into
+// one press instead of a guess, and what draws the LINKED marker on a tile.
+export interface PositionLink {
+  id: string;
+  /** The other Founder in the pair. */
+  person: FounderPerson;
+  /** The VIEWER'S own side — which of their positions is linked. */
+  connectionId: string;
+  tradeId: string;
+  theirTradeId: string;
+  instrument: string;
+  side: TradeSide;
+  /** 'join' when the terminal placed it, 'manual' when somebody paired it. */
+  source: string;
+  createdAt: number;
+}
+
+// An open position as the pairing picker reads it, from either side's own book.
+export interface PairablePosition {
+  tradeId: string;
+  connectionId: string;
+  connectionLabel: string;
+  broker: string;
+  instrument: string;
+  side: TradeSide;
+  units: number;
+  entryPrice: number;
+  currentPrice: number | null;
+  stopLoss: number | null;
+  takeProfit: number | null;
+  openedAt: number | null;
 }
 
 // One of the recipient's own live broker accounts, for the "which account" picker.

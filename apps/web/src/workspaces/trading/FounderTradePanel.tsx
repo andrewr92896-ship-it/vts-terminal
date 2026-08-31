@@ -2,6 +2,8 @@ import { useCallback, useEffect, useState } from 'react';
 import { ApiError, api } from '../../api/client';
 import type {
   FounderAccountView,
+  FounderLinkPatch,
+  FounderLinkView,
   FounderInvite,
   FounderLinks,
   FounderPerson,
@@ -22,15 +24,12 @@ import { etStamp } from './tradeTime';
 // sent or received.
 //
 // The blocking modal is where a decision is MADE; this is where it is reviewed
-// afterwards — including the audit timeline and the funded screenshot, which is
-// the point of asking for one. Founder-only, and rendered as nothing for
+// afterwards, with its audit timeline. Founder-only, and rendered as nothing for
 // anybody else: the server refuses these routes regardless, so this is the
 // discoverability half rather than the protection.
 
 const STATUS_LABEL: Record<FounderInvite['status'], string> = {
-  primary_pending: 'Waiting on their trade decision',
-  funded_pending: 'Waiting on their funded decision',
-  proof_pending: 'Waiting on their funded screenshot',
+  primary_pending: 'Waiting on their decision',
   complete: 'Complete',
 };
 
@@ -141,11 +140,11 @@ function Links({
   const [saving, setSaving] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
 
-  const toggle = async (senderUserId: string, recipientUserId: string, on: boolean) => {
+  const set = async (senderUserId: string, recipientUserId: string, patch: FounderLinkPatch) => {
     setSaving(true);
     setProblem(null);
     try {
-      onSaved((await api.setFounderLink(senderUserId, recipientUserId, on)).links);
+      onSaved((await api.setFounderLink(senderUserId, recipientUserId, patch)).links);
     } catch (e) {
       setProblem(e instanceof ApiError ? e.message : 'That could not be saved');
     } finally {
@@ -164,29 +163,31 @@ function Links({
     );
   }
 
-  const sending = new Set(links.sending.map((f) => f.userId));
-  const receiving = new Set(links.receiving.map((f) => f.userId));
+  const byId = (list: FounderLinkView[]) => new Map(list.map((l) => [l.person.userId, l]));
+  const sending = byId(links.sending);
+  const receiving = byId(links.receiving);
 
   return (
     <div style={{ ...cardStyle, marginBottom: 12 }}>
       <div style={{ fontSize: 13, fontWeight: 700, color: C.text }}>Whose trades go where</div>
       <div style={{ fontSize: 12, color: C.muted, margin: '6px 0 14px', lineHeight: 1.5 }}>
-        Each direction is its own switch, and either person can set it. Only trades that fill are
-        sent — a limit or stop order that has not triggered is not.
+        Each direction is its own set of switches, and either person can set them. Only trades that
+        fill are sent — a limit or stop order that has not triggered is not.
       </div>
 
-      <div style={{ display: 'grid', gap: 14 }}>
+      <div style={{ display: 'grid', gap: 18 }}>
         <div>
           <div style={groupLabel}>My trades go to</div>
-          <div style={{ display: 'grid', gap: 8 }}>
+          <div style={{ display: 'grid', gap: 10 }}>
             {recipients.map((r) => (
-              <Tick
+              <LinkRow
                 key={`out-${r.userId}`}
-                label={r.displayName}
-                hint={`Every trade you place is put in front of ${r.displayName} to join or decline.`}
-                checked={sending.has(r.userId)}
+                name={r.displayName}
+                link={sending.get(r.userId)}
                 disabled={saving}
-                onChange={(v) => void toggle(me, r.userId, v)}
+                entryHint={`New trades you place are put in front of ${r.displayName} to join or decline.`}
+                amendHint={`When you move or add a stop or target, ${r.displayName} is asked whether to move theirs to match.`}
+                onChange={(patch) => void set(me, r.userId, patch)}
               />
             ))}
           </div>
@@ -194,21 +195,78 @@ function Links({
 
         <div>
           <div style={groupLabel}>I receive trades from</div>
-          <div style={{ display: 'grid', gap: 8 }}>
+          <div style={{ display: 'grid', gap: 10 }}>
             {recipients.map((r) => (
-              <Tick
+              <LinkRow
                 key={`in-${r.userId}`}
-                label={r.displayName}
-                hint={`Their trades come to you to join or decline. You can switch this on yourself.`}
-                checked={receiving.has(r.userId)}
+                name={r.displayName}
+                link={receiving.get(r.userId)}
                 disabled={saving}
-                onChange={(v) => void toggle(r.userId, me, v)}
+                entryHint="Their new trades come to you to join or decline."
+                amendHint="When they move a stop or target, you are asked whether to move yours to match — one press."
+                onChange={(patch) => void set(r.userId, me, patch)}
               />
             ))}
           </div>
         </div>
       </div>
       {problem && <div style={{ fontSize: 12, color: C.red, marginTop: 10, fontWeight: 600 }}>{problem}</div>}
+    </div>
+  );
+}
+
+// ONE DIRECTION, TWO SWITCHES.
+//
+// Opening a trade and moving a stop on one are different things to want (owner
+// instruction, 2026-08), so they are two ticks rather than one — and they are
+// drawn under one person's name rather than as two separate lists, because the
+// question a reader is answering is "what do I share with Dale", not "who gets
+// my fills" and "who gets my stops" as two unrelated rosters.
+//
+// Turning both off removes the link entirely. That is the server's rule and
+// there is nothing to draw for it: an unticked row and a link that does not
+// exist are the same thing on screen, which is exactly what makes it safe.
+function LinkRow({
+  name,
+  link,
+  disabled,
+  entryHint,
+  amendHint,
+  onChange,
+}: {
+  name: string;
+  link: FounderLinkView | undefined;
+  disabled: boolean;
+  entryHint: string;
+  amendHint: string;
+  onChange: (patch: FounderLinkPatch) => void;
+}) {
+  return (
+    <div
+      style={{
+        border: `1px solid ${C.line2}`,
+        borderRadius: 10,
+        padding: '10px 12px',
+        background: 'rgba(255,255,255,.015)',
+      }}
+    >
+      <div style={{ fontSize: 13, fontWeight: 700, color: C.text, marginBottom: 8 }}>{name}</div>
+      <div style={{ display: 'grid', gap: 8 }}>
+        <Tick
+          label="New trades"
+          hint={entryHint}
+          checked={!!link?.entries}
+          disabled={disabled}
+          onChange={(v) => onChange({ entries: v })}
+        />
+        <Tick
+          label="Stop / target moves"
+          hint={amendHint}
+          checked={!!link?.amends}
+          disabled={disabled}
+          onChange={(v) => onChange({ amends: v })}
+        />
+      </div>
     </div>
   );
 }
@@ -730,7 +788,6 @@ function InviteRow({
   onToggle: () => void;
 }) {
   const [events, setEvents] = useState<FounderTradeEvent[] | null>(null);
-  const [proof, setProof] = useState<string | null>(null);
   const long = invite.side === 'long';
   const other = invite.isRecipient ? invite.inviter : invite.recipient;
 
@@ -765,6 +822,25 @@ function InviteRow({
         <span style={{ color: long ? C.green : C.red, fontWeight: 800, fontSize: 12 }}>
           {long ? 'BUY' : 'SELL'}
         </span>
+        {/* A LEVEL MOVE AND A TRADE READ DIFFERENTLY, so the list says which
+            without opening the row: two kinds of thing in one history that
+            looked identical would make the record useless for reconstructing
+            what happened. */}
+        {invite.kind === 'amend' && (
+          <span
+            style={{
+              fontSize: 10,
+              fontWeight: 800,
+              letterSpacing: '.08em',
+              color: C.gold,
+              border: `1px solid rgba(235,203,116,.4)`,
+              borderRadius: 4,
+              padding: '1px 5px',
+            }}
+          >
+            LEVELS
+          </span>
+        )}
         <span style={{ fontSize: 12, color: C.muted, flex: 1, minWidth: 0 }}>
           {invite.isRecipient ? `from ${other.displayName}` : `to ${other.displayName}`}
         </span>
@@ -781,51 +857,49 @@ function InviteRow({
 
       {expanded && (
         <div style={{ padding: '0 13px 13px', fontSize: 12.5, color: C.muted, lineHeight: 1.6 }}>
-          <div>
-            Their entry {fmt(invite.entryPrice)} · stop{' '}
-            {invite.stopLoss == null ? 'none set' : fmt(invite.stopLoss)}
-          </div>
-          <div>
-            Trade decision:{' '}
-            <b style={{ color: C.text }}>
-              {invite.primaryDecision === 'joined'
-                ? `Joined${invite.primaryUnits ? ` (${invite.primaryUnits} units)` : ''}`
-                : invite.primaryDecision === 'declined'
-                  ? 'Did not join'
-                  : 'Not yet answered'}
-            </b>
-          </div>
-          <div>
-            Funded decision:{' '}
-            <b style={{ color: C.text }}>
-              {invite.fundedDecision === 'yes'
-                ? invite.hasProof
-                  ? 'Placed and verified'
-                  : 'Placing — screenshot still owed'
-                : invite.fundedDecision === 'no'
-                  ? 'Not placed'
-                  : 'Not yet answered'}
-            </b>
-          </div>
-          {invite.hasProof && (
-            <div style={{ marginTop: 10 }}>
-              {proof ? (
-                <img
-                  src={proof}
-                  alt="The funded trade screenshot"
-                  style={{ width: '100%', maxWidth: 420, borderRadius: 8, border: `1px solid ${C.line2}` }}
-                />
-              ) : (
-                <button
-                  type="button"
-                  onClick={() => void api.founderProof(invite.id).then((r) => setProof(r.image)).catch(() => {})}
-                  style={linkBtn}
-                >
-                  Show the funded screenshot
-                </button>
+          {invite.kind === 'amend' ? (
+            <div>
+              {/* The MOVE, not the destination — the same rule the modal
+                  follows. A bare new number cannot say whether a stop tightened
+                  or loosened. */}
+              {invite.stopLoss != null && (
+                <div>
+                  Stop {invite.prevStopLoss == null ? 'none' : fmt(invite.prevStopLoss)} →{' '}
+                  {fmt(invite.stopLoss)}
+                </div>
+              )}
+              {invite.takeProfit != null && (
+                <div>
+                  Target {invite.prevTakeProfit == null ? 'none' : fmt(invite.prevTakeProfit)} →{' '}
+                  {fmt(invite.takeProfit)}
+                </div>
+              )}
+              {!invite.hasTarget && (
+                <div style={{ color: C.amber }}>
+                  No position of theirs to apply it to — nothing was offered to press.
+                </div>
               )}
             </div>
+          ) : (
+            <div>
+              Their entry {fmt(invite.entryPrice)} · stop{' '}
+              {invite.stopLoss == null ? 'none set' : fmt(invite.stopLoss)}
+            </div>
           )}
+          <div>
+            Decision:{' '}
+            <b style={{ color: C.text }}>
+              {invite.primaryDecision === 'joined'
+                ? invite.kind === 'amend'
+                  ? 'Moved to match'
+                  : `Joined${invite.primaryUnits ? ` (${invite.primaryUnits} units)` : ''}`
+                : invite.primaryDecision === 'declined'
+                  ? invite.kind === 'amend'
+                    ? 'Left their own levels alone'
+                    : 'Did not join'
+                  : 'Not yet answered'}
+            </b>
+          </div>
           {events && events.length > 0 && (
             <ol style={{ margin: '12px 0 0', padding: 0, listStyle: 'none', display: 'grid', gap: 4 }}>
               {events.map((e) => (
@@ -903,14 +977,3 @@ const field: React.CSSProperties = {
   fontFamily: C.mono,
 };
 
-const linkBtn: React.CSSProperties = {
-  background: 'transparent',
-  border: `1px solid ${C.line2}`,
-  borderRadius: 8,
-  color: C.text,
-  fontSize: 12,
-  fontWeight: 600,
-  padding: '7px 12px',
-  cursor: 'pointer',
-  fontFamily: C.sans,
-};
