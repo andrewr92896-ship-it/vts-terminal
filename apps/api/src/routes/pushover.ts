@@ -82,8 +82,26 @@ export async function pushoverRoutes(app: FastifyInstance) {
       .safeParse(request.body ?? {});
     const raw = parsed.success ? (parsed.data.kind ?? 'standard') : 'standard';
     const kind: PushoverTestKind = raw === 'standard' ? 'standard' : 'repeating';
-    const ok = await sendPushoverTest(request.currentUser!.id, kind);
-    if (!ok) return reply.code(400).send({ error: 'Connect your Pushover user key first, or check that it’s valid.' });
+    // The reply names WHAT Pushover refused, because the two causes need
+    // completely different people to do completely different things. Blaming
+    // the trader's key for a server-side token problem sent one setup round in
+    // circles: the key was correct, the terminal deleted it on every test, and
+    // the screen kept telling them to check it.
+    const result = await sendPushoverTest(request.currentUser!.id, kind);
+    if (result === 'no-key') {
+      return reply.code(400).send({ error: 'Connect your Pushover user key first.' });
+    }
+    if (result === 'invalid-app') {
+      return reply.code(503).send({
+        error: 'The server’s Pushover application token was rejected. Nothing is wrong with your key — this one is for whoever runs the terminal.',
+      });
+    }
+    if (result === 'invalid-user') {
+      return reply.code(400).send({ error: 'Pushover rejected that user key. Check it on your Pushover dashboard and re-enter it.' });
+    }
+    if (result !== 'ok') {
+      return reply.code(502).send({ error: 'Couldn’t reach Pushover just now. Nothing is wrong with your key — try again in a moment.' });
+    }
     return { ok: true };
   });
 

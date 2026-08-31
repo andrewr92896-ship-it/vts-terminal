@@ -11,6 +11,7 @@ const STEPS = [
   // Maintenance mode's failures are only visible once it is needed, and one of
   // them (blocking the health check) makes the deploy that enables it roll back.
   ['maintenance mode', 'verify:maintenance'],
+  ['pushover refusals', 'verify:pushover'],
   ['credential encryption', 'verify:secretbox'],
   ['AI provider seam', 'verify:ai-provider'],
   ['market data macro', 'verify:market-macro'],

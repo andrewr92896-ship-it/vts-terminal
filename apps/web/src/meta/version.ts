@@ -11,9 +11,17 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 7.82';
+export const APP_VERSION = 'Beta V 7.83';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 7.83',
+    date: '2026-08-31',
+    notes: [
+      'A Pushover test now says which of the two credentials was refused. Pushover rejects a bad server-side application token and a bad personal user key the same way, and the terminal read every refusal as your key being wrong — so it told you to check a key that was correct, and deleted it. Pasting it again just repeated the loop.',
+      'Your key is now only removed when Pushover names it as the bad one. A refused application token says so plainly and is left for whoever runs the terminal; anything the terminal does not recognise is reported as a failed send and touches nothing.',
+    ],
+  },
   {
     version: 'Beta V 7.82',
     date: '2026-08-31',
