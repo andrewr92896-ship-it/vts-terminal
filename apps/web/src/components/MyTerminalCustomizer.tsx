@@ -7,6 +7,8 @@ import {
   myTerminalOwnRows,
   myTerminalPinRows,
   myTerminalSections,
+  nudgeMyTerminal,
+  reorderMyTerminal,
   toggleOwnRow,
   togglePinnedRow,
   MY_TERMINAL_DEFAULT,
@@ -86,6 +88,110 @@ function Row({
   );
 }
 
+// THE ARRANGEMENT, dragged into place.
+//
+// Drag AND a pair of arrows, deliberately, because HTML5 drag events do not fire
+// on touch at all — a drag-only list is one a phone cannot use, and this is a
+// per-user setting people will reach for on a phone. The arrows are also what
+// makes it work from the keyboard, which a drag never does.
+function OrderList({
+  sections,
+  onMove,
+  onDropAt,
+}: {
+  sections: { key: string; label: string; icon: string }[];
+  onMove: (key: string, delta: -1 | 1) => void;
+  onDropAt: (from: string, to: string) => void;
+}) {
+  const [dragging, setDragging] = useState<string | null>(null);
+  const [over, setOver] = useState<string | null>(null);
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+      {sections.map((section, index) => {
+        const isOver = over === section.key && dragging !== null && dragging !== section.key;
+        return (
+          <div
+            key={section.key}
+            draggable
+            onDragStart={(e) => {
+              setDragging(section.key);
+              e.dataTransfer.effectAllowed = 'move';
+              // Firefox refuses to start a drag without data on the transfer.
+              e.dataTransfer.setData('text/plain', section.key);
+            }}
+            onDragEnd={() => {
+              setDragging(null);
+              setOver(null);
+            }}
+            onDragOver={(e) => {
+              e.preventDefault();
+              e.dataTransfer.dropEffect = 'move';
+              setOver(section.key);
+            }}
+            onDragLeave={() => setOver((k) => (k === section.key ? null : k))}
+            onDrop={(e) => {
+              e.preventDefault();
+              const from = dragging ?? e.dataTransfer.getData('text/plain');
+              setDragging(null);
+              setOver(null);
+              if (from && from !== section.key) onDropAt(from, section.key);
+            }}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 10,
+              padding: '8px 10px',
+              borderRadius: 9,
+              border: `1px solid ${isOver ? '#34D399' : C.line}`,
+              background: dragging === section.key ? 'rgba(52,211,153,.10)' : 'rgba(255,255,255,.02)',
+              opacity: dragging === section.key ? 0.6 : 1,
+              color: '#dfe7fa',
+              fontSize: 13,
+              cursor: 'grab',
+            }}
+          >
+            <Icon name="grip-vertical" size={14} color={C.faint} />
+            <Icon name={section.icon} size={15} color={C.faint} />
+            <span style={{ flex: 1 }}>{section.label}</span>
+            <span style={{ display: 'flex', gap: 4 }}>
+              <button
+                type="button"
+                aria-label={`Move ${section.label} up`}
+                disabled={index === 0}
+                onClick={() => onMove(section.key, -1)}
+                style={arrow(index === 0)}
+              >
+                <Icon name="chevron-up" size={13} />
+              </button>
+              <button
+                type="button"
+                aria-label={`Move ${section.label} down`}
+                disabled={index === sections.length - 1}
+                onClick={() => onMove(section.key, 1)}
+                style={arrow(index === sections.length - 1)}
+              >
+                <Icon name="chevron-down" size={13} />
+              </button>
+            </span>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+const arrow = (disabled: boolean): CSSProperties => ({
+  background: 'transparent',
+  border: `1px solid ${C.line}`,
+  borderRadius: 6,
+  color: disabled ? C.faint : '#9fb0d6',
+  padding: '2px 5px',
+  lineHeight: 0,
+  cursor: disabled ? 'not-allowed' : 'pointer',
+  opacity: disabled ? 0.4 : 1,
+});
+
 export function MyTerminalCustomizer({
   layout,
   reach,
@@ -140,8 +246,9 @@ export function MyTerminalCustomizer({
           <div style={{ flex: 1 }}>
             <div style={{ fontSize: 15, fontWeight: 700, color: '#eef3ff' }}>Customize My Terminal</div>
             <div style={{ fontSize: 11.5, color: C.faint, marginTop: 3 }}>
-              Put any section of the terminal on this workspace, and take off the ones you do not use.
-              Nothing moves — a section you add here still lives in its own workspace too.
+              Put any section of the terminal on this workspace, drag them into the order you want, and
+              take off the ones you do not use. Nothing moves — a section you add here still lives in its
+              own workspace too.
             </div>
           </div>
           <button
@@ -155,6 +262,26 @@ export function MyTerminalCustomizer({
         </header>
 
         <div style={{ overflowY: 'auto', padding: '14px 18px', display: 'flex', flexDirection: 'column', gap: 18 }}>
+          {resulting.length > 1 && (
+            <section>
+              <div style={{ fontSize: 11, letterSpacing: '1px', textTransform: 'uppercase', color: C.faint, marginBottom: 8 }}>
+                Order on the sidebar
+              </div>
+              <OrderList
+                sections={resulting.map((s) => ({ key: s.key, label: s.label, icon: s.icon }))}
+                onMove={(key, delta) => setDraft((d) => nudgeMyTerminal(d, resulting.map((s) => s.key), key, delta))}
+                onDropAt={(from, to) => {
+                  const keys = resulting.map((s) => s.key);
+                  const at = keys.indexOf(to);
+                  const rest = keys.filter((k) => k !== from);
+                  const target = at < 0 ? rest.length : rest.indexOf(to) + (keys.indexOf(from) < at ? 1 : 0);
+                  rest.splice(target, 0, from);
+                  setDraft((d) => reorderMyTerminal(d, rest));
+                }}
+              />
+            </section>
+          )}
+
           <section>
             <div style={{ fontSize: 11, letterSpacing: '1px', textTransform: 'uppercase', color: C.faint, marginBottom: 8 }}>
               My Terminal's own sections

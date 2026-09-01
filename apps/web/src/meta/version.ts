@@ -11,9 +11,19 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 7.85';
+export const APP_VERSION = 'Beta V 7.86';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 7.86',
+    date: '2026-09-01',
+    notes: [
+      'My Terminal\u2019s sections can be dragged into the order you want. Customize now opens with your board at the top of the panel \u2014 drag a row, or use the arrows on it, which is also how it works on a phone, where dragging does not.',
+      'Your arrangement only describes the rows you have placed. A section added to the terminal in a future update still turns up on your board rather than being swallowed by a saved list, and it arrives at the bottom where a new row is looked for.',
+      'Taking a row off and putting it back returns it to where you had it, rather than dropping it at the end.',
+      'All three terminals \u2014 private, public and the demo.',
+    ],
+  },
   {
     version: 'Beta V 7.85',
     date: '2026-08-31',

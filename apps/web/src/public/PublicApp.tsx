@@ -10,7 +10,7 @@ import { PublicLegalGate } from './PublicLegalGate';
 import { presetTiles } from './PublicBoard';
 import { useResponsive } from '../hooks/useMediaQuery';
 import { MyTerminalCustomizer } from '../components/MyTerminalCustomizer';
-import { MY_TERMINAL_WORKSPACE, myTerminalSections, parseMyTerminal, type MyTerminalLayout, type NavLike } from '../theme/myTerminal';
+import { MY_TERMINAL_WORKSPACE, isDefaultMyTerminal, myTerminalSections, parseMyTerminal, type MyTerminalLayout, type NavLike } from '../theme/myTerminal';
 
 import { PUBLIC_NAV,publicNavFor,publicWorkspaceFor,type PublicScreenKey,type PublicWorkspaceKey } from './publicNav';
 
@@ -110,7 +110,12 @@ export function PublicApp(){
  };
  async function saveSections(next:MyTerminalLayout){
   setSaving(true);
-  const value=next.add.length||next.hide.length?JSON.stringify(next):null;
+  // `isDefaultMyTerminal` rather than testing the fields here: this decides
+ // whether the board is stored at all, so a field added to the layout and not
+ // to this condition is one that saves and then vanishes. Ordering was exactly
+ // that — an arrangement with nothing added or hidden read as "default" and was
+ // written as null.
+ const value=isDefaultMyTerminal(next)?null:JSON.stringify(next);
   // Straight to the runtime rather than through the auth adapter: the shell is
   // on the public side of the seam and the adapter is on the other, so it
   // updates the identity and writes for a signed-in visitor here instead.

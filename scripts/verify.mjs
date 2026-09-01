@@ -12,6 +12,9 @@ const STEPS = [
   // them (blocking the health check) makes the deploy that enables it roll back.
   ['maintenance mode', 'verify:maintenance'],
   ['pushover refusals', 'verify:pushover'],
+  // My Terminal's arrangement — what happens to a board when the nav changes
+  // under it, which only ever shows up on a deploy.
+  ['my terminal layout', 'verify:my-terminal'],
   ['credential encryption', 'verify:secretbox'],
   ['AI provider seam', 'verify:ai-provider'],
   ['market data macro', 'verify:market-macro'],
