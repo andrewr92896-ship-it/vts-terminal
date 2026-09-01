@@ -65,7 +65,8 @@
     "db:migrate:public": "npm --workspace @vts/public-api run db:migrate",
     "verify:public-wiring": "node scripts/verify-public-wiring.mjs",
     "verify:maintenance": "npm --workspace @vts/api run verify:maintenance && npm --workspace @vts/web run verify:maintenance",
-    "verify:pushover": "npm --workspace @vts/api run verify:pushover"
+    "verify:pushover": "npm --workspace @vts/api run verify:pushover",
+    "verify:my-terminal": "npm --workspace @vts/web run verify:my-terminal"
   },
   "devDependencies": {
     "npm-run-all": "^4.1.5"

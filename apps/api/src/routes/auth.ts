@@ -165,6 +165,13 @@ const profileSchema = z
       .object({
         add: z.array(z.string().trim().min(1).max(40)).max(60),
         hide: z.array(z.string().trim().min(1).max(40)).max(60),
+        // The arrangement. Optional because every layout stored before ordering
+        // existed has no such key, and a client on an older cached bundle still
+        // posts the pair — an absent order reads as "nothing positioned", which
+        // renders exactly as it did before. Capped higher than the other two: it
+        // holds a key per row the user has placed, and keeps the ones whose rows
+        // are currently off so turning one back on restores its position.
+        order: z.array(z.string().trim().min(1).max(40)).max(120).optional(),
       })
       .nullable()
       .optional(),
@@ -577,7 +584,13 @@ export async function authRoutes(app: FastifyInstance, options: AuthRouteOptions
       const value = parsed.data.myTerminalSections;
       const add = value ? [...new Set(value.add)] : [];
       const hide = value ? [...new Set(value.hide)] : [];
-      patch.myTerminalSections = add.length || hide.length ? JSON.stringify({ add, hide }) : null;
+      // The arrangement is written with the rest. This object is rebuilt by hand
+      // rather than passed through, so a field added to the schema and not to
+      // here is accepted, validated, and then silently dropped on the way to the
+      // row — which reads to the user as a setting that will not save.
+      const order = value?.order ? [...new Set(value.order)] : [];
+      patch.myTerminalSections =
+        add.length || hide.length || order.length ? JSON.stringify({ add, hide, order }) : null;
     }
 
     if (parsed.data.username != null) {

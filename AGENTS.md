@@ -4373,6 +4373,37 @@ looked like it had not deployed. Nothing here can do that:
 - An empty diff is stored as **NULL**, so "never customized" and "customized
   back to the default" are one row with one meaning.
 
+**THE ROWS CAN BE DRAGGED INTO AN ORDER, AND THAT ORDER IS A PARTIAL ONE**
+(owner request, 2026-08; `order` on the layout, `applyOrder` /
+`reorderMyTerminal` / `nudgeMyTerminal`). The editor lists the board and it is
+rearranged by dragging — **or by a pair of arrows on every row**, because HTML5
+drag events do not fire on touch at all, so a drag-only list is one a phone
+cannot use, and the arrows are also what makes it work from a keyboard.
+
+**`order` LISTS ONLY THE ROWS THE USER POSITIONED, NEVER THE WORKSPACE.** That
+is what keeps this on the right side of the rule above rather than a rebuild of
+the editor that was removed. A key absent from `order` is not "unplaced and
+therefore gone" — it renders after the positioned ones, in its ordinary order.
+**So a section added to `NAV` in a later deploy still appears on a board
+somebody has arranged**, which is the exact property the install-wide Sidebar
+Layout editor destroyed. It arrives at the END, the same rule a pin already
+follows: a new row lands where somebody who just gained one looks for it.
+
+- **A key whose row is currently hidden or unpinned is KEPT, not pruned**, so
+  turning a row off and on again returns it to where it was put instead of
+  dropping it at the bottom of a board that was arranged around it.
+- **Both write paths rebuild the stored object by hand**, so a field added to
+  the layout and not to them is accepted, validated and then silently dropped —
+  which reads as a setting that will not save. The public side tests
+  `isDefaultMyTerminal` rather than the fields for that reason; the private
+  route cannot import it and names all three explicitly instead. Ordering was
+  caught by exactly this: an arrangement with nothing added or hidden read as
+  "default" and was written as null.
+- `npm run verify:my-terminal` checks it, and the check that matters is **a
+  section added in a later deploy still appears** — that only ever shows up on a
+  deploy, by which time the person whose board it is has already lost their
+  arrangement. Proved by breaking it five ways.
+
 **A pin is a SECOND entry point, never a move.** The section keeps its home in
 its own workspace, so taking it off My Terminal can never make it unreachable —
 and that is why two navigation rules exist, neither of which is visible from the

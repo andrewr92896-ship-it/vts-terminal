@@ -14,6 +14,7 @@
     "verify:sizing": "tsx src/workspaces/trading/verifySizing.ts",
     "verify:protection": "tsx src/workspaces/trading/verifyProtection.ts",
     "verify:maintenance": "tsx src/lib/verifyMaintenance.ts",
+    "verify:my-terminal": "tsx src/theme/verifyMyTerminal.ts",
     "verify:desk-layout": "tsx src/workspaces/trading/verifyDeskPositionsLayout.ts",
     "verify:demo-writes": "tsx ../public-terminal/src/demo/verifyDemoWrites.ts"
   },
