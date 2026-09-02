@@ -11,9 +11,18 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 7.87';
+export const APP_VERSION = 'Beta V 7.88';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 7.88',
+    date: '2026-09-02',
+    notes: [
+      'The Site Editor has a Settings screen with Down for maintenance, the same control the portfolio editor has: tick the box, press Apply, and vitalistradingsystems.com shows a short notice within about fifteen seconds. Nothing is deleted — turning it off puts the page back exactly as it was.',
+      'The screen reports whether the marketing site has actually checked in, so a site that is not yet pointed at the portal says so rather than a switch that looks like it works and does not.',
+      'The site fails open: if the portal stops answering, the page comes back on its own after a few missed checks. The portal being unreachable is never what keeps the site down.',
+    ],
+  },
   {
     version: 'Beta V 7.87',
     date: '2026-09-02',

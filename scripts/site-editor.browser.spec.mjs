@@ -302,6 +302,27 @@ try {
   const w = await page.evaluate(() => document.querySelector('iframe')?.contentWindow?.innerWidth ?? 0);
   ok(Math.abs(w - 390) <= 20, 'the phone frame is its own 390px viewport', `${w}px`);
 
+  console.log('\nJ. DOWN FOR MAINTENANCE');
+  await page.getByText('Settings', { exact: true }).last().click();
+  await wait(1500);
+  const box = page.getByRole('checkbox').first();
+  ok((await page.locator('text=/site is live/i').count()) > 0, 'the settings screen reports the site live');
+  ok((await page.locator('text=/checked in/i').count()) > 0, 'and that the marketing site has checked in', await page.locator('text=/checked in|not checked in/i').first().innerText());
+  await box.check();
+  await wait(300);
+  r = await fetch(`${M}/`);
+  ok(r.status === 200, 'ticking the box stages it — the site is still live', `${r.status}`);
+  ok((await page.locator('text=/not applied yet/i').count()) > 0, 'and the screen says so');
+  await page.getByRole('button', { name: 'Apply', exact: true }).click();
+  await wait(2500);
+  r = await fetch(`${M}/`);
+  ok(r.status === 503 && (await r.text()).includes('Down for maintenance'), 'Apply takes the site down within a poll', `${r.status}`);
+  ok((await page.locator('text=/showing the notice/i').count()) > 0, 'and the state line reports it in force');
+  await box.uncheck();
+  await page.getByRole('button', { name: 'Apply', exact: true }).click();
+  await wait(2500);
+  r = await fetch(`${M}/`);
+  ok(r.status === 200 && (await r.text()).includes('EDITED HEADLINE'), 'and off brings it back exactly as it was', `${r.status}`);
 } catch (err) {
   const shot = resolve(DIR, 'site-editor-failure.png');
   await page.screenshot({ path: shot, fullPage: false }).catch(() => {});

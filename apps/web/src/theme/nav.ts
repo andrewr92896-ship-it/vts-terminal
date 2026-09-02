@@ -306,6 +306,7 @@ export const NAV: NavWorkspace[] = [
       { key: 'site_editor', label: 'Editor', icon: 'pencil' },
       { key: 'site_view', label: 'View Site', icon: 'eye' },
       { key: 'site_files', label: 'File Uploads', icon: 'upload' },
+      { key: 'site_settings', label: 'Settings', icon: 'settings' },
     ],
   },
   // Site Help — available to every signed-in user. Consolidates the how-to

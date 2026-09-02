@@ -45,16 +45,98 @@ function portalOrigin() {
 }
 const ORIGIN = portalOrigin();
 const CONTENT_URL = ORIGIN ? `${ORIGIN}/api/public/site/marketing/content` : '';
+const STATE_URL = ORIGIN ? `${ORIGIN}/api/public/site/marketing/state` : '';
 const FILES_URL = ORIGIN ? `${ORIGIN}/api/public/site/marketing/files/` : '';
 const POLL_MS = Number(process.env.SITE_CONTENT_POLL_SECONDS || 15) * 1000;
+/** Past this without an answer, maintenance is treated as off. Six polls. */
+const STALE_MS = Math.max(POLL_MS * 6, 6_000);
 
 let model = MARKETING_SEED;
 let page = renderMarketing(model);
 let lastRead = null;
 let publishedAt = null;
 
+/**
+ * Down for maintenance — read separately from the content, and FAIL-OPEN.
+ *
+ * The switch is honoured only while the portal keeps answering. If the answer
+ * stops arriving — the portal down, slow, mid-deploy — the page comes back on
+ * its own after a few missed polls, because the portal being unreachable must
+ * never be what keeps the site down. That is the portfolio's rule, kept.
+ * "Never guess yes": a missing or malformed answer is off.
+ */
+const state = { at: 0, maintenance: false };
+
+async function readState() {
+  if (!STATE_URL) return;
+  try {
+    const res = await fetch(STATE_URL, { signal: AbortSignal.timeout(8000) });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const body = await res.json();
+    const on = body?.maintenance === true;
+    if (on !== state.maintenance) console.log(`[marketing] maintenance ${on ? 'ON' : 'off'}`);
+    state.maintenance = on;
+    state.at = Date.now();
+  } catch (err) {
+    console.warn(`[marketing] could not read the maintenance switch: ${err.message}`);
+  }
+}
+
+/** The current answer. Never throws, never blocks, never guesses "yes". */
+function maintenanceOn() {
+  if (!STATE_URL) return false;
+  if (Date.now() - state.at > STALE_MS) return false;
+  return state.maintenance;
+}
+
+/**
+ * The notice served while maintenance is on. Self-contained: no stylesheet,
+ * no font, no image, no request of its own. This is the one page that has to
+ * render at the moment something else is not.
+ */
+const NOTICE = `<!doctype html>
+<html lang="en"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Down for maintenance — Vitalis Trading Systems</title>
+<style>
+  :root{color-scheme:dark}
+  *{box-sizing:border-box}
+  body{margin:0;min-height:100vh;display:grid;place-items:center;padding:56px 24px;text-align:center;
+    color:#E9EFFB;background:radial-gradient(1200px 600px at 70% -10%,#0f1d3d 0%,#050B18 60%);
+    font-family:'IBM Plex Sans',system-ui,-apple-system,'Segoe UI',Arial,sans-serif}
+  main{max-width:480px}
+  .mark{margin:0;font:600 .8rem/1.4 'IBM Plex Mono',ui-monospace,SFMono-Regular,Menlo,monospace;
+    letter-spacing:.22em;text-transform:uppercase;color:#E9EFFB}
+  .mark em{display:block;font-style:normal;font-size:.62rem;letter-spacing:.34em;color:#EBCB74;margin-top:4px}
+  h1{margin:22px 0 12px;font-size:clamp(1.6rem,4vw,2.2rem);line-height:1.15;letter-spacing:-.02em;font-weight:700}
+  p{margin:0;font-size:1rem;line-height:1.7;color:#93A5C9}
+  .fine{margin:22px 0 0;font-size:.85rem;line-height:1.6;color:#5E7098}
+  a{color:#EBCB74}
+</style></head><body>
+<main>
+  <p class="mark">Vitalis <em>Trading Systems</em></p>
+  <h1>Down for maintenance</h1>
+  <p>The site is being updated and will be back shortly. Thanks for your patience.</p>
+  <p class="fine">The terminal itself is separate and unaffected:
+    <a href="https://app.vitalistradingsystems.com">app.vitalistradingsystems.com</a></p>
+</main></body></html>`;
+
+/** 503 with Retry-After, never 200: temporary, and never cached or indexed. */
+function sendNotice(req, res) {
+  res.writeHead(503, {
+    ...HEADERS,
+    'Content-Type': 'text/html; charset=utf-8',
+    'Cache-Control': 'no-store',
+    'Retry-After': '600',
+  });
+  if (req.method === 'HEAD') return res.end();
+  res.end(NOTICE);
+}
+
 async function readOnce() {
   if (!CONTENT_URL) return;
+  await readState();
   try {
     const res = await fetch(CONTENT_URL, { signal: AbortSignal.timeout(8000) });
     if (res.status === 404) {
@@ -148,17 +230,29 @@ const server = createServer(async (req, res) => {
     return text(res, 400, 'Bad request');
   }
 
-  if (urlPath === '/' || urlPath === '/index.html') {
-    res.writeHead(200, { ...HEADERS, 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-cache' });
-    return res.end(req.method === 'HEAD' ? undefined : page);
-  }
+  // Health is answered whatever the switch says — Railway health-checks it,
+  // and a maintenance mode that failed the health check would refuse to
+  // deploy at the one moment it is needed. Everything else gets the notice.
   if (urlPath === '/healthz') {
     return text(
       res,
       200,
-      JSON.stringify({ ok: true, portal: ORIGIN || null, lastReadFromPortal: lastRead, publishedAt }),
+      JSON.stringify({
+        ok: true,
+        maintenance: maintenanceOn(),
+        portal: ORIGIN || null,
+        lastReadFromPortal: lastRead,
+        lastState: state.at ? { maintenance: state.maintenance, secondsAgo: Math.round((Date.now() - state.at) / 1000) } : null,
+        publishedAt,
+      }),
       'application/json; charset=utf-8',
     );
+  }
+  if (maintenanceOn()) return sendNotice(req, res);
+
+  if (urlPath === '/' || urlPath === '/index.html') {
+    res.writeHead(200, { ...HEADERS, 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-cache' });
+    return res.end(req.method === 'HEAD' ? undefined : page);
   }
   if (urlPath.startsWith('/files/')) return proxyFile(urlPath.slice('/files/'.length), req, res);
 

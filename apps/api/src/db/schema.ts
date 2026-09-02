@@ -3282,6 +3282,10 @@ export const siteDocuments = sqliteTable('site_documents', {
   draft: text('draft'),
   published: text('published'),
   publishedAt: integer('published_at', { mode: 'timestamp_ms' }),
+  // Down for maintenance (migration 0141). The site polls it and serves a
+  // notice while it is on; off puts the site back exactly as it was.
+  maintenance: integer('maintenance', { mode: 'boolean' }).notNull().default(false),
+  maintenanceUpdatedAt: integer('maintenance_updated_at', { mode: 'timestamp_ms' }),
   updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
 });
 export type SiteDocumentRow = typeof siteDocuments.$inferSelect;

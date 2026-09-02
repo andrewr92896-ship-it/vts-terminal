@@ -902,6 +902,22 @@ against**; the server no longer serves it.
   `'none'` — the global header would otherwise block the editor framing its
   own preview. It is kept out of the service-worker precache like the employee
   entry.
+- **Down for maintenance is a fourth screen, Settings**, the portfolio admin's
+  control brought across: the checkbox STAGES and Apply commits, the state line
+  reports what is IN FORCE and never what is staged, and the switch is one
+  column on `site_documents` (migration `0141`). The site reads it off
+  `GET /api/public/site/:site/state` — **the only route that counts as the site
+  checking in** (`notePoll`), because the content route is read for a
+  different reason and counting it reported a healthy link while the
+  maintenance half was failing in the portfolio admin. Three rules, all the
+  portfolio's: **the site FAILS OPEN** (`maintenanceOn()` in `server.mjs`
+  treats an answer older than six polls as off, so the portal being
+  unreachable is never what keeps the site down — proved in
+  `verify:marketing-server`); it deletes nothing; and the notice is a **503
+  with `Retry-After` and `no-store`**, self-contained, with `/healthz` exempt
+  so the deploy that enables it cannot roll itself back. The notice's markup
+  lives in `server.mjs` and its React twin in `Settings.tsx` ("what visitors
+  would see"); keep the two in step by hand.
 - **`scripts/site-editor.browser.spec.mjs`** drives all of it in Chromium against
   the real API and the real marketing server (needs Playwright; not in
   `verify`). Two things it caught that a typecheck cannot: Fastify refuses a JSON

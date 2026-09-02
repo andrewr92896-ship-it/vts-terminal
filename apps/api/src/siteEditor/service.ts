@@ -179,6 +179,75 @@ export async function revertDraft(site: string): Promise<SiteStatus> {
   return getStatus(site);
 }
 
+// ---------------------------------------------------------------- maintenance
+
+/**
+ * Down for maintenance — the site replaced by a notice.
+ *
+ * THE SITE FAILS OPEN. It asks for this on a short interval; if the answer
+ * stops arriving — this service down, slow, mid-deploy — it shows the page.
+ * The portal being unavailable must never be what takes the site down.
+ *
+ * WHAT THE SETTINGS SCREEN SAYS ABOUT THE LINK IS EVIDENCE. The site stamps
+ * itself every time it asks (`notePoll`), so "checked in a moment ago" reports
+ * something that happened. Kept in this process on purpose — it is a reading
+ * of the last few minutes, and a restart that forgets it is telling the truth
+ * about what it has seen since.
+ */
+const polls = new Map<string, number>();
+
+export function notePoll(site: string): void {
+  polls.set(site, Date.now());
+}
+
+/** Milliseconds since the site last asked, or null if it never has. */
+export function sincePoll(site: string): number | null {
+  const at = polls.get(site);
+  return at === undefined ? null : Date.now() - at;
+}
+
+export type SiteSettings = {
+  site: string;
+  label: string;
+  url: string;
+  maintenance: boolean;
+  updatedAt: string | null;
+  sincePoll: number | null;
+};
+
+export async function getSettings(site: string): Promise<SiteSettings> {
+  const def = siteDef(site);
+  const r = await row(site);
+  return {
+    site,
+    label: def.label,
+    url: def.url,
+    maintenance: r?.maintenance === true,
+    updatedAt: r?.maintenanceUpdatedAt ? r.maintenanceUpdatedAt.toISOString() : null,
+    sincePoll: sincePoll(site),
+  };
+}
+
+export async function setMaintenance(site: string, on: boolean): Promise<SiteSettings> {
+  siteDef(site);
+  const now = new Date();
+  await db
+    .insert(siteDocuments)
+    .values({ site, maintenance: on, maintenanceUpdatedAt: now, updatedAt: now })
+    .onConflictDoUpdate({
+      target: siteDocuments.site,
+      set: { maintenance: on, maintenanceUpdatedAt: now, updatedAt: now },
+    });
+  return getSettings(site);
+}
+
+/** What the site reads: the switch, and nothing else. */
+export async function publicState(site: string): Promise<{ maintenance: boolean } | null> {
+  if (!SITES[site]) return null;
+  const r = await row(site);
+  return { maintenance: r?.maintenance === true };
+}
+
 // ---------------------------------------------------------------- versions
 
 const idFor = (ms: number) => String(ms).padStart(14, '0');

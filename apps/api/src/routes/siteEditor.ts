@@ -25,22 +25,27 @@ import {
   getDraft,
   getPublished,
   getStatus,
+  getSettings,
   getVersion,
   listFiles,
   listVersions,
+  notePoll,
   openFile,
+  publicState,
   publish,
   readExport,
   renameFile,
   revertDraft,
   saveDraft,
   saveFile,
+  setMaintenance,
 } from '../siteEditor/service.js';
 
 const modelBody = z.object({ model: z.unknown() });
 const docBody = z.object({ doc: z.unknown() });
 const uploadBody = z.object({ name: z.string().min(1).max(200), data: z.string().min(1) });
 const renameBody = z.object({ name: z.string().min(1).max(200) });
+const settingsBody = z.object({ maintenance: z.boolean() });
 
 export async function siteEditorRoutes(app: FastifyInstance): Promise<void> {
   const dev = { preHandler: requireFounder };
@@ -191,7 +196,40 @@ export async function siteEditorRoutes(app: FastifyInstance): Promise<void> {
     }
   });
 
+  app.get('/api/site-editor/:site/settings', dev, async (request, reply) => {
+    const s = site(request, reply);
+    if (!s) return reply;
+    return getSettings(s);
+  });
+
+  app.put('/api/site-editor/:site/settings', dev, async (request, reply) => {
+    const s = site(request, reply);
+    if (!s) return reply;
+    const parsed = settingsBody.safeParse(request.body);
+    // Only an explicit true turns it on. Anything else — a missing key, a
+    // string — is refused rather than read as off, so a malformed request can
+    // neither take the site down nor quietly bring it back.
+    if (!parsed.success) return reply.code(400).send({ error: 'Could not read that request.' });
+    const next = await setMaintenance(s, parsed.data.maintenance);
+    request.log.info({ site: s, user: request.currentUser?.id, maintenance: next.maintenance }, 'site maintenance');
+    return next;
+  });
+
   // ---- what the site reads. Published only; never the draft.
+
+  // Only THIS route counts as the site checking in. The content route is read
+  // for a different reason, and counting it would report a healthy link while
+  // the maintenance half was failing — which is exactly the fault the portfolio
+  // admin shipped once.
+  app.get('/api/public/site/:site/state', async (request, reply) => {
+    const s = (request.params as { site: string }).site;
+    const state = await publicState(s);
+    if (!state) return reply.code(404).send({ error: 'No such site.' });
+    notePoll(s);
+    reply.header('Cache-Control', 'no-store');
+    return state;
+  });
+
 
   app.get('/api/public/site/:site/content', async (request, reply) => {
     const s = (request.params as { site: string }).site;

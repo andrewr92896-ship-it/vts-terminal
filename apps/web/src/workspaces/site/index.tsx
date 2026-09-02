@@ -1,6 +1,7 @@
 import { Editor } from './Editor';
 import { Files } from './Files';
 import { ViewSite } from './ViewSite';
+import { Settings } from './Settings';
 
 /**
  * The Site Editor workspace — vitalistradingsystems.com, edited from here.
@@ -17,6 +18,8 @@ export function SiteWorkspace({ screen }: { screen: string; onNavigate?: (key: s
       return <ViewSite />;
     case 'site_files':
       return <Files />;
+    case 'site_settings':
+      return <Settings />;
     default:
       return null;
   }

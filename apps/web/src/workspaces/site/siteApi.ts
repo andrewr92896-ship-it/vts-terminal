@@ -54,6 +54,16 @@ export type FilesPayload = {
   maxBytes: number;
 };
 
+export type SiteSettings = {
+  site: string;
+  label: string;
+  url: string;
+  maintenance: boolean;
+  updatedAt: string | null;
+  /** Milliseconds since the live site last asked for this, or null if never. */
+  sincePoll: number | null;
+};
+
 export type ExportDoc = {
   format: string;
   site: string;
@@ -120,6 +130,10 @@ export const api = {
     request<ExportDoc>(`${BASE}/export`, { method: 'POST', body: JSON.stringify({ model }) }),
   importContent: (doc: unknown) =>
     request<ImportRead>(`${BASE}/import`, { method: 'POST', body: JSON.stringify({ doc }) }),
+
+  settings: () => request<SiteSettings>(`${BASE}/settings`),
+  setMaintenance: (maintenance: boolean) =>
+    request<SiteSettings>(`${BASE}/settings`, { method: 'PUT', body: JSON.stringify({ maintenance }) }),
 
   files: () => request<FilesPayload>(`${BASE}/files`),
   /**

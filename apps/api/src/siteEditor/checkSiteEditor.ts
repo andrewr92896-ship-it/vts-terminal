@@ -23,17 +23,22 @@ import {
   deleteFile,
   getDraft,
   getPublished,
+  getSettings,
   getStatus,
   getVersion,
   listFiles,
   listVersions,
+  notePoll,
   openFile,
+  publicState,
   publish,
   readExport,
   renameFile,
   revertDraft,
   saveDraft,
   saveFile,
+  setMaintenance,
+  sincePoll,
   slugify,
 } from './service.js';
 import { MARKETING_SEED } from '../../../marketing/render/seed.mjs';
@@ -161,6 +166,20 @@ async function main() {
   ok('a file from something else is refused by name', /not a site export/.test((await refused(() => readExport(S, { format: 'other', model: withFiles }))) ?? ''));
   ok('a bare model with no envelope is accepted', (await readExport(S, MARKETING_SEED)).sections === MARKETING_SEED.sections.length);
   ok('anything that is not a document is not', (await refused(() => readExport(S, 'nope'))) !== null);
+
+  section('down for maintenance');
+  const st0m = await getSettings(S);
+  ok('starts off, with the site never having asked', !st0m.maintenance && st0m.sincePoll === null);
+  ok('the public state reads off', (await publicState(S))?.maintenance === false);
+  ok('and an unknown site reads nothing', (await publicState('nope')) === null);
+  const on = await setMaintenance(S, true);
+  ok('turning it on is recorded with a time', on.maintenance && typeof on.updatedAt === 'string');
+  ok('and the public state reads on', (await publicState(S))?.maintenance === true);
+  ok('the documents are untouched by it', JSON.stringify(await getDraft(S)) === before && (await getPublished(S)) !== null);
+  notePoll(S);
+  ok('a poll stamps the check-in', (sincePoll(S) ?? 1e9) < 1000);
+  const off = await setMaintenance(S, false);
+  ok('turning it off puts it back', !off.maintenance && (await publicState(S))?.maintenance === false);
 
   await deleteFile(S, 'head-shot.png');
   ok('a deleted file is gone', (await listFiles(S)).length === 0 && (await openFile(S, 'head-shot.png')) === null);
