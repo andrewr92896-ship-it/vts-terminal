@@ -9,7 +9,6 @@ import type {
 import { useAuth } from '../auth/AuthContext';
 import { isFounder } from '../auth/access';
 import { C } from '../theme/tokens';
-import { fileToScaledDataUrl } from '../lib/image';
 import { useResponsive } from '../hooks/useMediaQuery';
 
 // The Founder trade coordination modal — the terminal's one BLOCKING alert.
@@ -41,12 +40,7 @@ const POLL_MS = 12_000;
 // authority, and a browser without BroadcastChannel simply polls.
 const CHANNEL = 'vts-founder-trades';
 
-export interface FounderTradeModalProps {
-  /** Take the recipient to the Funded section once a primary decision is made. */
-  onGoFunded: () => void;
-}
-
-export function FounderTradeModal({ onGoFunded }: FounderTradeModalProps) {
+export function FounderTradeModal() {
   const { user } = useAuth();
   const { isPhone } = useResponsive();
   const [invites, setInvites] = useState<FounderInvite[]>([]);
@@ -55,9 +49,6 @@ export function FounderTradeModal({ onGoFunded }: FounderTradeModalProps) {
   const [canTrade, setCanTrade] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  // Which invitation the recipient has already been routed to Funded for, so the
-  // navigation happens once per workflow rather than on every poll.
-  const routed = useRef(new Set<string>());
   const loading = useRef(false);
 
   // Founder-only on the client as well, so an ordinary account never polls an
@@ -120,17 +111,6 @@ export function FounderTradeModal({ onGoFunded }: FounderTradeModalProps) {
   // how many are behind it so nothing arrives unannounced.
   const current = invites[0] ?? null;
   const behind = Math.max(0, invites.length - 1);
-
-  // Once a primary decision is made, take the recipient to Funded. The modal
-  // does not depend on the navigation working — it stays up wherever they are —
-  // so a failed route costs nothing.
-  useEffect(() => {
-    if (!current) return;
-    if (current.status !== 'funded_pending') return;
-    if (routed.current.has(current.id)) return;
-    routed.current.add(current.id);
-    onGoFunded();
-  }, [current, onGoFunded]);
 
   // Fold a mutation's answer straight back in, so the acting tab updates without
   // waiting for its own poll, and tell the other tabs to re-read.
@@ -206,11 +186,26 @@ export function FounderTradeModal({ onGoFunded }: FounderTradeModalProps) {
       >
         {behind > 0 && (
           <div style={{ fontSize: 12, color: C.faint, marginBottom: 10, letterSpacing: '.04em' }}>
-            {behind + 1} TRADE INVITATIONS WAITING · THIS IS THE OLDEST
+            {behind + 1} DECISIONS WAITING · THIS IS THE OLDEST
           </div>
         )}
 
-        {current.status === 'primary_pending' && (
+        {/* ONE QUESTION, TWO KINDS. A trade invitation asks somebody to take a
+            position; a level move asks them to change one they are already in.
+            They are drawn as separate steps rather than one with conditionals
+            because a half-awake reader has to know which decision they are
+            making from the heading alone — the same reason the direction and
+            instrument are set larger than anything else on both. */}
+        {current.kind === 'amend' ? (
+          <AmendStep
+            invite={current}
+            canTrade={canTrade}
+            busy={busy}
+            error={error}
+            onApply={() => act(() => api.joinFounderTrade(current.id))}
+            onDismiss={() => act(() => api.declineFounderTrade(current.id))}
+          />
+        ) : (
           <PrimaryStep
             invite={current}
             prefs={prefs}
@@ -221,26 +216,6 @@ export function FounderTradeModal({ onGoFunded }: FounderTradeModalProps) {
             onPrefs={(p) => setPrefs(p)}
             onJoin={() => act(() => api.joinFounderTrade(current.id))}
             onDecline={() => act(() => api.declineFounderTrade(current.id))}
-          />
-        )}
-
-        {current.status === 'funded_pending' && (
-          <FundedStep
-            invite={current}
-            busy={busy}
-            error={error}
-            onYes={() => act(() => api.founderFundedDecision(current.id, 'yes'))}
-            onNo={() => act(() => api.founderFundedDecision(current.id, 'no'))}
-          />
-        )}
-
-        {current.status === 'proof_pending' && (
-          <ProofStep
-            invite={current}
-            busy={busy}
-            error={error}
-            onUpload={(image) => act(() => api.uploadFounderProof(current.id, image))}
-            onError={(m) => setError(m)}
           />
         )}
       </div>
@@ -483,7 +458,7 @@ function PrimaryStep({
         <BigButton label="DO NOT JOIN" tone="stop" onClick={onDecline} disabled={busy || invite.sending} />
       </div>
       <p style={{ fontSize: 12, color: C.faint, margin: '14px 0 0', lineHeight: 1.5 }}>
-        Either answer moves on to your funded account, which is a separate decision.
+        Either answer finishes this. Nothing is sent to your funded account.
       </p>
     </>
   );
@@ -648,111 +623,136 @@ const inputStyle: React.CSSProperties = {
   fontFamily: C.mono,
 };
 
-// ---- step 2: the funded account ----
+// ---- the other kind of invitation: a level move ----
 
-function FundedStep({
+// The sender moved or added a stop or a target on a position they are already
+// in, and this is the recipient's one press to match it.
+//
+// **IT SHOWS THE MOVE, NOT THE DESTINATION.** "1.0820 → 1.0840" is the decision;
+// a bare new number is not, because the reader cannot tell from it whether the
+// stop tightened or loosened. Where the level came from is stated in the same
+// row it moved to, at the same size, so the two are read together.
+//
+// **AND IT ONLY OFFERS THE BUTTON WHEN THERE IS SOMETHING TO PRESS IT ON.** The
+// server resolves the recipient's own position when the invitation is raised —
+// from an explicit pairing, or from their single open position in the same
+// instrument and direction — and an ambiguous book resolves to NONE. The
+// invitation is still shown, because knowing what a partner did is worth knowing
+// either way; what is withheld is a button that would move a stop on a position
+// nobody chose.
+function AmendStep({
   invite,
+  canTrade,
   busy,
   error,
-  onYes,
-  onNo,
+  onApply,
+  onDismiss,
 }: {
   invite: FounderInvite;
+  canTrade: boolean;
   busy: boolean;
   error: string | null;
-  onYes: () => void;
-  onNo: () => void;
+  onApply: () => void;
+  onDismiss: () => void;
 }) {
+  const ready = invite.hasTarget && canTrade;
+  const moves = [
+    invite.stopLoss == null
+      ? null
+      : { label: 'Stop loss', from: invite.prevStopLoss, to: invite.stopLoss },
+    invite.takeProfit == null
+      ? null
+      : { label: 'Take profit', from: invite.prevTakeProfit, to: invite.takeProfit },
+  ].filter(Boolean) as { label: string; from: number | null; to: number }[];
+
   return (
     <>
-      <Heading>Are you placing this on your funded account?</Heading>
-      <TradeFacts invite={invite} />
-      {error && <ErrorBox message={error} />}
-      <div style={{ display: 'grid', gap: 12 }}>
-        <BigButton
-          label="YES — I AM PLACING IT"
-          sub="You place it at the firm; the terminal will ask for a screenshot"
-          tone="go"
-          onClick={onYes}
-          disabled={busy}
-        />
-        <BigButton label="NO — DO NOT JOIN FUNDED" tone="stop" onClick={onNo} disabled={busy} />
+      <Heading>
+        {invite.inviter.displayName} moved {moves.length > 1 ? 'their levels' : `their ${moves[0]?.label.toLowerCase() ?? 'levels'}`}
+      </Heading>
+
+      <div
+        style={{
+          border: `1px solid ${C.line2}`,
+          borderRadius: 12,
+          padding: 16,
+          background: C.panel2,
+          margin: '16px 0',
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'baseline', gap: 12, flexWrap: 'wrap' }}>
+          <span style={{ fontSize: 28, fontWeight: 800, letterSpacing: '-.01em' }}>{invite.instrument}</span>
+          <span
+            style={{
+              fontSize: 26,
+              fontWeight: 900,
+              color: invite.side === 'long' ? C.green : C.red,
+              letterSpacing: '.06em',
+            }}
+          >
+            {invite.side === 'long' ? 'BUY' : 'SELL'}
+          </span>
+        </div>
+        <dl style={{ margin: '14px 0 0', display: 'grid', gap: 10 }}>
+          {moves.map((m) => (
+            <div
+              key={m.label}
+              style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'baseline' }}
+            >
+              <dt style={{ fontSize: 13, color: C.muted }}>{m.label}</dt>
+              <dd style={{ margin: 0, fontSize: 17, fontWeight: 700, fontFamily: C.mono }}>
+                {/* Where it was, struck through, beside where it is now. The
+                    move is the decision; the destination alone is not. */}
+                <span style={{ color: C.faint, textDecoration: m.from == null ? 'none' : 'line-through' }}>
+                  {m.from == null ? 'None' : fmtPrice(m.from)}
+                </span>
+                <span style={{ color: C.faint, margin: '0 8px' }}>→</span>
+                <span>{fmtPrice(m.to)}</span>
+              </dd>
+            </div>
+          ))}
+        </dl>
       </div>
-      <p style={{ fontSize: 12, color: C.faint, margin: '14px 0 0', lineHeight: 1.5 }}>
-        {invite.primaryDecision === 'joined'
-          ? 'You joined the terminal trade. This is a separate decision.'
-          : 'You did not join the terminal trade. This is a separate decision.'}{' '}
-        The terminal never places a funded trade for you.
-      </p>
-    </>
-  );
-}
 
-// ---- step 3: the screenshot ----
-
-function ProofStep({
-  invite,
-  busy,
-  error,
-  onUpload,
-  onError,
-}: {
-  invite: FounderInvite;
-  busy: boolean;
-  error: string | null;
-  onUpload: (image: string) => void;
-  onError: (message: string) => void;
-}) {
-  const fileRef = useRef<HTMLInputElement | null>(null);
-  const [preparing, setPreparing] = useState(false);
-  const [preview, setPreview] = useState<string | null>(null);
-
-  const pick = async (file: File | undefined) => {
-    if (!file) return;
-    setPreparing(true);
-    try {
-      // Scaled in the browser before it is sent, the same way study-guide
-      // screenshots are — a phone photo is several megabytes untouched.
-      const dataUrl = await fileToScaledDataUrl(file, 1400, 0.82);
-      setPreview(dataUrl);
-      onUpload(dataUrl);
-    } catch {
-      onError('That image could not be read — try another screenshot');
-    } finally {
-      setPreparing(false);
-    }
-  };
-
-  const working = busy || preparing;
-  return (
-    <>
-      <Heading>Funded trade verification required</Heading>
-      <TradeFacts invite={invite} />
-      {error && <ErrorBox message={error} />}
-      <p style={{ fontSize: 14, color: C.muted, margin: '0 0 14px', lineHeight: 1.5 }}>
-        Upload a screenshot of your funded trade. This is what finishes the workflow — the alerts
-        keep going until it is saved.
-      </p>
-      {preview && (
-        <img
-          src={preview}
-          alt="The screenshot about to be saved"
-          style={{ width: '100%', borderRadius: 10, border: `1px solid ${C.line2}`, marginBottom: 14 }}
-        />
+      {invite.primaryError && !error && (
+        <ErrorBox message={`Your last attempt did not go through: ${invite.primaryError}`} />
       )}
-      <input
-        ref={fileRef}
-        type="file"
-        accept="image/*"
-        onChange={(e) => void pick(e.target.files?.[0])}
-        style={{ display: 'none' }}
-      />
-      <BigButton
-        label={working ? 'UPLOADING…' : 'UPLOAD SCREENSHOT'}
-        tone="go"
-        onClick={() => fileRef.current?.click()}
-        disabled={working}
-      />
+      {error && <ErrorBox message={error} />}
+
+      {!invite.hasTarget && (
+        <ErrorBox message="You have no open position this can be applied to. Link your position to theirs from the trade card, then ask them to send it again." />
+      )}
+      {invite.hasTarget && !canTrade && (
+        <ErrorBox message="Turn Advanced Trading on in My Terminal ▸ Premium Features to change a live position. You can still dismiss this." />
+      )}
+
+      <div style={{ display: 'grid', gap: 12, marginTop: 8 }}>
+        <BigButton
+          label={busy || invite.sending ? 'SENDING…' : 'MOVE MINE TO MATCH'}
+          sub={
+            invite.hasTarget
+              ? `On your ${invite.targetAccount ?? 'own'} position`
+              : 'No position of yours to apply it to'
+          }
+          tone="go"
+          onClick={onApply}
+          disabled={busy || invite.sending || !ready}
+        />
+        <BigButton label="LEAVE MINE AS THEY ARE" tone="stop" onClick={onDismiss} disabled={busy || invite.sending} />
+      </div>
+
+      <p style={{ fontSize: 12, color: C.faint, margin: '14px 0 0', lineHeight: 1.5 }}>
+        {/* HOW the position was found, said plainly. "We are provably in the same
+            trade" and "you have one position that looks like it" are different
+            degrees of confidence, and the reader should see which one this is
+            before they press. */}
+        {invite.hasTarget && invite.targetMatch === 'chain'
+          ? 'This applies to the position of yours that is linked to theirs.'
+          : invite.hasTarget
+            ? `Matched your only open ${invite.instrument} ${invite.side === 'long' ? 'buy' : 'sell'} — not a linked position. Check it is the one you mean.`
+            : 'Nothing on your account will change.'}{' '}
+        Only the level they moved is sent; your other level is left exactly as it is.
+      </p>
     </>
   );
 }

@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { requireWorkspace, requireWorkspaceWrite, requirePremium } from '../auth/middleware.js';
 import { TRADE_ORDER_TYPES, TRADE_SIDES } from '../db/schema.js';
 import { auditActorFor } from '../trading/credentialAudit.js';
-import { autoInviteAfterFill } from '../trading/founderTrades.js';
+import { autoAmendAfterModify, autoInviteAfterFill } from '../trading/founderTrades.js';
 import {
   cancelDeskOrder,
   closeDeskPosition,
@@ -199,7 +199,23 @@ export async function tradeDeskRoutes(app: FastifyInstance) {
       return reply.code(400).send({ error: parsed.error.errors[0]?.message ?? 'Invalid request' });
     }
     try {
-      await modifyDeskPosition(request.currentUser!, parsed.data, auditActorFor(request));
+      const result = await modifyDeskPosition(request.currentUser!, parsed.data, auditActorFor(request));
+      // Founder level-move send: if this trader has a standing link asking for
+      // their stop and target changes to reach another Founder, the invitation
+      // is raised here rather than by the browser — so it happens whether or not
+      // the tab that moved the level is still open. Deliberately NOT awaited and
+      // it swallows its own errors, exactly like the fill's own auto-send: a
+      // side effect must never delay or fail the change being reported.
+      //
+      // Wired to the ROUTE and not to the service, which is what stops a chain
+      // ping-ponging: the recipient applying a change calls `modifyDeskPosition`
+      // directly, so it never fans back out over their own links.
+      void autoAmendAfterModify(
+        request.currentUser!,
+        result,
+        parsed.data.connectionId,
+        parsed.data.tradeId,
+      );
       return { ok: true };
     } catch (e) {
       return fail(reply, e);

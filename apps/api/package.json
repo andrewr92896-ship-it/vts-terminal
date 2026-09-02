@@ -36,7 +36,8 @@
     "setup": "npm run db:migrate && npm run db:seed",
     "db:check-site-editor": "tsx src/siteEditor/checkSiteEditor.ts",
     "db:check-two-factor": "tsx src/auth/checkTwoFactor.ts",
-    "verify:maintenance": "tsx src/verifyMaintenance.ts"
+    "verify:maintenance": "tsx src/verifyMaintenance.ts",
+    "verify:pushover": "tsx src/notifications/verifyPushover.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.105.0",

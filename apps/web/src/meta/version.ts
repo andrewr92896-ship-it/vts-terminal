@@ -11,16 +11,61 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 7.82';
+export const APP_VERSION = 'Beta V 7.87';
 
 export const PATCH_NOTES: PatchNote[] = [
   {
-    version: 'Beta V 7.82',
+    version: 'Beta V 7.87',
     date: '2026-09-02',
     notes: [
       'A Site Editor workspace, for the founder only: the vitalistradingsystems.com landing page is edited from here, with the same tools the portfolio editor has — a live preview that follows every keystroke, undo and redo, Save that keeps work on the server without touching the site, Deploy that publishes it, the last twenty saves, export and import, file uploads with open, download and preview behaviours, and an Add menu on every section for cards, images, YouTube videos, text and callouts.',
       'The landing page itself did not change. Its words now live in a document the editor can change, and a check proves the starting document renders to exactly the page that was there.',
       'The marketing site now reads what is deployed from the portal and keeps the last good page if the portal is unreachable — so a deploy reaches it within about fifteen seconds, and an outage at the portal is a page that stops updating rather than one that disappears.',
+    ],
+  },
+  {
+    version: 'Beta V 7.86',
+    date: '2026-09-01',
+    notes: [
+      'My Terminal\u2019s sections can be dragged into the order you want. Customize now opens with your board at the top of the panel \u2014 drag a row, or use the arrows on it, which is also how it works on a phone, where dragging does not.',
+      'Your arrangement only describes the rows you have placed. A section added to the terminal in a future update still turns up on your board rather than being swallowed by a saved list, and it arrives at the bottom where a new row is looked for.',
+      'Taking a row off and putting it back returns it to where you had it, rather than dropping it at the end.',
+      'All three terminals \u2014 private, public and the demo.',
+    ],
+  },
+  {
+    version: 'Beta V 7.85',
+    date: '2026-08-31',
+    notes: [
+      'A stop or take profit that would trigger the moment it was set is now refused, on the ticket and on any live position. A buy is filled at the ask and its stop is watched against the bid, so a level typed at the price on the screen sat below the fill and at the trigger — it looked right and took the trade out on arrival. Every protective level now has to sit at least a pip (a point on anything that is not a currency pair) clear of the price it is measured against.',
+      'Moving a stop or target on a live position is checked at all now. It never was: the desk only ever judged a level when an order was placed, so anything amended afterwards went straight to the broker unexamined.',
+      'A Founder link can now send your stop and target MOVES as well as your new trades. When you move or add a level, whoever you are linked to gets the same pop-up they get for a trade, and one press moves theirs to match. Only the level you actually moved is sent, and taking a level off is deliberately not sent at all.',
+      'The two are separate switches per direction, so you can share level moves without sharing new trades, or either on its own. Both people can set either one.',
+      'A level move never guesses which of your positions it is about. It uses the position linked to theirs, or your single open position in that instrument and direction — and if you hold two, it tells you what they changed and offers no button rather than moving the wrong one.',
+      'Positions can be linked by hand from the trade card, for when you placed the same trade separately instead of joining. Linked positions are marked on the Live Wall and on Live Trades, so you can see whether a level moved there reaches anybody.',
+      'Joining a trade no longer asks about your funded account or a screenshot. Answering the one question finishes it. Nothing about the Funded Trades screen or the funded book changed.',
+    ],
+  },
+  {
+    version: 'Beta V 7.84',
+    date: '2026-08-31',
+    notes: [
+      'A Pushover application that has expired or been deactivated now says so. It is the same problem as a wrong token, but Pushover words it differently and only in its error text, so the terminal reported it as "couldn\u2019t reach Pushover" — which points at the network rather than at the one thing that needs replacing.',
+    ],
+  },
+  {
+    version: 'Beta V 7.83',
+    date: '2026-08-31',
+    notes: [
+      'A Pushover test now says which of the two credentials was refused. Pushover rejects a bad server-side application token and a bad personal user key the same way, and the terminal read every refusal as your key being wrong — so it told you to check a key that was correct, and deleted it. Pasting it again just repeated the loop.',
+      'Your key is now only removed when Pushover names it as the bad one. A refused application token says so plainly and is left for whoever runs the terminal; anything the terminal does not recognise is reported as a failed send and touches nothing.',
+    ],
+  },
+  {
+    version: 'Beta V 7.82',
+    date: '2026-08-31',
+    notes: [
+      'The Pushover panel no longer claims Pushover is unset up on the server when it simply could not reach the server. Any failed check — the terminal closed for maintenance, a dropped connection — read as "Pushover isn\u2019t set up on the server yet", which points you at the wrong thing entirely. It now says it could not check, and says outright that this tells you nothing about your Pushover account.',
     ],
   },
   {

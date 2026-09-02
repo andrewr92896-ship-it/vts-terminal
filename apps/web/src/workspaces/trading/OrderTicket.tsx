@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties }
 import { api, ApiError } from '../../api/client';
 import { fmtMoney, fmtUnits } from './TradeCard';
 import { forexPair } from './pips';
+import { protectionStep, triggerProblem } from './protection';
 import { TicketPresetMenu, fmtPct } from './TicketPresetMenu';
 import {
   DEFAULT_PRESETS,
@@ -570,6 +571,30 @@ export function OrderTicket({ account, instruments, instrument, onInstrument, re
         if (long && takeProfit <= reference) return 'A long’s target has to sit above the entry';
         if (!long && takeProfit >= reference) return 'A short’s target has to sit below the entry';
       }
+    }
+    // WOULD IT FIRE THE MOMENT IT WAS SET? A different question from the block
+    // above, and both are needed. That one asks whether the level is on the
+    // right side of the price the trade OPENS at; this asks whether it is on the
+    // right side of the price it is WATCHED against — and they are not the same
+    // price. A buy is filled at the ask and its stop triggers on the bid, so the
+    // whole spread is a band where a level passes the first check and fires on
+    // arrival. The rule and its one-pip minimum live in `protection.ts`, mirrored
+    // server-side so the desk refuses exactly what the ticket refuses.
+    //
+    // Only a MARKET order is judged this way: a resting entry is not on the book
+    // yet, so its levels cannot fire on anything until it fills.
+    if (type === 'market') {
+      const { step: guard, stepLabel } = protectionStep(isForex, spec.pipSize);
+      const instant = triggerProblem({
+        side,
+        bid: quote?.bid ?? null,
+        ask: quote?.ask ?? null,
+        step: guard,
+        stepLabel,
+        stopLoss,
+        takeProfit,
+      });
+      if (instant) return instant;
     }
     return null;
   })();

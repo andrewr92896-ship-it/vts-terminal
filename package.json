@@ -46,6 +46,7 @@
     "verify:study-categories": "npm --workspace @vts/web run verify:study-categories",
     "verify:movement": "npm --workspace @vts/web run verify:movement",
     "verify:sizing": "npm --workspace @vts/web run verify:sizing",
+    "verify:protection": "npm --workspace @vts/web run verify:protection",
     "verify:desk-layout": "npm --workspace @vts/web run verify:desk-layout",
     "build:private": "npm --workspace @vts/api run build && npm --workspace @vts/web run build",
     "build:marketing": "node scripts/build-static-app.mjs apps/marketing",
@@ -66,7 +67,9 @@
     "verify:marketing-render": "node scripts/verify-marketing-render.mjs",
     "verify:marketing-server": "node scripts/verify-marketing-server.mjs",
     "db:check-site-editor": "npm --workspace @vts/api run db:check-site-editor",
-    "verify:maintenance": "npm --workspace @vts/api run verify:maintenance && npm --workspace @vts/web run verify:maintenance"
+    "verify:maintenance": "npm --workspace @vts/api run verify:maintenance && npm --workspace @vts/web run verify:maintenance",
+    "verify:pushover": "npm --workspace @vts/api run verify:pushover",
+    "verify:my-terminal": "npm --workspace @vts/web run verify:my-terminal"
   },
   "devDependencies": {
     "npm-run-all": "^4.1.5"

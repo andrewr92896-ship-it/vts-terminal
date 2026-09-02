@@ -13,8 +13,10 @@ import {
   getFounderLinks,
   getFounderPrefs,
   getInvite,
-  getProofImage,
   invitableFounders,
+  linkPositions,
+  listPositionLinks,
+  pairablePositions,
   previewJoinSize,
   joinPrimary,
   planFounderTest,
@@ -23,8 +25,7 @@ import {
   pendingForRecipient,
   setFounderLink,
   setFounderPrefs,
-  setFundedDecision,
-  uploadProof,
+  unlinkPositions,
 } from '../trading/founderTrades.js';
 
 // Founder trade coordination — every route in one namespace, and every one of
@@ -68,15 +69,34 @@ const prefsSchema = z.object({
   responseLevel: z.enum(NOTIF_LEVELS).optional(),
 });
 
-// One direction of one link. Either party may set it, which is what makes
-// "receive their trades" possible without touching their account.
-const linkSchema = z.object({
-  senderUserId: z.string().min(1).max(64),
-  recipientUserId: z.string().min(1).max(64),
-  on: z.boolean(),
-});
+// One direction of one link, and WHAT TRAVELS along it. Either party may set it,
+// which is what makes "receive their trades" possible without touching their
+// account.
+//
+// A PATCH over what is stored, like the personal prefs: the terminal is a
+// service-worker-cached PWA, so a browser on an old bundle changing one switch
+// must never silently reset the other. `on` is that old bundle's field and is
+// read as the entries switch, which is exactly what it meant when it was the
+// only one — so a cached client keeps working rather than failing quietly.
+const linkSchema = z
+  .object({
+    senderUserId: z.string().min(1).max(64),
+    recipientUserId: z.string().min(1).max(64),
+    entries: z.boolean().optional(),
+    amends: z.boolean().optional(),
+    on: z.boolean().optional(),
+  })
+  .refine((v) => v.entries !== undefined || v.amends !== undefined || v.on !== undefined, {
+    message: 'Nothing to change',
+  });
 
-const proofSchema = z.object({ image: z.string().min(1) });
+// Pairing two positions by hand. Only the two trade ids: which accounts they sit
+// on is read from each side's own open book, never taken from the request.
+const pairSchema = z.object({
+  withUserId: z.string().min(1).max(64),
+  myTradeId: z.string().min(1).max(64),
+  theirTradeId: z.string().min(1).max(64),
+});
 
 // What travels with an invitation. Founder-set and install-wide — the group's
 // rule rather than one trader's, so an invitation means the same thing whoever
@@ -199,8 +219,13 @@ export async function founderTradeRoutes(app: FastifyInstance) {
     const parsed = linkSchema.safeParse(request.body);
     if (!parsed.success) return reply.code(400).send({ error: 'Invalid link' });
     try {
-      const { senderUserId, recipientUserId, on } = parsed.data;
-      return { links: await setFounderLink(request.currentUser!, senderUserId, recipientUserId, on) };
+      const { senderUserId, recipientUserId, entries, amends, on } = parsed.data;
+      return {
+        links: await setFounderLink(request.currentUser!, senderUserId, recipientUserId, {
+          entries: entries ?? on,
+          amends,
+        }),
+      };
     } catch (e) {
       return fail(reply, e);
     }
@@ -256,17 +281,6 @@ export async function founderTradeRoutes(app: FastifyInstance) {
     }
   });
 
-  // The funded screenshot, served as its own read so a list never carries every
-  // image on the desk.
-  app.get('/api/founder-trades/:id/proof', guard, async (request, reply) => {
-    const { id } = request.params as { id: string };
-    try {
-      return { image: await getProofImage(request.currentUser!, id) };
-    } catch (e) {
-      return fail(reply, e);
-    }
-  });
-
   // Raise an invitation from a trade the caller has just placed. Repeating it
   // for the same trade returns the invitation that already exists rather than
   // raising a second one.
@@ -282,9 +296,15 @@ export async function founderTradeRoutes(app: FastifyInstance) {
     }
   });
 
-  // JOIN. This press is the authorization for one order and nothing else: the
-  // instrument, direction and stop come from the invitation, the size from the
-  // caller's own settings, and the desk's ordinary order path does the rest.
+  // JOIN, or APPLY a level change — one endpoint for both kinds of invitation.
+  //
+  // This press is the authorization for one action and nothing else. On a trade
+  // invitation the instrument, direction and stop come from the invitation and
+  // the size from the caller's own settings; on a level move, the position the
+  // change reaches was resolved when the invitation was raised and nothing in
+  // this request can redirect it. The desk's ordinary order path does the rest,
+  // which is what puts a matched level through the same instant-trigger refusal
+  // as one typed by hand.
   app.post('/api/founder-trades/:id/join', guard, async (request, reply) => {
     const { id } = request.params as { id: string };
     try {
@@ -294,8 +314,10 @@ export async function founderTradeRoutes(app: FastifyInstance) {
     }
   });
 
-  // Declining the primary trade deliberately does NOT end the workflow — the
-  // funded question is separate and still owed.
+  // Declining, or leaving your own levels as they are. Either answer ENDS the
+  // workflow now: the funded question that used to follow it was removed from
+  // this chain (owner decision, 2026-08), and nothing about the funded book or
+  // the Funded Trades screen changed with it.
   app.post('/api/founder-trades/:id/decline', guard, async (request, reply) => {
     const { id } = request.params as { id: string };
     try {
@@ -305,32 +327,55 @@ export async function founderTradeRoutes(app: FastifyInstance) {
     }
   });
 
-  app.post('/api/founder-trades/:id/funded', guard, async (request, reply) => {
-    const parsed = z.object({ decision: z.enum(['yes', 'no']) }).safeParse(request.body);
-    if (!parsed.success) return reply.code(400).send({ error: 'A funded decision is required' });
+  // ---- linked positions ----
+  //
+  // A pairing is what turns a level move into one press: the terminal knows
+  // exactly which of the recipient's positions is the same trade rather than
+  // matching on instrument and hoping. Created automatically by a join, and by
+  // hand here for the case the owner named — the invitation came, it was not
+  // joined, and the trade was placed separately anyway.
+  app.get('/api/founder-trades/positions/links', guard, async (request, reply) => {
     try {
-      return { invite: await setFundedDecision(request.currentUser!, id(request), parsed.data.decision) };
+      return { links: await listPositionLinks(request.currentUser!) };
     } catch (e) {
       return fail(reply, e);
     }
   });
 
-  // The screenshot is what completes the funded branch, not the YES that
-  // preceded it. Body limit matches the desk's other screenshot routes; the
-  // client scales the image before it gets here.
-  app.post(
-    '/api/founder-trades/:id/proof',
-    { preHandler: [requireFounder], bodyLimit: 12 * 1024 * 1024 },
-    async (request, reply) => {
-      const parsed = proofSchema.safeParse(request.body);
-      if (!parsed.success) return reply.code(400).send({ error: 'A screenshot is required' });
-      try {
-        return { invite: await uploadProof(request.currentUser!, id(request), parsed.data.image) };
-      } catch (e) {
-        return fail(reply, e);
-      }
-    },
-  );
+  // Both sides' open positions, for the picker. Reading another Founder's open
+  // book is deliberate rather than incidental: pairing needs two positions, and
+  // this is the same group whose positions already share a Live Wall. It is
+  // bounded to founder-level accounts by the guard, and to a named, currently
+  // eligible one by the service.
+  app.get('/api/founder-trades/positions/pairable', guard, async (request, reply) => {
+    const q = z.object({ withUserId: z.string().min(1).max(64) }).safeParse(request.query);
+    if (!q.success) return reply.code(400).send({ error: 'A Founder is required' });
+    try {
+      return await pairablePositions(request.currentUser!, q.data.withUserId, auditActorFor(request));
+    } catch (e) {
+      return fail(reply, e);
+    }
+  });
+
+  app.post('/api/founder-trades/positions/links', guard, async (request, reply) => {
+    const parsed = pairSchema.safeParse(request.body);
+    if (!parsed.success) return reply.code(400).send({ error: 'Two positions are required' });
+    try {
+      return { links: await linkPositions(request.currentUser!, parsed.data, auditActorFor(request)) };
+    } catch (e) {
+      return fail(reply, e);
+    }
+  });
+
+  // Either party may break a pairing, exactly as either may set one — being able
+  // to stop your own position being reached must not depend on the other person.
+  app.delete('/api/founder-trades/positions/links/:id', guard, async (request, reply) => {
+    try {
+      return { links: await unlinkPositions(request.currentUser!, id(request)) };
+    } catch (e) {
+      return fail(reply, e);
+    }
+  });
 }
 
 function id(request: { params: unknown }): string {

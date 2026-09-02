@@ -1,10 +1,11 @@
-import { useState, type CSSProperties } from 'react';
+import { useEffect, useState, type CSSProperties } from 'react';
 import { api, ApiError } from '../../api/client';
 import { useAuth } from '../../auth/AuthContext';
-import { hasEntitlement } from '../../auth/access';
+import { hasEntitlement, isFounder } from '../../auth/access';
 import { fmtMoney } from './tradeFormat';
-import { fmtSteps, movementFor, movementLeg, type Movement, type MovementLeg } from './pips';
-import type { LiveTrade } from '../../api/types';
+import { fmtSteps, forexPair, movementFor, movementLeg, type Movement, type MovementLeg } from './pips';
+import { protectionStep, triggerProblem } from './protection';
+import type { FounderPerson, LiveTrade, PairablePosition } from '../../api/types';
 
 // Acting on an open position — the stop, the target, and closing it — for every
 // surface that draws one. Live Trades' desk book was the only place a position
@@ -162,6 +163,40 @@ export function usePositionEditor(
       ...(stopLoss === undefined ? {} : { stopLoss }),
       ...(takeProfit === undefined ? {} : { takeProfit }),
     };
+
+    // WOULD IT FIRE THE MOMENT IT WAS SET?
+    //
+    // The case this exists for is the one the owner hit: a level typed at the
+    // price on the screen, which took a live position out on arrival. A stop is
+    // watched against the opposite side of the book from the one the trade was
+    // filled at, so "below my entry" was never the same question as "below the
+    // price it triggers on" — see `protection.ts`, which is mirrored server-side.
+    //
+    // **THE MARK IS ALL THIS SCREEN HAS, AND THAT IS THE RIGHT WAY ROUND.** The
+    // wall carries one price per position, not two, so this judges against the
+    // mark while the server judges against the exact triggering side and refuses
+    // with the venue's own numbers. The server is the enforcer either way; this
+    // is what stops an obviously-instant level costing a round trip.
+    //
+    // A 'note' is exempt: a funded or hand-kept level is a RECORD of what the
+    // firm is holding, not an order, so there is nothing for it to trigger
+    // against and refusing it would stop somebody writing down what is true.
+    if (kind === 'broker') {
+      const { step, stepLabel } = protectionStep(forexPair(trade.instrument) != null, trade.forex?.pipSize);
+      const instant = triggerProblem({
+        side: trade.side,
+        bid: trade.currentPrice,
+        ask: trade.currentPrice,
+        step,
+        stepLabel,
+        ...levels,
+      });
+      if (instant) {
+        setError(instant);
+        return;
+      }
+    }
+
     setBusy(true);
     setError(null);
     try {
@@ -253,6 +288,201 @@ export function PositionActions({
           {"Close"}
         </button>
       )}
+    </>
+  );
+}
+
+
+// ---- linked positions ----
+//
+// **WHETHER A LEVEL MOVED HERE REACHES ANYBODY.** A pairing between two
+// Founders' positions is what turns "I moved my stop" into a one-press decision
+// on the other end, and until it is drawn on the position itself there is no way
+// to tell a paired trade from an unpaired one — so a trader has no idea whether
+// the partner they think they are running a trade with is going to hear about
+// the stop they just moved.
+//
+// Stamped server-side onto the viewer's OWN positions only (`linkedWith`), so
+// this draws nothing on a teammate's card: a pairing is between two accounts,
+// and there is nothing to do with it on a position you cannot act on.
+
+const LINK_BLUE = '#5AC8FA';
+
+/** The marker itself. Small, and deliberately not coloured like a tier mark or a
+ *  win/loss reading — it is a fact about who else is in this trade. */
+export function LinkedMark({ trade }: { trade: LiveTrade }) {
+  const links = trade.linkedWith ?? [];
+  if (links.length === 0) return null;
+  const names = links.map((l) => l.displayName).join(', ');
+  return (
+    <span
+      title={`Linked with ${names} — a stop or target moved here is offered to them in one press`}
+      style={{
+        fontSize: 9,
+        fontWeight: 800,
+        letterSpacing: '.06em',
+        color: LINK_BLUE,
+        border: `1px solid rgba(90,200,250,.45)`,
+        borderRadius: 4,
+        padding: '1px 5px',
+        whiteSpace: 'nowrap',
+      }}
+    >
+      {links.length > 1 ? `LINKED ×${links.length}` : 'LINKED'}
+    </span>
+  );
+}
+
+/**
+ * Pair this position with another Founder's, by hand.
+ *
+ * **THE CASE THE OWNER NAMED:** the invitation came, it was not joined, and the
+ * trade was placed separately anyway. Without a pairing a later level move falls
+ * back to matching on instrument — which is a guess, and resolves to nothing at
+ * all the moment either of them holds two positions in the same pair. With one
+ * it is exact.
+ *
+ * Founder-level and the viewer's own broker positions only. It is drawn as an
+ * expanding row rather than a dialog because it sits inside a trade card that
+ * may itself be inside a board tile, where a modal would be the wrong shape.
+ */
+export function PositionLinkControl({ trade, onChanged }: { trade: LiveTrade; onChanged: () => void }) {
+  const { user } = useAuth();
+  const [open, setOpen] = useState(false);
+  const [people, setPeople] = useState<FounderPerson[]>([]);
+  const [withUserId, setWithUserId] = useState('');
+  const [theirs, setTheirs] = useState<PairablePosition[]>([]);
+  const [theirTradeId, setTheirTradeId] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const eligible = !!user && !user.isDemo && isFounder(user.roles);
+  const myTradeId = brokerTradeId(trade.id);
+  const links = trade.linkedWith ?? [];
+
+  useEffect(() => {
+    if (!open || people.length > 0) return;
+    api
+      .founderRecipients()
+      .then((r) => {
+        setPeople(r.recipients);
+        setWithUserId((prev) => prev || r.recipients[0]?.userId || '');
+      })
+      .catch(() => setError('Could not read who else has Founder access'));
+  }, [open, people.length]);
+
+  // Their open positions, narrowed to the ones that could BE this trade. The
+  // server checks instrument and direction again when the pairing is made —
+  // this is the shortlist, not the rule.
+  useEffect(() => {
+    if (!open || !withUserId) return;
+    setTheirs([]);
+    setTheirTradeId('');
+    api
+      .pairablePositions(withUserId)
+      .then((r) => {
+        const same = r.theirs.filter(
+          (p) =>
+            p.instrument.replace(/[/_-]/g, '').toUpperCase() ===
+              trade.instrument.replace(/[/_-]/g, '').toUpperCase() && p.side === trade.side,
+        );
+        setTheirs(same);
+        setTheirTradeId(same[0]?.tradeId ?? '');
+      })
+      .catch(() => setError('Could not read their open positions'));
+  }, [open, withUserId, trade.instrument, trade.side]);
+
+  if (!eligible) return null;
+
+  const unlink = async (id: string) => {
+    setBusy(true);
+    setError(null);
+    try {
+      await api.unlinkPositions(id);
+      onChanged();
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message : 'Could not unlink');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const link = async () => {
+    if (!withUserId || !theirTradeId) return;
+    setBusy(true);
+    setError(null);
+    try {
+      await api.linkPositions({ withUserId, myTradeId, theirTradeId });
+      setOpen(false);
+      onChanged();
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message : 'Could not link those positions');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <>
+      {links.map((l) => (
+        <button
+          key={l.id}
+          onClick={() => void unlink(l.id)}
+          disabled={busy}
+          title={`Linked with ${l.displayName}${l.source === 'join' ? ' (you joined their trade)' : ''} — press to unlink`}
+          style={{ ...miniBtn, color: LINK_BLUE, borderColor: 'rgba(90,200,250,.45)' }}
+        >
+          {l.displayName} ✕
+        </button>
+      ))}
+      {!open ? (
+        <button onClick={() => setOpen(true)} style={miniBtn}>
+          {links.length > 0 ? 'Link another' : 'Link to a partner'}
+        </button>
+      ) : (
+        <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap', width: '100%' }}>
+          <select
+            value={withUserId}
+            onChange={(e) => setWithUserId(e.target.value)}
+            aria-label="Which Founder"
+            style={{ ...miniInput, width: 'auto' }}
+          >
+            {people.map((p) => (
+              <option key={p.userId} value={p.userId}>
+                {p.displayName}
+              </option>
+            ))}
+          </select>
+          <select
+            value={theirTradeId}
+            onChange={(e) => setTheirTradeId(e.target.value)}
+            aria-label="Which of their positions"
+            style={{ ...miniInput, width: 'auto' }}
+          >
+            {theirs.length === 0 ? (
+              <option value="">No matching open position</option>
+            ) : (
+              theirs.map((p) => (
+                <option key={p.tradeId} value={p.tradeId}>
+                  {p.units} @ {p.entryPrice} · {p.connectionLabel}
+                </option>
+              ))
+            )}
+          </select>
+          <button onClick={() => setOpen(false)} style={miniBtn} disabled={busy}>
+            {"Cancel"}
+          </button>
+          <button
+            onClick={() => void link()}
+            disabled={busy || !theirTradeId}
+            style={{ ...miniBtn, color: '#0c2768', background: GOLD, borderColor: GOLD, fontWeight: 700 }}
+          >
+            {busy ? 'Linking…' : 'Link'}
+          </button>
+          {error && <span style={{ fontSize: 10, color: RED, width: '100%' }}>{error}</span>}
+        </div>
+      )}
+      {!open && error && <span style={{ fontSize: 10, color: RED }}>{error}</span>}
     </>
   );
 }

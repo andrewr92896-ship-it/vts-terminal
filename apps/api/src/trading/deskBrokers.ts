@@ -1,7 +1,7 @@
 import type { BrokerConnectionKind } from '../db/schema.js';
 import type { OandaConfig, KrakenConfig } from './config.js';
 import type { DecryptedConnection, KrakenCreds, OandaCreds } from './connections.js';
-import { fetchOandaAccountSummary } from './brokers/oanda.js';
+import { fetchOandaAccountSummary, fetchOandaTrades } from './brokers/oanda.js';
 import {
   cancelOandaOrder,
   closeOandaTrade,
@@ -168,6 +168,27 @@ export interface DeskHolding {
   minimumTradeSize: number | null;
 }
 
+// An open position, as the desk needs it: enough to judge a protective level
+// against and to say which position an invitation is about.
+//
+// **ONLY A VENUE WHOSE POSITIONS CAN BE AMENDED REPORTS ANY.** Kraken spot has
+// no position object at all — a buy leaves a balance, and its protective order
+// is an ordinary resting order that `amend` already refuses by name — so it
+// answers with nothing rather than with holdings dressed up as positions. That
+// keeps `canAmendProtection` the single statement of which venue can do this.
+export interface DeskPositionRow {
+  /** The venue's own trade id — what close/amend take. */
+  tradeId: string;
+  instrument: string; // display form, e.g. EUR/USD
+  side: 'long' | 'short';
+  units: number;
+  entryPrice: number;
+  currentPrice: number | null;
+  stopLoss: number | null;
+  takeProfit: number | null;
+  openedAt: number | null;
+}
+
 export interface DeskBroker {
   readonly broker: BrokerConnectionKind;
   readonly connectionId: string;
@@ -182,6 +203,8 @@ export interface DeskBroker {
   quotes(instruments: string[]): Promise<DeskQuoteRow[]>;
   place(input: DeskPlaceRequest): Promise<DeskPlaceResponse>;
   close(input: { tradeId: string; instrument: string; units: number | null }): Promise<DeskCloseResponse>;
+  /** Open positions on this account. Empty on a venue that has none to amend. */
+  positions(): Promise<DeskPositionRow[]>;
   amend(input: { tradeId: string; spec: DeskInstrumentSpec; takeProfit?: number | null; stopLoss?: number | null }): Promise<void>;
   workingOrders(): Promise<DeskWorkingOrderRow[]>;
   cancel(orderId: string): Promise<void>;
@@ -270,6 +293,25 @@ function oandaBroker(conn: DecryptedConnection): DeskBroker {
     },
     amend: ({ tradeId, spec, takeProfit, stopLoss }) =>
       modifyOandaTradeOrders(cfg, tradeId, { takeProfit, stopLoss, displayPrecision: spec.displayPrecision }),
+    // The same read the Live Wall makes, reshaped. The wall namespaces an id as
+    // `<connectionId>:oanda:<tradeId>` for its own row keys; what close, amend
+    // and every founder-trade pairing take is the venue's own id, so the prefix
+    // this connector added is stripped back off here rather than at four call
+    // sites that would each have to remember the format.
+    positions: async () => {
+      const trades = await fetchOandaTrades(cfg);
+      return trades.map((t) => ({
+        tradeId: t.id.slice(t.id.lastIndexOf(':') + 1),
+        instrument: t.instrument,
+        side: t.side,
+        units: t.units,
+        entryPrice: t.entryPrice,
+        currentPrice: t.currentPrice,
+        stopLoss: t.stopLoss,
+        takeProfit: t.takeProfit,
+        openedAt: t.openedAt,
+      }));
+    },
     workingOrders: async () => {
       const orders = await fetchOandaPendingOrders(cfg);
       // A TP/SL belonging to an open trade is shown on the position it protects,
@@ -454,6 +496,11 @@ function krakenBroker(conn: DecryptedConnection): DeskBroker {
         'SPOT_NO_AMEND',
       );
     },
+    // Spot has no position to report: a buy leaves a balance, which Holdings
+    // answers, and there is nothing here a stop could be moved on. Reporting
+    // holdings as positions would put rows in front of controls that `amend`
+    // and `close` immediately refuse.
+    positions: async () => [],
     workingOrders: async () => {
       const pairs = await loadKrakenPairs();
       const orders = await fetchKrakenOpenOrders(cfg, pairs);

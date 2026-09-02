@@ -16,12 +16,22 @@ const STEPS = [
   // has to fall back to that page when the portal is unreachable.
   ['marketing renderer reproduces the page', 'verify:marketing-render'],
   ['marketing server', 'verify:marketing-server'],
+  ['pushover refusals', 'verify:pushover'],
+  // My Terminal's arrangement — what happens to a board when the nav changes
+  // under it, which only ever shows up on a deploy.
+  ['my terminal layout', 'verify:my-terminal'],
   ['credential encryption', 'verify:secretbox'],
   ['AI provider seam', 'verify:ai-provider'],
   ['market data macro', 'verify:market-macro'],
   ['investments math', 'verify:investments'],
   ['investments math mirror (private ↔ public)', 'verify:investments-mirror'],
   ['position sizing (web ↔ server)', 'verify:sizing'],
+  // A stop typed at the price on screen took a live position out the moment
+  // it was set: a long is filled at the ask and its stop is watched against
+  // the bid, so every spread was a band where a level passed the entry-side
+  // check and triggered instantly. Invisible to a typecheck, and only
+  // reproducible against a live quote.
+  ['protective-order triggers (web ↔ server)', 'verify:protection'],
   ['trade movement (pips and points)', 'verify:movement'],
   // The demo is the showcase, and its writes are the half a screenshot cannot
   // see: a capture asserts a page rendered, not that pressing "add" on it did

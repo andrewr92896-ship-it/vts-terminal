@@ -22,9 +22,12 @@ import {
   type DeskCloseResponse,
   type DeskHolding,
   type DeskInstrumentSpec,
+  type DeskPositionRow,
   type DeskQuoteRow,
   type DeskWorkingOrderRow,
 } from './deskBrokers.js';
+import { forexPair } from './forex.js';
+import { protectionStep, triggerProblem } from './protection.js';
 
 // The Trade Desk — placing real orders from inside the terminal.
 //
@@ -42,7 +45,7 @@ import {
 // set of conditionals scattered through here.
 
 export { DeskError } from './deskBrokers.js';
-export type { DeskHolding, DeskInstrumentSpec } from './deskBrokers.js';
+export type { DeskHolding, DeskInstrumentSpec, DeskPositionRow } from './deskBrokers.js';
 
 // Resolve one of the caller's own active connections into a broker adapter.
 // Throws rather than returning null so every caller fails closed.
@@ -260,6 +263,49 @@ export async function listDeskHoldings(userId: string, actor: AuditActor): Promi
   return results.flat().sort((a, b) => (b.value ?? 0) - (a.value ?? 0));
 }
 
+// ---- open positions ----
+
+export interface DeskPosition extends DeskPositionRow {
+  connectionId: string;
+  connectionLabel: string;
+  broker: string;
+}
+
+// Every open position across ONE trader's own accounts.
+//
+// Deliberately not a second Live Wall: the wall is team-scoped, cached and
+// per-viewer, and this is the caller's own book read fresh for the two jobs that
+// need certainty rather than freshness — pairing two Founders' positions, and
+// working out which of the recipient's positions a level-move applies to. An
+// account that will not answer contributes nothing rather than failing the whole
+// read, exactly as the working-orders read already does.
+//
+// The credential USE is the caller's to state rather than this function's: a
+// trader opening the pairing picker is a person asking (`desk_read`, its own
+// audit row), while the terminal working out which position a level-move applies
+// to is background polling on somebody else's book (`wall_read`, aggregated by
+// the hour, with a null actor). Recording the second as the first would name a
+// person as having read an account they never opened.
+export async function listDeskPositions(userId: string, use: CredentialUse): Promise<DeskPosition[]> {
+  const brokers = await tradeableBrokers(userId, use);
+  const results = await Promise.all(
+    brokers.map(async (b) => {
+      try {
+        const rows = await b.positions();
+        return rows.map((p) => ({
+          ...p,
+          connectionId: b.connectionId,
+          connectionLabel: b.label,
+          broker: b.broker as string,
+        }));
+      } catch {
+        return [];
+      }
+    }),
+  );
+  return results.flat().sort((a, b) => (b.openedAt ?? 0) - (a.openedAt ?? 0));
+}
+
 // ---- the order journal ----
 
 export interface DeskOrderRecord {
@@ -442,6 +488,43 @@ function checkProtection(
   }
 }
 
+// Refuse a protective level that would fire the moment it was set.
+//
+// **THIS IS A DIFFERENT QUESTION FROM `checkProtection` ABOVE, AND BOTH ARE
+// NEEDED.** That one asks whether the level is on the right side of the price
+// the trade OPENS at, which is what makes a trade coherent. This one asks
+// whether it is on the right side of the price it is WATCHED against, which is
+// what stops it triggering instantly — and the two are not the same price. A
+// long is filled at the ask and its stop is watched against the bid, so every
+// spread is a band in which a level passes the first check and fires on arrival.
+//
+// That is not hypothetical: it took one of the desk's own positions out (owner
+// report, 2026-08) after a stop was typed at the price on the screen. The rule
+// and its one-pip minimum live in `trading/protection.ts`, mirrored into the
+// browser so the ticket refuses the same level before it is ever sent.
+async function assertNoInstantTrigger(
+  broker: DeskBroker,
+  spec: DeskInstrumentSpec,
+  side: 'long' | 'short',
+  levels: { takeProfit?: number | null; stopLoss?: number | null },
+  quote?: DeskQuoteRow | null,
+): Promise<void> {
+  // Reuse the quote the caller already read where there is one — placing an
+  // order has fetched it two lines earlier, and asking the venue twice for the
+  // same price is a round trip that can also disagree with itself.
+  const q = quote ?? (await viaBroker(() => broker.quotes([spec.instrument])).catch(() => []))[0] ?? null;
+  const { step, stepLabel } = protectionStep(forexPair(spec.instrument) != null, spec.pipSize);
+  const problem = triggerProblem({
+    side,
+    bid: q?.bid ?? null,
+    ask: q?.ask ?? null,
+    step,
+    stepLabel,
+    ...levels,
+  });
+  if (problem) throw new DeskError(problem, 400, 'INSTANT_TRIGGER');
+}
+
 async function placeOrderImpl(user: UserRow, input: PlaceInput, actor: AuditActor): Promise<PlaceResult> {
   refuseDemo(user);
   const broker = await resolveConnection(user.id, input.connectionId, {
@@ -510,6 +593,13 @@ async function placeOrderImpl(user: UserRow, input: PlaceInput, actor: AuditActo
     }
   }
   checkProtection(input.side, reference, takeProfit, stopLoss);
+  // Only a MARKET order is judged against the live market: a resting entry is
+  // not on the book yet, so its levels are measured against its own trigger
+  // price (which `checkProtection` has just done) and cannot fire on anything
+  // until it fills.
+  if (input.type === 'market') {
+    await assertNoInstantTrigger(broker, spec, input.side, { takeProfit, stopLoss }, quote ?? null);
+  }
 
   // Some venues refuse an order worth less than a minimum *value*, which a size
   // above the minimum size can still fall below — a tenth of the minimum coin
@@ -648,6 +738,26 @@ async function closePositionImpl(user: UserRow, input: CloseInput, actor: AuditA
 
 // ---- amending a live trade's stop / target ----
 
+// What an amend actually did, plus the position as it stood BEFORE it. Returned
+// rather than logged because a Founder level-move invitation is built from it:
+// "the stop moved 1.0820 → 1.0840" needs both ends, and only the account that
+// was just read knows the first one.
+export interface ModifyResult {
+  /** This attempt's row in the desk's own order journal (`trading_orders.id`). */
+  orderRecordId: string;
+  instrument: string;
+  /** Null when the venue did not report the position — never guessed. */
+  side: 'long' | 'short' | null;
+  previousStopLoss: number | null;
+  previousTakeProfit: number | null;
+  stopLoss: number | null;
+  takeProfit: number | null;
+  entryPrice: number | null;
+  units: number | null;
+  changedStopLoss: boolean;
+  changedTakeProfit: boolean;
+}
+
 export interface ModifyInput {
   connectionId: string;
   tradeId: string;
@@ -657,7 +767,11 @@ export interface ModifyInput {
   stopLoss?: number | null;
 }
 
-async function modifyPositionImpl(user: UserRow, input: ModifyInput, actor: AuditActor): Promise<void> {
+async function modifyPositionImpl(
+  user: UserRow,
+  input: ModifyInput,
+  actor: AuditActor,
+): Promise<ModifyResult> {
   refuseDemo(user);
   const broker = await resolveConnection(user.id, input.connectionId, {
     purpose: 'order_amend',
@@ -669,6 +783,28 @@ async function modifyPositionImpl(user: UserRow, input: ModifyInput, actor: Audi
   const stopLoss = input.stopLoss == null ? input.stopLoss : round(input.stopLoss, spec.displayPrecision);
   if (takeProfit === undefined && stopLoss === undefined) {
     throw new DeskError('Nothing to change');
+  }
+
+  // THE POSITION IS READ FROM THE VENUE, NOT TAKEN FROM THE CALLER.
+  //
+  // Judging a level needs the position's DIRECTION, and the modify payload has
+  // never carried one — which is exactly why nothing was judged here at all
+  // until now. Adding `side` to the request would have made a client's word the
+  // input to a safety check; the account itself is the authority, the read is a
+  // deliberate human action rather than a poll, and the same row supplies the
+  // levels the position was on BEFORE this change, which is what a Founder
+  // level-move invitation is built from.
+  //
+  // A position the venue does not report is refused rather than amended blind:
+  // on a venue with no positions to amend the adapter answers with none, and
+  // `amend` there refuses by name a line later anyway.
+  const open = await viaBroker(() => broker.positions()).catch((): DeskPositionRow[] => []);
+  const position = open.find((p) => p.tradeId === input.tradeId) ?? null;
+  if (position) {
+    // Note the deliberate omission of a direction check against the ENTRY:
+    // moving a long's stop above its entry is a trader taking risk off, and it
+    // must stay allowed. What is refused is a level that would fire on arrival.
+    await assertNoInstantTrigger(broker, spec, position.side, { takeProfit, stopLoss });
   }
 
   const shared = {
@@ -687,7 +823,7 @@ async function modifyPositionImpl(user: UserRow, input: ModifyInput, actor: Audi
 
   try {
     await broker.amend({ tradeId: input.tradeId, spec, takeProfit, stopLoss });
-    await journal(user.id, {
+    const orderRecordId = await journal(user.id, {
       ...shared,
       status: 'filled',
       brokerOrderId: null,
@@ -697,6 +833,23 @@ async function modifyPositionImpl(user: UserRow, input: ModifyInput, actor: Audi
       error: null,
     });
     invalidateDeskSnapshot(user.teamId ?? `solo:${user.id}`);
+    return {
+      orderRecordId,
+      instrument: spec.instrument,
+      // What the position was on before this change, for anything that needs to
+      // say what MOVED rather than only where it landed. Null when the venue did
+      // not report the position — the caller then has a change with no history,
+      // which is honest rather than a fabricated previous level.
+      side: position?.side ?? null,
+      previousStopLoss: position?.stopLoss ?? null,
+      previousTakeProfit: position?.takeProfit ?? null,
+      stopLoss: stopLoss === undefined ? (position?.stopLoss ?? null) : stopLoss,
+      takeProfit: takeProfit === undefined ? (position?.takeProfit ?? null) : takeProfit,
+      entryPrice: position?.entryPrice ?? null,
+      units: position?.units ?? null,
+      changedStopLoss: stopLoss !== undefined,
+      changedTakeProfit: takeProfit !== undefined,
+    };
   } catch (e) {
     if (e instanceof DeskError && e.status < 500) throw e; // nothing was sent
     const message = e instanceof Error ? e.message : 'The change could not be applied';
@@ -799,7 +952,11 @@ export function closeDeskPosition(user: UserRow, input: CloseInput, actor: Audit
   );
 }
 
-export function modifyDeskPosition(user: UserRow, input: ModifyInput, actor: AuditActor): Promise<void> {
+export function modifyDeskPosition(
+  user: UserRow,
+  input: ModifyInput,
+  actor: AuditActor,
+): Promise<ModifyResult> {
   return withOrderAudit(user, input.connectionId, 'order_amend', actor, () =>
     modifyPositionImpl(user, input, actor),
   );

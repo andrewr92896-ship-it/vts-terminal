@@ -48,6 +48,26 @@ export interface LiveTrade {
   // reason: absent means nobody has chosen, which every screen renders as the
   // appearance it had before this existed.
   tileColor?: string | null;
+  // Which other Founders' positions this one is paired with — the LINKED marker
+  // on a trade card. Stamped only for a founder-level viewer and only on their
+  // OWN positions: a pairing is between two people's accounts, so nobody else on
+  // the wall has any business reading it, and there is nothing to draw on a
+  // position the viewer cannot act on anyway.
+  //
+  // Absent/null means "not linked, or not the viewer's to know" — the two are
+  // deliberately one answer here, because the marker's whole job is to say
+  // whether a level moved on this position would reach anybody.
+  linkedWith?: PositionLinkMark[] | null;
+}
+
+// One end of a pairing, as a position tile needs it.
+export interface PositionLinkMark {
+  /** The pairing's own id, so the tile can offer to break it. */
+  id: string;
+  /** The other Founder. */
+  displayName: string;
+  /** 'join' when the terminal placed it, 'manual' when somebody paired it. */
+  source: string;
 }
 
 // Per-broker outcome of a Live Wall refresh: was it configured, did the fetch
