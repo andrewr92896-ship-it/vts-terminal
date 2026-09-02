@@ -7098,11 +7098,28 @@ and is the box every partner signs in to. Established 2026-08-31, by reading
 Settings ▸ Networking on it.
 
 **`@vts/api`, in that same project's `production` environment, is NOT it.** It
-serves the apex (`vitalistradingsystems.com`) and
-`vtsapi-production.up.railway.app`, and its database is the empty one the split
-left behind. It looks like the private portal from every angle that matters —
-same repo, same branch, same build, `Online`, 32 production-looking variables,
-and it is the service the project canvas opens on.
+answers on `vtsapi-production.up.railway.app`, and its database is the empty
+one the split left behind. It looks like the private portal from every angle
+that matters — same repo, same branch, same build, `Online`, 32
+production-looking variables, and it is the service the project canvas opens
+on. (On 2026-08-31 the apex was attached to it too; that is no longer where the
+apex lives — see below.)
+
+**THE PUBLIC SITES ARE A DIFFERENT PROJECT: `vts-public-and-demo`, `staging`
+environment** (established 2026-09-02, from the project canvas and from
+`vitalistradingsystems.com/healthz` answering with the marketing server's own
+JSON). Two services, both deploying from `main` of this repo:
+
+| service | serves | config |
+| --- | --- | --- |
+| `marketing` | `vitalistradingsystems.com` — the landing page | `deploy/railway/marketing.json`; variables `PUBLIC_APP_ORIGIN`, `SITE_CONTENT_ORIGIN` |
+| `public-terminal` | `app.vitalistradingsystems.com` — the demo and public accounts | `deploy/railway/public-terminal.json` |
+
+**So a variable for the landing page goes on `marketing` in
+`vts-public-and-demo`**, and `SITE_CONTENT_ORIGIN` (the Site Editor's link to
+the portal) is set there, not anywhere in the VTS Terminal project. A session
+that reads the paragraph above and sends the owner to `@vts/api` for it sends
+them to a service that has nothing to do with the page.
 
 **SO: EVERY ENVIRONMENT VARIABLE FOR THE PRIVATE TERMINAL GOES ON
 `vts-private-staging`, IN `staging`.** A Railway environment has its own
