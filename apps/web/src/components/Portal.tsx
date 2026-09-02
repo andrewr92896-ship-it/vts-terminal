@@ -79,6 +79,7 @@ import { MarketData } from '../workspaces/trading/MarketData';
 import { MarketNews } from '../workspaces/trading/MarketNews';
 import { GeneralNews } from '../workspaces/news/GeneralNews';
 import { INVESTMENT_SCREENS } from '../workspaces/investments/screens';
+import { SITE_SCREENS } from '../workspaces/site/screens';
 import { PremiumFeatures } from '../workspaces/myportal/PremiumFeatures';
 
 // The Studies screens are code-split into a lazy chunk that only loads when the
@@ -116,6 +117,9 @@ const DeletedTrades = lazy(() =>
 const InvestmentsWorkspace = lazy(() =>
   import('../workspaces/investments').then((m) => ({ default: m.InvestmentsWorkspace })),
 );
+// The Site Editor — founder-only, and one lazy chunk: it carries the marketing
+// page's renderer and an editor nobody but the owner opens.
+const SiteWorkspace = lazy(() => import('../workspaces/site').then((m) => ({ default: m.SiteWorkspace })));
 // My Terminal's cross-workspace roll-up — lazy, since it pulls in the shared
 // Investments UI kit.
 const NetWorthScreen = lazy(() =>
@@ -672,6 +676,7 @@ export function Portal() {
   function renderExtra(scr: string): React.ReactNode {
     // The Investments workspace — the long-term portfolio tracker.
     if (INVESTMENT_SCREENS.has(scr)) return <InvestmentsWorkspace screen={scr} onNavigate={selectScreen} />;
+    if (SITE_SCREENS.has(scr)) return <SiteWorkspace screen={scr} onNavigate={selectScreen} />;
     switch (scr) {
       // Net Worth moved to the Finances workspace; `my_networth` still resolves
       // so in-app links and any saved reference keep landing on it.

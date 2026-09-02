@@ -21,7 +21,9 @@ export type WorkspaceKey =
   | 'settings'
   | 'help'
   | 'admin'
-  | 'founder';
+  | 'founder'
+  // The Site Editor — public sites, edited from the private portal. Founder-level.
+  | 'site';
 
 export interface Theme {
   pageBg: string;
@@ -157,6 +159,18 @@ export const THEMES: Record<WorkspaceKey, Theme> = {
     accent2: '#c9821a',
     accentText: '#241800',
   },
+  // Site Editor: Railway's deploy purple, because that is the button the whole
+  // workspace exists to press.
+  site: {
+    pageBg: 'radial-gradient(1200px 600px at 70% -10%,#1e1840 0%,#0d0b1f 60%)',
+    headerBg: 'linear-gradient(90deg,#1a1536 0%,#241d4a 100%)',
+    headerBorder: '#3b3170',
+    navBg: '#120f26',
+    navBorder: '#231d45',
+    accent: '#7A5AF8',
+    accent2: '#5b3fd6',
+    accentText: '#ffffff',
+  },
 };
 
 export function accentGradient(t: Theme): string {
@@ -185,6 +199,7 @@ export const DEFAULT_SCREEN: Record<WorkspaceKey, string> = {
   admin: 'ad_users',
   founder: 'ad_ai',
   help: 'hp_howto',
+  site: 'site_editor',
 };
 
 export const WORKSPACE_LABELS: Record<WorkspaceKey, string> = {
@@ -198,4 +213,5 @@ export const WORKSPACE_LABELS: Record<WorkspaceKey, string> = {
   admin: 'Admin Terminal',
   founder: 'Developer Terminal',
   help: 'Site Help',
+  site: 'Site Editor',
 };

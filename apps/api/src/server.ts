@@ -38,6 +38,7 @@ import { employeeRoutes } from './routes/employee.js';
 import { featureRoutes } from './routes/features.js';
 import { budgetRoutes } from './routes/budget.js';
 import { wallTemplateRoutes } from './routes/wallTemplates.js';
+import { siteEditorRoutes } from './routes/siteEditor.js';
 import { seedWallTemplates } from './trading/wallTemplates.js';
 import { WALL_TEMPLATE_SEED } from './trading/wallTemplateSeed.js';
 import { investmentRoutes } from './routes/investments.js';
@@ -104,11 +105,16 @@ export async function buildServer() {
     credentials: true,
   });
 
-  app.addHook('onSend', async (_request, reply, payload) => {
+  app.addHook('onSend', async (request, reply, payload) => {
     reply.header('X-Robots-Tag', 'noindex, nofollow');
     reply.header('X-Content-Type-Options', 'nosniff');
-    reply.header('X-Frame-Options', 'DENY');
-    reply.header('Content-Security-Policy', "frame-ancestors 'none'");
+    // Nothing here may be framed — except the Site Editor's preview page, which
+    // exists to be framed by the editor and by nothing else. 'self' rather than
+    // an origin: a preview framed from another site would be a page of ours
+    // drawing whatever that site posted into it.
+    const framed = request.url.split('?')[0] === '/site-preview';
+    reply.header('X-Frame-Options', framed ? 'SAMEORIGIN' : 'DENY');
+    reply.header('Content-Security-Policy', framed ? "frame-ancestors 'self'" : "frame-ancestors 'none'");
     reply.header('Referrer-Policy', 'no-referrer');
     reply.header('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
     return payload;
@@ -164,6 +170,7 @@ export async function buildServer() {
   await app.register(featureRoutes);
   await app.register(budgetRoutes);
   await app.register(wallTemplateRoutes);
+  await app.register(siteEditorRoutes);
   await app.register(investmentRoutes);
   await app.register(myPortalRoutes);
   await app.register(devBlogRoutes);
@@ -203,6 +210,20 @@ export async function buildServer() {
     // Any deeper path resolves to the same shell, so a bookmarked or mistyped
     // sub-path lands on the portal rather than the main app.
     app.get('/employee/*', serveEmployeeShell);
+
+    // The Site Editor's preview — a second entry, like the employee portal, so
+    // the iframe has its own viewport and the marketing page's own stylesheet
+    // rather than the terminal's. Read by hand for the same reason the employee
+    // shell is: it must carry no-store, which @fastify/static would overwrite.
+    // It holds no data of its own; the editor posts the document into it.
+    const sitePreviewPath = path.join(WEB_DIST, 'site-preview.html');
+    app.get('/site-preview', async (_request, reply) => {
+      if (!fs.existsSync(sitePreviewPath)) {
+        return reply.code(404).type('text/plain').send('Site preview is not built');
+      }
+      reply.header('Cache-Control', 'no-store');
+      return reply.type('text/html; charset=utf-8').send(fs.readFileSync(sitePreviewPath, 'utf8'));
+    });
 
     app.setNotFoundHandler((request, reply) => {
       if (request.method === 'GET' && !request.url.startsWith('/api')) {

@@ -11,9 +11,27 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 7.86';
+export const APP_VERSION = 'Beta V 7.88';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 7.88',
+    date: '2026-09-02',
+    notes: [
+      'The Site Editor has a Settings screen with Down for maintenance, the same control the portfolio editor has: tick the box, press Apply, and vitalistradingsystems.com shows a short notice within about fifteen seconds. Nothing is deleted — turning it off puts the page back exactly as it was.',
+      'The screen reports whether the marketing site has actually checked in, so a site that is not yet pointed at the portal says so rather than a switch that looks like it works and does not.',
+      'The site fails open: if the portal stops answering, the page comes back on its own after a few missed checks. The portal being unreachable is never what keeps the site down.',
+    ],
+  },
+  {
+    version: 'Beta V 7.87',
+    date: '2026-09-02',
+    notes: [
+      'A Site Editor workspace, for the founder only: the vitalistradingsystems.com landing page is edited from here, with the same tools the portfolio editor has — a live preview that follows every keystroke, undo and redo, Save that keeps work on the server without touching the site, Deploy that publishes it, the last twenty saves, export and import, file uploads with open, download and preview behaviours, and an Add menu on every section for cards, images, YouTube videos, text and callouts.',
+      'The landing page itself did not change. Its words now live in a document the editor can change, and a check proves the starting document renders to exactly the page that was there.',
+      'The marketing site now reads what is deployed from the portal and keeps the last good page if the portal is unreachable — so a deploy reaches it within about fifteen seconds, and an outage at the portal is a page that stops updating rather than one that disappears.',
+    ],
+  },
   {
     version: 'Beta V 7.86',
     date: '2026-09-01',
