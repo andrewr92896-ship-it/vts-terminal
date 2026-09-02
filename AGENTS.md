@@ -832,6 +832,84 @@ covered by none of its guards).
 `docs/implementation/public-launch-runbook.md` is what is left to provision, all
 of which needs a Railway account and a domain.
 
+## THE SITE EDITOR — vitalistradingsystems.com, EDITED FROM THE PRIVATE PORTAL
+
+Owner request, 2026-09: the marketing landing page gets the same editing tool
+the owner's portfolio has (`andrewr92896-ship-it/andrewramey-admin`), living in
+its own **founder-only workspace on portal.vitalistradingsystems.com**. The
+standing rule that came with it: **a feature added to either editor is added to
+the other.** The two are separate codebases with the same shape, so parity is a
+matter of making the same change twice — see the file map below for where each
+half of a feature lives here.
+
+**THE LANDING PAGE DID NOT CHANGE, AND THAT IS CHECKED, NOT PROMISED.** The
+words moved out of `apps/marketing/src/index.html` into a document
+(`apps/marketing/render/seed.mjs`) and one function turns that document into the
+page (`apps/marketing/render/render.mjs`). `npm run verify:marketing-render`
+renders the seed and compares it with `src/index.html`, whitespace between tags
+collapsed, so the page cannot drift from the hand-written file without a check
+going red. **`src/index.html` stays in the tree as the thing the check compares
+against**; the server no longer serves it.
+
+- **The renderer is plain JavaScript with no dependencies and no DOM**, on
+  purpose: it runs on the marketing server per request (a service with no build
+  step), in the portal's preview page in the browser on every keystroke, and in
+  Node against the file. Every value is escaped on the way in. `render.d.mts`
+  describes it for the two TypeScript importers; keep the two in step.
+- **The marketing service is a small server now** (`apps/marketing/server.mjs`,
+  start command in `deploy/railway/marketing.json`, health at `/healthz`). It
+  reads the PUBLISHED document off the portal's public route, keeps the last
+  good one, and renders the page from it; **with `SITE_CONTENT_ORIGIN` unset or
+  the portal unreachable it serves the seed — today's page.** The portal is
+  ASKED, never imported: `verify-public-boundary` still forbids private code and
+  the portal's hostname in the marketing sources, and the origin is an
+  environment variable for exactly that reason. It also proxies `/files/<slug>`
+  from the portal so an uploaded image is at the site's own address, and the CSP
+  gained ONE host — `www.youtube-nocookie.com` in `frame-src`, for the video
+  block. `verify:marketing-server` drives it as a process.
+  - **To deploy it:** set `SITE_CONTENT_ORIGIN=https://portal.vitalistradingsystems.com`
+    on the Railway marketing service. Nothing else changes; without it the
+    site is exactly what it was.
+- **The private API holds the document** (`apps/api/src/siteEditor/service.ts`,
+  routes in `routes/siteEditor.ts`, migration `0140`): a DRAFT the editor writes
+  on Save and nobody else sees, what is PUBLISHED, the last twenty saves, and
+  uploads as bytes in SQLite (no blob store here; the precedent avatars set).
+  **Keyed by site**, so a second site is an entry in `SITES` and a renderer of
+  its own. The validator is the RENDERER'S — imported from `apps/marketing` — so
+  the one function that decides whether a document can be drawn decides whether
+  it can be saved. Everything under `/api/site-editor` is `requireFounder`; the
+  two routes under `/api/public/site/:site` are what the SITE reads and serve
+  only what is published. `db:check-site-editor` walks it (in `verify:db`).
+- **The workspace** (`apps/web/src/workspaces/site/`, key `site`, founder-level
+  in `auth/access.ts`, one lazy chunk) is the portfolio admin's editor brought
+  across: three states (working / saved / published), undo and redo on the
+  keys, Revert / Save / Deploy with confirmations and Railway's deploy purple,
+  the last twenty saves, export and import, the file picker with open /
+  download / preview behaviours, the collapsible section list, drag-resizable
+  panes, and one Add menu on every section offering the site-wide blocks —
+  card, image, video (any YouTube link), text, callout. `siteApi.ts` keeps the
+  admin's method names so a fix made in one editor is the same diff in the
+  other. `SectionForm.tsx` mirrors what `render.mjs` draws — the portfolio
+  editor's lesson about fields that are typed into and never drawn.
+- **The preview is a third HTML entry** (`apps/web/site-preview.html` →
+  `src/sitePreview.ts`), for the reason the portfolio settled: the page's
+  layout resolves against the VIEWPORT, so it has to be its own document in an
+  iframe. It imports the marketing renderer and the marketing stylesheet — no
+  second renderer to drift — and points `/files/` at the portal's public file
+  route, since `/files/` is the site's proxy and does not exist here. The
+  editor POSTS its working state in. `server.ts` serves it by hand with
+  `no-store` and, for this ONE path, `frame-ancestors 'self'` instead of
+  `'none'` — the global header would otherwise block the editor framing its
+  own preview. It is kept out of the service-worker precache like the employee
+  entry.
+- **`scripts/site-editor.browser.spec.mjs`** drives all of it in Chromium against
+  the real API and the real marketing server (needs Playwright; not in
+  `verify`). Two things it caught that a typecheck cannot: Fastify refuses a JSON
+  content-type with no body, so a body-less POST (publish, revert, delete)
+  answered "Bad Request" — `siteApi.ts` sets the header only when there is a
+  body; and the seeded founder meets the terms gate first, which the test
+  accepts through the API the way the app does.
+
 ## Architecture
 
 Monorepo, **npm workspaces**:
@@ -6391,6 +6469,12 @@ defaults; the app runs locally with almost nothing set.
   (`vitalistradingsystems.com`), `EMPLOYEE_IP_ALLOWLIST` (unset = no network
   fence; **fails closed** when set, so a wrong value locks you out of `/employee`
   — the main terminal is unaffected). Every default is the strict value.
+- **Marketing site (its own Railway service):** `SITE_CONTENT_ORIGIN` — the
+  private portal's origin (`https://portal.vitalistradingsystems.com`), read by
+  `apps/marketing/server.mjs` for the published landing-page document and its
+  files. **Unset, the site serves the hand-written page exactly as before.**
+  `SITE_CONTENT_POLL_SECONDS` (15). Not in `config.ts` — that is the private
+  API's schema, and this service must carry none of it.
 - **First-boot admin seed** (read directly via `process.env`, not in the schema):
   `ADMIN_USERNAME` (default `andrew`), `ADMIN_DISPLAY_NAME`, `ADMIN_EMAIL`,
   `ADMIN_PASSWORD` (blank = random, printed once to logs), `APP_EMAIL_DOMAIN`.

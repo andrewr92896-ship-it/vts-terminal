@@ -11,6 +11,11 @@ const STEPS = [
   // Maintenance mode's failures are only visible once it is needed, and one of
   // them (blocking the health check) makes the deploy that enables it roll back.
   ['maintenance mode', 'verify:maintenance'],
+  // The marketing page is rendered from a document now; the seed of that
+  // document has to BE the hand-written page, and the server that serves it
+  // has to fall back to that page when the portal is unreachable.
+  ['marketing renderer reproduces the page', 'verify:marketing-render'],
+  ['marketing server', 'verify:marketing-server'],
   ['credential encryption', 'verify:secretbox'],
   ['AI provider seam', 'verify:ai-provider'],
   ['market data macro', 'verify:market-macro'],

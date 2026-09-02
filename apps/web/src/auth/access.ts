@@ -63,8 +63,9 @@ export function canAccessWorkspace(
   ws: WorkspaceKey,
   features: UserFeatures,
 ): boolean {
-  // The Founder Terminal is founder-level only.
-  if (ws === 'founder') return isFounder(roles);
+  // The Founder Terminal is founder-level only, and so is the Site Editor: it
+  // edits a public website, which is the owner's and nobody else's.
+  if (ws === 'founder' || ws === 'site') return isFounder(roles);
   // The Admin Terminal is for admins (founder-level included).
   if (ws === 'admin') return isAdmin(roles);
   // Advanced Trading is opt-in — the one workspace a signed-in user does not get
@@ -122,6 +123,7 @@ export function workspacesForRoles(roles: RoleKey[], features: UserFeatures): Wo
 // driven by the NAV array; this list only decides which a user may see.)
 export const ALL_WORKSPACES: WorkspaceKey[] = [
   'trading',
+  'site',
   'investments',
   // Included with every account, like Investments and Studies — personal money
   // and general news hold no credential and place no order.

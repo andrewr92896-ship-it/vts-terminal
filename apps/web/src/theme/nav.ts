@@ -292,6 +292,22 @@ export const NAV: NavWorkspace[] = [
       // it. See `ViewAsRole` in components/TopBar.tsx.)
     ],
   },
+  // The Site Editor (owner request, 2026-09): the marketing landing page at
+  // vitalistradingsystems.com, edited from here the way the owner's portfolio is
+  // edited from its own admin. Founder-level only (auth/access.ts). Its screens
+  // are the portfolio admin's three, brought across.
+  {
+    key: 'site',
+    label: 'Site Editor',
+    icon: 'globe',
+    accent: '#7A5AF8',
+    group: 'Sites',
+    sections: [
+      { key: 'site_editor', label: 'Editor', icon: 'pencil' },
+      { key: 'site_view', label: 'View Site', icon: 'eye' },
+      { key: 'site_files', label: 'File Uploads', icon: 'upload' },
+    ],
+  },
   // Site Help — available to every signed-in user. Consolidates the how-to
   // guides, announcements, patch notes, and the bug-report / suggestion forms
   // that used to live in the corner help hub.

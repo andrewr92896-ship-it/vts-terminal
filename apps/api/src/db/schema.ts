@@ -1,4 +1,4 @@
-import { sqliteTable, text, integer, real, primaryKey, unique, index } from 'drizzle-orm/sqlite-core';
+import { sqliteTable, text, integer, real, blob, primaryKey, unique, index } from 'drizzle-orm/sqlite-core';
 
 // The four roles match the prototype's access matrix exactly.
 export const ROLES = ['Admin', 'Trader', 'Sales', 'Viewer'] as const;
@@ -3164,3 +3164,55 @@ export const tradingNotes = sqliteTable(
 );
 
 export type TradingNoteRow = typeof tradingNotes.$inferSelect;
+
+// ---- Site Editor ----
+// The marketing landing page (and any site added later), edited from a
+// founder-only workspace on the private portal. See siteEditor/service.ts and
+// migration 0140. Keyed by SITE so a second site is a row, not a schema.
+//
+// site_documents holds the DRAFT — what the editor writes on Save, which nobody
+// else ever sees — and what is PUBLISHED, which the site serves. Both JSON;
+// NULL means never. site_versions is the last twenty saves. site_files holds
+// uploads as bytes in the row: this deploy has no blob store and the volume
+// holds the database, the precedent avatars and trade screenshots set.
+//
+// These belong to the site, not to a person, and are deliberately NOT in the
+// admin/service.ts per-user delete list.
+export const siteDocuments = sqliteTable('site_documents', {
+  site: text('site').primaryKey(),
+  draft: text('draft'),
+  published: text('published'),
+  publishedAt: integer('published_at', { mode: 'timestamp_ms' }),
+  updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
+});
+export type SiteDocumentRow = typeof siteDocuments.$inferSelect;
+
+export const siteVersions = sqliteTable(
+  'site_versions',
+  {
+    // Zero-padded milliseconds, so the string order is the time order.
+    id: text('id').primaryKey(),
+    site: text('site').notNull(),
+    at: integer('at', { mode: 'timestamp_ms' }).notNull(),
+    note: text('note').notNull().default(''),
+    deployed: integer('deployed', { mode: 'boolean' }).notNull().default(false),
+    model: text('model').notNull(),
+  },
+  (t) => ({ siteIdx: index('site_versions_site_idx').on(t.site, t.id) }),
+);
+export type SiteVersionRow = typeof siteVersions.$inferSelect;
+
+export const siteFiles = sqliteTable(
+  'site_files',
+  {
+    site: text('site').notNull(),
+    slug: text('slug').notNull(),
+    name: text('name').notNull(),
+    type: text('type').notNull(),
+    size: integer('size').notNull(),
+    data: blob('data', { mode: 'buffer' }).notNull(),
+    uploadedAt: integer('uploaded_at', { mode: 'timestamp_ms' }).notNull(),
+  },
+  (t) => ({ pk: primaryKey({ columns: [t.site, t.slug] }) }),
+);
+export type SiteFileRow = typeof siteFiles.$inferSelect;

@@ -49,6 +49,7 @@ const CHECKS = [
   { script: 'db:check-notes' },
   { script: 'db:check-rollover' },
   { script: 'db:check-founder-trades' },
+  { script: 'db:check-site-editor' },
 ];
 const DIR = '.tmp-verify';
 

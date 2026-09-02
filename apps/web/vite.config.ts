@@ -21,7 +21,9 @@ function stripPwaFromEmployeeEntry() {
     transformIndexHtml: {
       order: 'post' as const,
       handler(html: string, ctx: { filename: string }) {
-        if (!ctx.filename.endsWith('employee.html')) return html;
+        // The same goes for the Site Editor's preview page: it is framed by
+        // the editor and must not offer to install the terminal from inside it.
+        if (!ctx.filename.endsWith('employee.html') && !ctx.filename.endsWith('site-preview.html')) return html;
         return html.replace(/\s*<link rel="manifest"[^>]*>/g, '');
       },
     },
@@ -79,7 +81,17 @@ export default defineConfig({
         // network-only: nothing about it should sit in a device's offline cache,
         // and a security-critical page must always run the code the server is
         // currently serving.
-        globIgnores: ['**/employee.html', '**/employee-*.js', '**/employee-*.css'],
+        globIgnores: [
+          '**/employee.html',
+          '**/employee-*.js',
+          '**/employee-*.css',
+          // The Site Editor's preview must always run the renderer the server
+          // is currently serving — a cached one would preview a page the site
+          // no longer draws.
+          '**/site-preview.html',
+          '**/sitePreview-*.js',
+          '**/sitePreview-*.css',
+        ],
         // Single-page app: unknown routes fall back to the app shell.
         navigateFallback: '/index.html',
         // Never serve the HTML shell for API, webhook or employee-portal paths.
@@ -87,7 +99,7 @@ export default defineConfig({
         // webhook stay real; /employee must hit the network so the separate,
         // hardened page (and its headers) is what actually loads — the main
         // app shell must never stand in for it.
-        navigateFallbackDenylist: [/^\/api/, /^\/employee/],
+        navigateFallbackDenylist: [/^\/api/, /^\/employee/, /^\/site-preview/],
         // No runtimeCaching for /api on purpose: every API and live data request
         // goes to the network so nothing is ever served stale.
       },
@@ -102,6 +114,9 @@ export default defineConfig({
       input: {
         main: path.resolve(root, 'index.html'),
         employee: path.resolve(root, 'employee.html'),
+        // The Site Editor's preview: the marketing page's own renderer and
+        // stylesheet, as a page of its own so an iframe gives it a viewport.
+        sitePreview: path.resolve(root, 'site-preview.html'),
       },
     },
   },

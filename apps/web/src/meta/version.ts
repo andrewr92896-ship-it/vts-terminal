@@ -11,9 +11,18 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 7.81';
+export const APP_VERSION = 'Beta V 7.82';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 7.82',
+    date: '2026-09-02',
+    notes: [
+      'A Site Editor workspace, for the founder only: the vitalistradingsystems.com landing page is edited from here, with the same tools the portfolio editor has — a live preview that follows every keystroke, undo and redo, Save that keeps work on the server without touching the site, Deploy that publishes it, the last twenty saves, export and import, file uploads with open, download and preview behaviours, and an Add menu on every section for cards, images, YouTube videos, text and callouts.',
+      'The landing page itself did not change. Its words now live in a document the editor can change, and a check proves the starting document renders to exactly the page that was there.',
+      'The marketing site now reads what is deployed from the portal and keeps the last good page if the portal is unreachable — so a deploy reaches it within about fifteen seconds, and an outage at the portal is a page that stops updating rather than one that disappears.',
+    ],
+  },
   {
     version: 'Beta V 7.81',
     date: '2026-08-30',
