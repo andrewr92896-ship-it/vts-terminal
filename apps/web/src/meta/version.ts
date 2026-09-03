@@ -11,9 +11,16 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 7.88';
+export const APP_VERSION = 'Beta V 7.89';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 7.89',
+    date: '2026-09-03',
+    notes: [
+      'The vitalistradingsystems.com landing page carries the Vitalis Trading Systems logo in its top bar — the same wordmark the terminal signs in under — in place of the typed-out name.',
+    ],
+  },
   {
     version: 'Beta V 7.88',
     date: '2026-09-02',
