@@ -95,13 +95,6 @@
   border: 1px solid rgba(235, 203, 116, .45); background: transparent;
   color: #EBCB74; font-weight: 700; font-size: 11.5px; cursor: pointer;
 }
-.vts-public-warning {
-  margin-top: 16px; padding: 12px 14px; border-radius: 9px;
-  border: 1px solid rgba(224, 162, 58, .45); background: rgba(224, 162, 58, .09);
-  color: #f2e3c6; font-size: 12px; line-height: 1.55;
-}
-.vts-public-warning strong { display: block; margin-bottom: 4px; color: #f6d79a; }
-.vts-public-warning p { margin: 0; }
 .vts-public-demo-door, .vts-public-early-access {
   margin-top: 16px; padding: 13px 14px; border-radius: 9px;
   border: 1px solid #1c3a7a; background: rgba(9, 22, 51, .55);

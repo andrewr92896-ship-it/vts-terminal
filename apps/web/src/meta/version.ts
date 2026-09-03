@@ -11,9 +11,16 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 7.88';
+export const APP_VERSION = 'Beta V 7.89';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 7.89',
+    date: '2026-09-03',
+    notes: [
+      'The public terminal’s sign-in card no longer carries the notice about this not being the group terminal. It was written for the people who might land on the wrong one, and everyone else reading it is a visitor being told what the product does not have before they have seen what it does.',
+    ],
+  },
   {
     version: 'Beta V 7.88',
     date: '2026-09-02',
