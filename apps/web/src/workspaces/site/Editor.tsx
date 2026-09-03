@@ -1027,8 +1027,8 @@ function PageForm({ model, onChange }: { model: Model; onChange: (m: Model) => v
   return (
     <div>
       <Group title="Header">
-        <Text label="Mark" value={bar.mark ?? ''} onChange={(v) => setBar({ mark: v })} />
-        <Text label="Mark — second line, in gold" value={bar.markEm ?? ''} onChange={(v) => setBar({ markEm: v })} />
+        <Text label="Logo — alt text, first line" value={bar.mark ?? ''} onChange={(v) => setBar({ mark: v })} />
+        <Text label="Logo — alt text, second line" value={bar.markEm ?? ''} onChange={(v) => setBar({ markEm: v })} />
       </Group>
       <Group title={`Menu — ${(bar.links ?? []).length}`}>
         <LinkList value={bar.links ?? []} onChange={(v) => setBar({ links: v })} noun="link" />
