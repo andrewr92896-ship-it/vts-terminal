@@ -11,9 +11,16 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 7.90';
+export const APP_VERSION = 'Beta V 7.91';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 7.91',
+    date: '2026-09-04',
+    notes: [
+      'The public demo scrolls again on a desktop. The main column had been allowed to grow to the height of the page, so anything below the fold was clipped and could not be reached; it is now bounded by the window and scrolls, as it already did on a phone.',
+    ],
+  },
   {
     version: 'Beta V 7.90',
     date: '2026-09-03',

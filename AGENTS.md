@@ -408,6 +408,21 @@ labelled "Account settings" and also had no handler; there is a settings screen,
 so it now goes there. Both reached the shell the way the Help button does, by
 event, because the bar sits above the router.
 
+### The public shell's grid STATES its row, and that is what makes it scroll
+
+`.vts-public-shell` is a two-column grid the height of the viewport with
+`overflow: hidden`, and the main column inside it is the scroller. Left with an
+implicit row, that row is `auto` and sizes to its CONTENT, so the column's
+`height: 100%` resolved against a row as tall as the page rather than the
+viewport — the main column grew to fit everything, the shell clipped the rest,
+and **nothing on a desktop could scroll up or down** (owner report, 2026-09).
+The phone layout is `display: block`, where 100% resolves against the shell
+itself, so it scrolled fine and every capture in the visual suite is taken at
+the top of the page, which is why nothing noticed. `grid-template-rows:
+minmax(0, 1fr)` pins the row to the viewport. The visual suite now scrolls the
+longest screen on both widths and asserts the column is no taller than the
+window — proved failing against the old rule.
+
 ### Live streams show the SLOT in the public terminal
 
 `StreamChannel.placeholder` (`api/types.ts`) means **no player is mounted for
