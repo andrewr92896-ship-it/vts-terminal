@@ -102,8 +102,5 @@ export function PublicLogin({ initialStep = 'login', onVerified, onDemo, onClose
     <p>The public terminal is in pre-release and admission is by invitation. Ask to be told when a place opens.</p>
     <button type="button" onClick={()=>{setStep('early-access');setError('');setNotice('')}}>Request an invitation</button>
   </div></>}
-  <div className="vts-public-warning" role="note">
-    <strong>You are entering the Public Terminal.</strong>
-    <p>This is not the group terminal. Group operations are not available here and your features will be significantly reduced. Continue only if you meant to use the public version.</p>
-  </div><footer><a href="#terms">Terms</a><a href="#privacy">Privacy</a><span>Public candidate</span></footer></form></section></main>;
+  <footer><a href="#terms">Terms</a><a href="#privacy">Privacy</a><span>Public candidate</span></footer></form></section></main>;
 }

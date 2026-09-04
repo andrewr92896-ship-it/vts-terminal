@@ -438,8 +438,18 @@ it deleted. It is written to stand on its own whatever the summary says about
 itself, and the live-account suite asserts it is on screen — a notice that can be
 quietly dropped is not a commitment.
 
-Styled slate rather than gold or amber on purpose: the blocks either side of it
-are an offer and a warning, and this is neither.
+Styled slate rather than gold or amber on purpose: the sign-in card's other
+blocks are offers — the demo door and the beta-access invitation — and this is
+neither an offer nor a warning.
+
+**THE "THIS IS NOT THE GROUP TERMINAL" NOTICE IS REMOVED AND IS NOT TO BE
+REBUILT** (owner instruction, 2026-09). An amber card on the sign-in screen told
+every visitor that group operations were unavailable and their features would be
+"significantly reduced". It was written for the handful of people who might land
+on the public terminal by mistake, and it was shown to everybody else — so the
+first thing a prospective customer read was what the product does not have,
+before they had seen what it does. The people it was for reach the private
+portal by its own address.
 
 `legal/content` is imported for the support address rather than hardcoding it, so
 there is one home for it; that is why the module is on the public import
