@@ -307,7 +307,7 @@ export function renderMarketing(model, { stylesheet = '/styles.css', scripts = t
 </head>
 <body>
   <header class="bar">
-    <span class="mark">${esc(bar.mark)} <em>${esc(bar.markEm)}</em></span>
+    <img class="mark" src="/brand/vitalis-wordmark.png" alt="${esc(bar.mark)} ${esc(bar.markEm)}" width="520" height="175">
     <nav>
 ${nav}
     </nav>

@@ -861,6 +861,12 @@ collapsed, so the page cannot drift from the hand-written file without a check
 going red. **`src/index.html` stays in the tree as the thing the check compares
 against**; the server no longer serves it.
 
+- **The top bar carries the signature logo, not a typed wordmark** (owner
+  instruction, 2026-09): `apps/marketing/src/brand/vitalis-wordmark.png`, a copy
+  of the same file the terminal signs in under, served by the marketing server
+  from its own `src` like the stylesheet. The document's `bar.mark` /
+  `bar.markEm` still exist and are the image's ALT text — the editor labels
+  them as such, so nothing is typed into a field that is never drawn.
 - **The renderer is plain JavaScript with no dependencies and no DOM**, on
   purpose: it runs on the marketing server per request (a service with no build
   step), in the portal's preview page in the browser on every keystroke, and in
