@@ -2,8 +2,11 @@ export interface PatchNote{version:string;date:string;notes:string[]}
 // The public terminal's own version and its historical archive. Separate from the
 // private terminal's `meta/version` (replaced at the build seam) because they are
 // different products on different release trains.
-export const APP_VERSION='Public Candidate V 2.7';
+export const APP_VERSION='Public Candidate V 2.8';
 export const PATCH_NOTES:PatchNote[]=[
+ {version:'Public Candidate V 2.8',date:'September 4, 2026',notes:[
+  'On a phone the Live Wall no longer leaves empty space under its tiles. The chart and the live-stream slot draw at a proper height, and the watchlist tape takes only the height it needs.',
+ ]},
  {version:'Public Candidate V 2.7',date:'August 30, 2026',notes:[
   'Beta access is for people aged 18 or over in the United States. That is now said on the request form before you type an address in, and you confirm it on the acceptance screen.',
   'We do not check your age or where you are, and we do not ask for a birthdate — you tell us, and we keep a record that you did. An account opened on a statement that turns out to be untrue may be closed.',

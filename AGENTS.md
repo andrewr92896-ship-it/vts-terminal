@@ -316,6 +316,24 @@ flushed on unmount — a drag fires a layout change per frame, and leaving
 mid-arrangement is when the write matters most. A phone renders one column and
 never writes that back, the same rule the private board follows.
 
+**THE PHONE COLUMN'S CELLS HAVE REAL HEIGHTS, and a tile fills its cell**
+(owner report, 2026-09). A tile is `height: 100%` of its cell; on the grid the
+cell is an absolutely sized box, so that resolves. The first phone pass gave
+each cell only a `minHeight`, against which a percentage is `auto` — so every
+tile shrank to its content, the chart and the stream slot collapsed to whatever
+an unsized embed happens to be, and the rest of each cell sat empty UNDER the
+tile's border: a squat chart and a sliver of stream slot each above a hundred
+pixels of nothing. `phoneCellPx` now sets each cell to its tile's rows with a
+six-row floor, in the pixels a grid cell of that many rows would be, and the
+column reads top to bottom then left to right like the desktop board. **The
+ticker tape is the one exception** (`isTickerStrip`, the private board's own
+test): a strip of one fixed height that does not grow into a taller tile, so a
+floor could only pad its cell — it takes its content's height, and the stacked
+board's watchlist is three rows for the same reason. The visual suite asserts
+on a phone that every cell is exactly its tile and that an embed host is handed
+most of it, proved failing against a min-height cell (a 39px chart tile in a
+430px cell).
+
 ### The public board's WORKSPACE is sizable, and it is the private setup
 
 Ported from `ChartBoard.tsx` rather than re-invented (owner instruction,
