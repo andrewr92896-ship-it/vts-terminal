@@ -434,6 +434,42 @@ test('the watchlist uses the widget that fits the tile it is in', async ({ page 
   expect((await configs()).some((c) => c.includes('proName')), 'the stacked watchlist is not the tape').toBe(true);
 });
 
+// A PHONE'S CELLS HAVE REAL HEIGHTS, and a tile fills its cell. The first phone
+// pass gave each cell only a minimum height, against which the tile's `height:
+// 100%` is `auto` — so every tile shrank to its content, the embeds collapsed to
+// nothing, and the rest of each cell was empty page under the tile's border
+// (owner report, 2026-09). TradingView is blocked in this suite, so the embed
+// host's height here comes purely from the layout, which is exactly the thing
+// being asserted: a cell hands its embed a size whether or not the script loads.
+test('a phone stacks the board with no empty space under a tile', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 780 });
+  await page.goto('about:blank');
+  await page.goto(`${base}/?demo=1&device=mobile#live`, { waitUntil: 'domcontentloaded' });
+  await expect(page.locator('.wall-cell').first()).toBeVisible();
+  const cells = await page.locator('.wall-cell').evaluateAll((els) =>
+    els.map((el) => ({
+      strip: el.dataset.strip === '1',
+      cell: Math.round(el.getBoundingClientRect().height),
+      tile: Math.round(el.firstElementChild?.getBoundingClientRect().height ?? 0),
+      embed: Math.round(el.querySelector('.tradingview-widget-container')?.getBoundingClientRect().height ?? -1),
+      title: el.querySelector('.tile-header')?.textContent?.trim() ?? '',
+    })),
+  );
+  expect(cells.length, 'no stacked cells rendered').toBeGreaterThan(3);
+  for (const c of cells) {
+    // The tile is the cell — nothing of the cell shows below the tile's border.
+    expect(Math.abs(c.cell - c.tile), `${c.title}: tile ${c.tile}px in a ${c.cell}px cell`).toBeLessThanOrEqual(1);
+    if (c.strip) continue;
+    // Six rows is the floor, so a full-width tile is never a stub…
+    expect(c.cell, `${c.title}: ${c.cell}px is a stub`).toBeGreaterThanOrEqual(250);
+    // …and an embed inside one is handed most of that to draw into.
+    if (c.embed >= 0) expect(c.embed, `${c.title}: embed host is ${c.embed}px`).toBeGreaterThanOrEqual(200);
+  }
+  // The stream slot is the 16:9 box a player would be in, not a caption.
+  const slot = page.getByText('Live stream plays here').locator('..');
+  expect(await slot.evaluate((el) => el.getBoundingClientRect().height)).toBeGreaterThanOrEqual(200);
+});
+
 test('the demo asks which device it is on, and the answer picks the layout', async ({ page }) => {
   const errors = [];
   const record = (error) => errors.push(String(error));

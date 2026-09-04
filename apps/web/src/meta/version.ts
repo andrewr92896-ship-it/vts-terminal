@@ -11,9 +11,16 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 7.91';
+export const APP_VERSION = 'Beta V 7.92';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 7.92',
+    date: '2026-09-04',
+    notes: [
+      'The public demo\u2019s Live Wall no longer leaves empty space under its tiles on a phone. Each tile now fills a properly sized cell, so the chart and the live-stream slot draw at a real height instead of collapsing, and the watchlist tape takes only the height it needs.',
+    ],
+  },
   {
     version: 'Beta V 7.91',
     date: '2026-09-04',

@@ -148,7 +148,10 @@ export const DEFAULT_BOARD: BoardTile[] = [
 // cramped tile is worse than a scroll.
 export const STACKED_BOARD: BoardTile[] = (() => {
   const rows: [string, string, string, number][] = [
-    ['s-watch', 'watchlist', 'Watchlist', 5],
+    // Three rows, because the tape is a strip of ONE fixed height and does not
+    // grow into a taller tile — at five rows it sat above a hundred pixels of
+    // empty tile on any screen wide enough to draw the grid.
+    ['s-watch', 'watchlist', 'Watchlist', 3],
     ['s-chart', 'chart', 'EUR/USD', 10],
     ['s-news', 'news', 'Market News', 9],
     ['s-cal', 'calendar', 'Economic Calendar', 8],
@@ -177,6 +180,25 @@ export const BOARD_PRESETS: { key: BoardPresetKey; label: string; hint: string; 
 ];
 export function presetTiles(key: BoardPresetKey): BoardTile[] {
   return (BOARD_PRESETS.find((p) => p.key === key) ?? BOARD_PRESETS[0]!).tiles.map((t) => ({ ...t }));
+}
+
+// A watchlist in scrolling mode is TradingView's ticker tape — a strip of ONE
+// fixed height that does not grow to fill a taller tile the way the static
+// quote list does. Same test as the private board's `isTickerStrip`.
+function isTickerStrip(t: BoardTile): boolean {
+  return t.kind === 'watchlist' && (t.watchlistMode ?? 'scroll') !== 'static';
+}
+
+// The phone column's cell height for a tile: its own rows with a six-row floor,
+// in the same pixels a grid cell of that many rows would be. A three-row tile
+// is legible in a twelve-wide strip and unreadable as a full-width stub. The
+// tape is the one exception — with a fixed-height strip inside, a floor can
+// only pad the cell with empty tile, so it takes its content's height instead.
+const PHONE_FLOOR_ROWS = 6;
+function phoneCellPx(t: BoardTile): number | undefined {
+  if (isTickerStrip(t)) return undefined;
+  const rows = Math.max(t.h ?? DEF.get(t.kind as PublicTileKind)?.h ?? PHONE_FLOOR_ROWS, PHONE_FLOOR_ROWS);
+  return ROW_H * rows + GAP * (rows - 1);
 }
 
 function renderTile(tile: BoardTile, editing: boolean, onChange: (patch: Partial<BoardTile>) => void, onRemove: () => void) {
@@ -360,7 +382,7 @@ export function PublicBoard({
   }, []);
 
   const layout: Layout[] = useMemo(
-    () => tiles.map((t, i) => ({ i: t.id, x: t.x ?? 0, y: t.y ?? i * 6, w: t.w ?? 4, h: t.h ?? 8, minW: 2, minH: 4 })),
+    () => tiles.map((t, i) => ({ i: t.id, x: t.x ?? 0, y: t.y ?? i * 6, w: t.w ?? 4, h: t.h ?? 8, minW: 2, minH: isTickerStrip(t) ? 3 : 4 })),
     [tiles],
   );
 
@@ -384,12 +406,25 @@ export function PublicBoard({
 
   // A phone renders ONE column and never writes that back: the grid is a desktop
   // idea, and a drag on the flattened order would overwrite the real
-  // arrangement. Same rule the private board follows.
+  // arrangement. Same rule the private board follows, in the order the board
+  // reads on a desktop — top to bottom, then left to right.
+  //
+  // EVERY CELL HAS A REAL HEIGHT, and that is the whole point of this branch.
+  // A tile fills its cell with `height: 100%`, and on the grid the cell is an
+  // absolutely-sized box so that resolves. The first phone pass gave each cell
+  // only a `minHeight`, against which a percentage is `auto` — so the tile
+  // shrank to its content, the chart and the stream slot collapsed to whatever
+  // an unsized embed happens to be, and the rest of the cell sat empty UNDER
+  // the tile's border: a short tape, a squat chart and a sliver of stream
+  // slot, each above a hundred pixels of nothing (owner report, 2026-09).
   if (isPhone) {
+    const ordered = [...tiles].sort((a, b) => (a.y ?? 0) - (b.y ?? 0) || (a.x ?? 0) - (b.x ?? 0));
     return (
       <div ref={wrap} style={{ display: 'flex', flexDirection: 'column', gap: GAP }}>
-        {tiles.map((t) => (
-          <div key={t.id} style={{ minHeight: 240 }}>{renderTile(t, false, () => {}, () => {})}</div>
+        {ordered.map((t) => (
+          <div key={t.id} className="wall-cell" data-strip={isTickerStrip(t) ? '1' : undefined} style={{ height: phoneCellPx(t) }}>
+            {renderTile(t, false, () => {}, () => {})}
+          </div>
         ))}
       </div>
     );
