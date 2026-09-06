@@ -6740,6 +6740,26 @@ changed and what it means. Do not explain the implementation, restate the reques
 back, list the files touched, or write a summary of a summary. Length is not
 evidence of care here; it is the thing that makes the writing unreadable.
 
+**BREVITY IS A HARD RULE, NOT A STYLE PREFERENCE** (owner instruction,
+2026-09 — "often Claude is overly verbose and I want to reduce that in
+general"). It applies to every reply, report, document, patch note, blog post
+and commit body an agent produces for this repo. Concrete limits, because
+"be concise" has been said before and did not hold:
+
+- **A closing report is one paragraph, under about 120 words.** Lead with the
+  outcome. If something failed or needs a decision, that is the first sentence.
+- **A deliverable document (a brief, a catalogue, a plan) says each thing
+  once, in one to three sentences per item.** No introduction explaining what
+  the document is about to say, no closing summary restating it.
+- **No headers in anything under about 500 words.** No bullet that runs to a
+  paragraph. No restating the request back. No listing files touched.
+- **When in doubt, cut.** A reader who wants more will ask; a reader handed
+  too much stops reading, and then the one important sentence is lost.
+
+The one exception is THIS FILE: an AGENTS.md entry may be as long as it takes
+to stop a mistake being repeated, because it is read by agents rather than by
+the owner.
+
 ## Never write tips, tricks, or how-to-use-this copy in the UI
 
 Owner instruction, 2026-08. The terminal had accumulated explanatory captions all
