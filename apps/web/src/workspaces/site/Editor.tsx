@@ -55,6 +55,7 @@ const TYPES: { type: SectionType; label: string }[] = [
   { type: 'grid', label: 'Card grid' },
   { type: 'boundary', label: 'Panel' },
   { type: 'early', label: 'Highlighted panel' },
+  { type: 'certificates', label: 'Certificates' },
 ];
 
 /** A URL-safe anchor. Ids are links people paste, so they are never rewritten. */
@@ -508,7 +509,11 @@ export function Editor() {
                         ...model,
                         sections: [
                       ...sections,
-                      type === 'grid' ? { id, type, items: [{}] } : { id, type, title: label, items: [] },
+                      type === 'grid'
+                        ? { id, type, items: [{}] }
+                        : type === 'certificates'
+                          ? { id, type, eyebrow: 'Certificates', title: label, items: [{}] }
+                          : { id, type, title: label, items: [] },
                     ],
                       });
                       setSelected(sections.length);

@@ -940,6 +940,16 @@ against**; the server no longer serves it.
   admin's method names so a fix made in one editor is the same diff in the
   other. `SectionForm.tsx` mirrors what `render.mjs` draws — the portfolio
   editor's lesson about fields that are typed into and never drawn.
+- **Certificates (`certificates`) is the one section type added since, on the
+  parity rule** (2026-09): items carry `imgSrc`, `title`, `meta`, `credential`,
+  `href`/`linkLabel`, and the renderer sorts them — a badge is a tile that is
+  one link, the whole of it, so the badge is what confirms the completion and
+  the address is never printed; no badge is a row under the tiles with the same
+  link written out. `certificates()` in `render.mjs`, `.certs` in the site's
+  stylesheet, `CERTIFICATE` in `SectionForm.tsx`, spec section F2. **The
+  portfolio's image slideshow has NOT been brought across yet** — its player is
+  React, and this page is static HTML with no script but `viewer.js`, so it
+  needs a small carousel script of its own before parity holds there.
 - **The preview is a third HTML entry** (`apps/web/site-preview.html` →
   `src/sitePreview.ts`), for the reason the portfolio settled: the page's
   layout resolves against the VIEWPORT, so it has to be its own document in an

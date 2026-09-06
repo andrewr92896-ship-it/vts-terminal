@@ -11,9 +11,16 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 7.92';
+export const APP_VERSION = 'Beta V 7.93';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 7.93',
+    date: '2026-09-06',
+    notes: [
+      'The Site Editor can add a Certificates section: each certificate has a badge image, a name, the issuer and date, an optional credential ID and a confirmation link. A certificate with a badge is a tile, and the whole tile opens the confirmation; one without a badge is listed under the tiles with the same link. The same section the portfolio editor gained.',
+    ],
+  },
   {
     version: 'Beta V 7.92',
     date: '2026-09-04',
