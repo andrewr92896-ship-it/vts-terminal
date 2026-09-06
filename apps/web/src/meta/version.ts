@@ -11,9 +11,16 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 7.93';
+export const APP_VERSION = 'Beta V 7.94';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 7.94',
+    date: '2026-09-06',
+    notes: [
+      'The Site Editor can add an Image slideshow section, the same one the portfolio editor has: uploaded images as slides with alt text, an optional title and caption; previous and next, a counter, thumbnails, the arrow keys, a swipe on a phone, and the file viewer as the lightbox. Whole image or fill the frame, per section. No autoplay.',
+    ],
+  },
   {
     version: 'Beta V 7.93',
     date: '2026-09-06',

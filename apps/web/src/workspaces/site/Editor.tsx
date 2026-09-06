@@ -56,6 +56,7 @@ const TYPES: { type: SectionType; label: string }[] = [
   { type: 'boundary', label: 'Panel' },
   { type: 'early', label: 'Highlighted panel' },
   { type: 'certificates', label: 'Certificates' },
+  { type: 'gallery', label: 'Image slideshow' },
 ];
 
 /** A URL-safe anchor. Ids are links people paste, so they are never rewritten. */
@@ -513,7 +514,9 @@ export function Editor() {
                         ? { id, type, items: [{}] }
                         : type === 'certificates'
                           ? { id, type, eyebrow: 'Certificates', title: label, items: [{}] }
-                          : { id, type, title: label, items: [] },
+                          : type === 'gallery'
+                            ? { id, type, title: label, imgFit: 'contain', items: [{}] }
+                            : { id, type, title: label, items: [] },
                     ],
                       });
                       setSelected(sections.length);

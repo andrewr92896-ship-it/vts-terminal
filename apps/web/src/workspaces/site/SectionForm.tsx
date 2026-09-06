@@ -35,6 +35,7 @@ const SECTION_FIELDS: Record<string, string[]> = {
   boundary: ['title', 'body', 'buttons'],
   early: ['title', 'body', 'buttons'],
   certificates: ['eyebrow', 'title', 'note'],
+  gallery: ['eyebrow', 'title', 'note', 'frame'],
 };
 const has = (type: string, field: string) => (SECTION_FIELDS[type] ?? []).includes(field);
 
@@ -43,7 +44,7 @@ const has = (type: string, field: string) => (SECTION_FIELDS[type] ?? []).includ
  * certificate is not a site-wide block — it is what a Certificates section
  * holds — so it is keyed here under its own name.
  */
-type RowKind = ItemKind | 'certificate';
+type RowKind = ItemKind | 'certificate' | 'slide';
 const ITEM_FIELDS: Record<RowKind, string[]> = {
   card: ['title', 'body', 'link'],
   image: ['image', 'title'],
@@ -51,6 +52,7 @@ const ITEM_FIELDS: Record<RowKind, string[]> = {
   text: ['body'],
   callout: ['title', 'body'],
   certificate: ['image', 'title', 'meta', 'credential', 'link'],
+  slide: ['image', 'alt', 'title', 'caption'],
 };
 
 const CERTIFICATE = {
@@ -59,8 +61,14 @@ const CERTIFICATE = {
   note: 'A badge image, the certificate, and the link that confirms it. No badge — it is listed below the tiles.',
 };
 
+const SLIDE = {
+  label: 'Slide',
+  icon: 'plus',
+  note: 'An uploaded image, what it shows, and a caption.',
+};
+
 const kindOf = (item: Item, type: string): RowKind =>
-  item.kind ?? (type === 'certificates' ? 'certificate' : 'card');
+  item.kind ?? (type === 'certificates' ? 'certificate' : type === 'gallery' ? 'slide' : 'card');
 const str = (v: unknown) => (typeof v === 'string' ? v : '');
 const links = (v: unknown) => (Array.isArray(v) ? (v as Link[]) : []);
 
@@ -92,6 +100,14 @@ export function SectionForm({ section, onChange }: { section: Section; onChange:
         )}
         {has(type, 'note') && (
           <Area label="Note" value={str(section.note)} onChange={(v) => set({ note: v || undefined })} rows={2} />
+        )}
+        {has(type, 'frame') && (
+          <FrameField
+            fit={section.imgFit ?? 'contain'}
+            thumbs={section.thumbs !== false}
+            onFit={(v) => set({ imgFit: v === 'contain' ? undefined : v })}
+            onThumbs={(v) => set({ thumbs: v ? undefined : false })}
+          />
         )}
         {has(type, 'lede') && (
           <Area label="Lede" value={str(section.lede)} onChange={(v) => set({ lede: v })} />
@@ -154,10 +170,15 @@ function ItemRow({
 }) {
   const kind = kindOf(item, type);
   const cert = kind === 'certificate';
-  const label = cert ? CERTIFICATE.label : (BLOCKS.find((b) => b.kind === kind)?.label ?? 'Item');
+  const slide = kind === 'slide';
+  const label = cert ? CERTIFICATE.label : slide ? SLIDE.label : (BLOCKS.find((b) => b.kind === kind)?.label ?? 'Item');
   const media = kind === 'image' || kind === 'video';
   const name =
-    str(item.title) || (kind === 'video' ? str(item.videoUrl) : '') || str(item.body).slice(0, 40) || `Untitled ${index + 1}`;
+    str(item.title) ||
+    str(item.alt) ||
+    (kind === 'video' ? str(item.videoUrl) : '') ||
+    str(item.body).slice(0, 40) ||
+    `Untitled ${index + 1}`;
   return (
     <Row index={index} count={count} title={`${label} · ${name}`} onMove={onMove} onRemove={onRemove}>
       {ITEM_FIELDS[kind].map((field) => {
@@ -166,13 +187,38 @@ function ItemRow({
             return (
               <Text
                 key={field}
-                label={media ? 'Caption' : 'Title'}
+                label={media ? 'Caption' : slide ? 'Title — optional' : 'Title'}
                 value={str(item.title)}
                 onChange={(v) => onChange({ title: v })}
               />
             );
           case 'body':
             return <Area key={field} label="Body" value={str(item.body)} onChange={(v) => onChange({ body: v })} />;
+          case 'alt':
+            return (
+              <div key={field}>
+                <Text
+                  label="What the image shows"
+                  value={str(item.alt)}
+                  onChange={(v) => onChange({ alt: v })}
+                  placeholder="The Live Wall with three open positions"
+                />
+                {!str(item.alt).trim() && (
+                  <p style={{ margin: '-6px 0 14px', font: `400 12px/1.6 ${C.sans}`, color: C.gold }}>
+                    Needed — read aloud to anyone who cannot see the image, and shown if it fails to load.
+                  </p>
+                )}
+              </div>
+            );
+          case 'caption':
+            return (
+              <Text
+                key={field}
+                label="Caption — optional"
+                value={str(item.caption)}
+                onChange={(v) => onChange({ caption: v || undefined })}
+              />
+            );
           case 'meta':
             return (
               <Text
@@ -229,6 +275,56 @@ function ItemRow({
   );
 }
 
+/**
+ * How a slideshow frames its images, and whether the thumbnail strip is drawn.
+ * `contain` shows the whole image (logos, screenshots); `cover` fills the frame
+ * and crops (photos).
+ */
+function FrameField({
+  fit,
+  thumbs,
+  onFit,
+  onThumbs,
+}: {
+  fit: 'cover' | 'contain';
+  thumbs: boolean;
+  onFit: (v: 'cover' | 'contain') => void;
+  onThumbs: (v: boolean) => void;
+}) {
+  const choice = (value: 'cover' | 'contain', label: string, note: string) => {
+    const on = fit === value;
+    return (
+      <button
+        type="button"
+        onClick={() => onFit(value)}
+        aria-pressed={on}
+        style={{
+          flex: 1,
+          padding: '9px 10px',
+          borderRadius: 8,
+          border: `1px solid ${on ? C.gold : C.line}`,
+          background: on ? tint(C.gold, 0.12) : 'transparent',
+          textAlign: 'left',
+          cursor: 'pointer',
+        }}
+      >
+        <span style={{ display: 'block', font: `600 12.5px/1.4 ${C.sans}`, color: C.text }}>{label}</span>
+        <span style={{ display: 'block', font: `400 12px/1.5 ${C.sans}`, color: C.faint }}>{note}</span>
+      </button>
+    );
+  };
+  return (
+    <div style={{ marginBottom: 14 }}>
+      <span style={labelStyle}>Image fit</span>
+      <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
+        {choice('contain', 'Whole image', 'Nothing cropped. Logos and screenshots.')}
+        {choice('cover', 'Fill the frame', 'Edges cropped to fill. Photos.')}
+      </div>
+      <Check label="Show thumbnails under the slideshow" checked={thumbs} onChange={onThumbs} />
+    </div>
+  );
+}
+
 /** A YouTube link, with the read-back beside it: the id the page will embed. */
 function VideoField({ value, onChange }: { value: string; onChange: (v: string) => void }) {
   const id = youtubeId(value);
@@ -249,8 +345,11 @@ function AddMenu({ type, onAdd }: { type: string; onAdd: (item: Item) => void })
   const [open, setOpen] = useState(false);
   // A certificates section holds certificates and nothing else: a card between
   // two badges would be an item the section cannot draw.
-  const own = type === 'grid' ? BLOCKS[0] : type === 'certificates' ? CERTIFICATE : null;
-  const blocks = type === 'certificates' ? [] : BLOCKS.filter((b) => !own || b.kind !== ('kind' in own ? own.kind : ''));
+  const own = type === 'grid' ? BLOCKS[0] : type === 'certificates' ? CERTIFICATE : type === 'gallery' ? SLIDE : null;
+  const blocks =
+    type === 'certificates' || type === 'gallery'
+      ? []
+      : BLOCKS.filter((b) => !own || b.kind !== ('kind' in own ? own.kind : ''));
 
   const choice = (b: { label: string; note: string; icon: string }, item: Item, key: string) => (
     <button
