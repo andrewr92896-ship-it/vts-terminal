@@ -34,19 +34,33 @@ const SECTION_FIELDS: Record<string, string[]> = {
   grid: [],
   boundary: ['title', 'body', 'buttons'],
   early: ['title', 'body', 'buttons'],
+  certificates: ['eyebrow', 'title', 'note'],
 };
 const has = (type: string, field: string) => (SECTION_FIELDS[type] ?? []).includes(field);
 
-/** What a block's form offers, by what the renderer draws for that kind. */
-const ITEM_FIELDS: Record<ItemKind, string[]> = {
+/**
+ * What a block's form offers, by what the renderer draws for that kind. A
+ * certificate is not a site-wide block — it is what a Certificates section
+ * holds — so it is keyed here under its own name.
+ */
+type RowKind = ItemKind | 'certificate';
+const ITEM_FIELDS: Record<RowKind, string[]> = {
   card: ['title', 'body', 'link'],
   image: ['image', 'title'],
   video: ['video', 'title'],
   text: ['body'],
   callout: ['title', 'body'],
+  certificate: ['image', 'title', 'meta', 'credential', 'link'],
 };
 
-const kindOf = (item: Item, type: string): ItemKind => item.kind ?? (type === 'grid' ? 'card' : 'card');
+const CERTIFICATE = {
+  label: 'Certificate',
+  icon: 'plus',
+  note: 'A badge image, the certificate, and the link that confirms it. No badge — it is listed below the tiles.',
+};
+
+const kindOf = (item: Item, type: string): RowKind =>
+  item.kind ?? (type === 'certificates' ? 'certificate' : 'card');
 const str = (v: unknown) => (typeof v === 'string' ? v : '');
 const links = (v: unknown) => (Array.isArray(v) ? (v as Link[]) : []);
 
@@ -75,6 +89,9 @@ export function SectionForm({ section, onChange }: { section: Section; onChange:
         )}
         {has(type, 'title') && (
           <Text label="Title" value={str(section.title)} onChange={(v) => set({ title: v })} />
+        )}
+        {has(type, 'note') && (
+          <Area label="Note" value={str(section.note)} onChange={(v) => set({ note: v || undefined })} rows={2} />
         )}
         {has(type, 'lede') && (
           <Area label="Lede" value={str(section.lede)} onChange={(v) => set({ lede: v })} />
@@ -136,7 +153,8 @@ function ItemRow({
   onChange: (patch: Partial<Item>) => void;
 }) {
   const kind = kindOf(item, type);
-  const label = BLOCKS.find((b) => b.kind === kind)?.label ?? 'Item';
+  const cert = kind === 'certificate';
+  const label = cert ? CERTIFICATE.label : (BLOCKS.find((b) => b.kind === kind)?.label ?? 'Item');
   const media = kind === 'image' || kind === 'video';
   const name =
     str(item.title) || (kind === 'video' ? str(item.videoUrl) : '') || str(item.body).slice(0, 40) || `Untitled ${index + 1}`;
@@ -155,22 +173,51 @@ function ItemRow({
             );
           case 'body':
             return <Area key={field} label="Body" value={str(item.body)} onChange={(v) => onChange({ body: v })} />;
+          case 'meta':
+            return (
+              <Text
+                key={field}
+                label="Issuer and date"
+                value={str(item.meta)}
+                onChange={(v) => onChange({ meta: v })}
+                placeholder="Claude Academy · September 2026"
+              />
+            );
+          case 'credential':
+            return (
+              <Text
+                key={field}
+                label="Credential ID — optional"
+                value={str(item.credential)}
+                onChange={(v) => onChange({ credential: v || undefined })}
+              />
+            );
           case 'link':
             return (
               <div key={field}>
                 <LinkField
-                  label="Link"
+                  label={cert ? 'Confirmation link' : 'Link'}
                   href={str(item.href)}
                   behavior={item.behavior as LinkBehavior | undefined}
                   onHref={(v) => onChange({ href: v })}
                   onBehavior={(v) => onChange({ behavior: v })}
                 />
-                <Text label="Link text" value={str(item.linkLabel)} onChange={(v) => onChange({ linkLabel: v })} />
+                <Text
+                  label="Link text"
+                  value={str(item.linkLabel)}
+                  onChange={(v) => onChange({ linkLabel: v })}
+                  placeholder={cert ? 'Confirm completion' : undefined}
+                />
               </div>
             );
           case 'image':
             return (
-              <ImageField key={field} label="Image" src={str(item.imgSrc)} onChange={(v) => onChange({ imgSrc: v || undefined })} />
+              <ImageField
+                key={field}
+                label={cert ? 'Badge image — optional' : 'Image'}
+                src={str(item.imgSrc)}
+                onChange={(v) => onChange({ imgSrc: v || undefined })}
+              />
             );
           case 'video':
             return <VideoField key={field} value={str(item.videoUrl)} onChange={(v) => onChange({ videoUrl: v })} />;
@@ -200,8 +247,10 @@ function VideoField({ value, onChange }: { value: string; onChange: (v: string) 
 /** The add menu: the section's own item first, then every block the site knows. */
 function AddMenu({ type, onAdd }: { type: string; onAdd: (item: Item) => void }) {
   const [open, setOpen] = useState(false);
-  const own = type === 'grid' ? BLOCKS[0] : null;
-  const blocks = BLOCKS.filter((b) => !own || b.kind !== own.kind);
+  // A certificates section holds certificates and nothing else: a card between
+  // two badges would be an item the section cannot draw.
+  const own = type === 'grid' ? BLOCKS[0] : type === 'certificates' ? CERTIFICATE : null;
+  const blocks = type === 'certificates' ? [] : BLOCKS.filter((b) => !own || b.kind !== ('kind' in own ? own.kind : ''));
 
   const choice = (b: { label: string; note: string; icon: string }, item: Item, key: string) => (
     <button

@@ -264,6 +264,41 @@ try {
   siteHtml = await (await fetch(`${M}/`)).text();
   ok(siteHtml.includes('youtube-nocookie.com/embed/dQw4w9WgXcQ') && siteHtml.includes('src="/files/shot.png"'), 'and both reach the site, with the file at the site\'s own address');
 
+  console.log('\nF2. CERTIFICATES — A BADGE IS A TILE, THE REST IS A LIST');
+  await page.getByRole('button', { name: 'Add section' }).click();
+  await wait(300);
+  await page.getByRole('button', { name: 'Certificates', exact: true }).click();
+  await wait(900);
+  // The section's own Title field comes first; the certificate's is the second.
+  const certTitle = (n) => page.getByText('Title', { exact: true }).nth(n).locator('..').locator('input');
+  await page.locator('button[title="shot.png"]').first().click();
+  await certTitle(1).fill('Introduction to Claude Cowork');
+  await field('Issuer and date').fill('Claude Academy · September 2026');
+  await page.locator('input[placeholder*="pick a file"]').first().fill('https://academy.claude.com/badges/abc');
+  await page.getByRole('button', { name: 'Add', exact: true }).click();
+  await wait(300);
+  const certMenu = await page.locator('text=Add to this section').locator('..').innerText();
+  ok(/Certificate/.test(certMenu) && !/Card|Video/.test(certMenu), 'Add offers only a certificate here');
+  await page.locator('text=Add to this section').locator('..').getByRole('button', { name: /^Certificate/ }).click();
+  await wait(400);
+  await certTitle(2).fill('Prompt Engineering Basics');
+  await page.locator('input[placeholder*="pick a file"]').nth(1).fill('https://example.com/verify/2');
+  await wait(1400);
+  const certs = frame().locator('#certificates');
+  const tile = certs.locator('a.cert-tile');
+  ok((await tile.count()) === 1, 'the badge is drawn as a tile');
+  ok((await tile.getAttribute('href')) === 'https://academy.claude.com/badges/abc' && (await tile.getAttribute('target')) === '_blank', 'and the WHOLE tile is the confirmation link, in a new tab');
+  ok((await tile.locator('img[src$="/files/shot.png"]').count()) === 1, 'with the badge image in it');
+  ok(/Introduction to Claude Cowork[\s\S]*Confirm completion/i.test(await tile.innerText()), 'naming the certificate and saying what clicking does');
+  ok(!(await certs.innerText()).includes('academy.claude.com'), 'without printing the address');
+  const certRow = certs.locator('.cert-list li');
+  ok((await certRow.count()) === 1 && (await certRow.innerText()).includes('Prompt Engineering Basics'), 'the badgeless certificate is a row under the tiles');
+  ok((await certRow.locator('a').getAttribute('href')) === 'https://example.com/verify/2', 'with its own confirmation link');
+  await press('Deploy');
+  await wait(2500);
+  siteHtml = await (await fetch(`${M}/`)).text();
+  ok(siteHtml.includes('class="cert-tile"') && siteHtml.includes('href="https://academy.claude.com/badges/abc"'), 'and the section reaches the site');
+
   console.log('\nG. EXPORT AND IMPORT');
   const [download] = await Promise.all([page.waitForEvent('download'), page.getByRole('button', { name: 'Export', exact: true }).click()]);
   exported = resolve(DIR, 'export.json');

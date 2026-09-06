@@ -31,6 +31,8 @@
  * @property {'card' | 'image' | 'video' | 'text' | 'callout'} [kind]
  * @property {string} [title]
  * @property {string} [body]
+ * @property {string} [meta]        a certificate's issuer and date
+ * @property {string} [credential]  a certificate's id, if the issuer gives one
  * @property {string} [imgSrc]
  * @property {string} [videoUrl]
  * @property {string} [href]
@@ -40,13 +42,14 @@
 /**
  * @typedef {Object} Section
  * @property {string} id
- * @property {'hero' | 'grid' | 'boundary' | 'early'} type
+ * @property {'hero' | 'grid' | 'boundary' | 'early' | 'certificates'} type
  * @property {boolean} [hidden]
  * @property {boolean} [anchor]   emit the id on the element (a link target)
  * @property {string} [eyebrow]
  * @property {string} [h1]
  * @property {string} [h1Em]      the second, gold line of the headline
  * @property {string} [title]
+ * @property {string} [note]      a line under a certificates title
  * @property {string} [lede]
  * @property {string} [body]
  * @property {string} [fine]
@@ -255,6 +258,61 @@ function panel(s, cls) {
   return out.join('\n');
 }
 
+/**
+ * Certificates: a badge is a TILE, a certificate with no badge is a ROW.
+ *
+ * The whole tile is one link — the badge, the name, the issuer — so the badge
+ * is what a reader clicks to confirm the completion, and the address is never
+ * printed. A tile with no link is a picture and says nothing about confirming.
+ * Certificates without a badge are listed under the tiles with the same link
+ * written out. Nothing records which is which: upload a badge later and the
+ * certificate moves up on its own. The same section the portfolio has.
+ */
+function certificates(s) {
+  const out = [sectionOpen(s, 'certs')];
+  if (s.eyebrow) out.push(`      <p class="eyebrow">${esc(s.eyebrow)}</p>`);
+  if (s.title) out.push(`      <h2>${esc(s.title)}</h2>`);
+  if (s.note) out.push(`      <p class="note">${esc(s.note)}</p>`);
+  const items = (s.items ?? []).filter((it) => it && typeof it === 'object');
+  const hasBadge = (it) => typeof it.imgSrc === 'string' && it.imgSrc;
+  const confirm = (it) => esc(it.linkLabel || 'Confirm completion');
+  const tiles = items.filter(hasBadge);
+  const rows = items.filter((it) => !hasBadge(it));
+  if (tiles.length) {
+    out.push(`      <div class="cert-tiles">`);
+    for (const it of tiles) {
+      const alt = it.title ? `${esc(it.title)} badge` : 'Certificate badge';
+      const inner = [
+        `          <span class="badge"><img src="${esc(fileHref(it.imgSrc))}" alt="${alt}" loading="lazy"></span>`,
+      ];
+      if (it.title) inner.push(`          <strong>${esc(it.title)}</strong>`);
+      if (it.meta) inner.push(`          <span class="meta">${esc(it.meta)}</span>`);
+      if (it.credential) inner.push(`          <code class="cred">${esc(it.credential)}</code>`);
+      if (it.href) {
+        inner.push(`          <span class="confirm">${confirm(it)} →</span>`);
+        const label = `${esc(it.title || 'Certificate')} — ${confirm(it)}`;
+        out.push(`        <a class="cert-tile"${linkAttrs(it)} aria-label="${label}">`, ...inner, `        </a>`);
+      } else {
+        out.push(`        <div class="cert-tile">`, ...inner, `        </div>`);
+      }
+    }
+    out.push(`      </div>`);
+  }
+  if (rows.length) {
+    out.push(`      <ul class="cert-list">`);
+    for (const it of rows) {
+      const parts = [`<strong>${esc(it.title || 'Certificate')}</strong>`];
+      if (it.meta) parts.push(`<span class="meta">${esc(it.meta)}</span>`);
+      if (it.credential) parts.push(`<code class="cred">${esc(it.credential)}</code>`);
+      if (it.href) parts.push(`<a class="confirm"${linkAttrs(it)}>${confirm(it)} →</a>`);
+      out.push(`        <li>${parts.join(' ')}</li>`);
+    }
+    out.push(`      </ul>`);
+  }
+  out.push(`    </section>`);
+  return out.join('\n');
+}
+
 function section(s) {
   switch (s.type) {
     case 'hero':
@@ -265,6 +323,8 @@ function section(s) {
       return panel(s, 'boundary');
     case 'early':
       return panel(s, 'early');
+    case 'certificates':
+      return certificates(s);
     default:
       return '';
   }
