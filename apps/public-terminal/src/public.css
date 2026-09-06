@@ -4,11 +4,21 @@
   height: var(--app-h);
   display: grid;
   grid-template-columns: var(--public-side-w, 248px) minmax(0, 1fr);
+  /* THE ROW IS STATED, AND THAT IS WHAT MAKES THE TERMINAL SCROLL. Left
+     implicit, the one row is `auto` and sizes to its CONTENT, so the column's
+     `height: 100%` resolved against a row as tall as the page rather than the
+     viewport — the main column grew to fit everything, the shell's
+     `overflow: hidden` clipped the rest, and nothing on a desktop could scroll
+     up or down. The phone layout below is `display: block`, where 100% resolves
+     against the shell itself, which is why it scrolled while the desktop did
+     not. `minmax(0, 1fr)` pins the row to the viewport so the main column is
+     the scroller it was always meant to be. */
+  grid-template-rows: minmax(0, 1fr);
   background: var(--bg);
   overflow: hidden;
 }
 .vts-public-shell[data-collapsed='true'] { --public-side-w: 76px; }
-.vts-public-column { min-width: 0; height: 100%; display: flex; flex-direction: column; }
+.vts-public-column { min-width: 0; min-height: 0; height: 100%; display: flex; flex-direction: column; }
 .vts-public-main { min-height: 0; flex: 1; overflow: auto; padding: 20px 24px 30px; }
 .vts-public-footer { display:flex; justify-content:space-between; gap:16px; padding:9px 24px; border-top:1px solid var(--line); color:var(--faint); font:10px 'IBM Plex Mono',monospace; }
 .vts-public-footer a { color:var(--muted); text-decoration:none; }
@@ -95,13 +105,6 @@
   border: 1px solid rgba(235, 203, 116, .45); background: transparent;
   color: #EBCB74; font-weight: 700; font-size: 11.5px; cursor: pointer;
 }
-.vts-public-warning {
-  margin-top: 16px; padding: 12px 14px; border-radius: 9px;
-  border: 1px solid rgba(224, 162, 58, .45); background: rgba(224, 162, 58, .09);
-  color: #f2e3c6; font-size: 12px; line-height: 1.55;
-}
-.vts-public-warning strong { display: block; margin-bottom: 4px; color: #f6d79a; }
-.vts-public-warning p { margin: 0; }
 .vts-public-demo-door, .vts-public-early-access {
   margin-top: 16px; padding: 13px 14px; border-radius: 9px;
   border: 1px solid #1c3a7a; background: rgba(9, 22, 51, .55);

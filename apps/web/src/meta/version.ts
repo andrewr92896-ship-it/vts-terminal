@@ -11,14 +11,42 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 7.89';
+export const APP_VERSION = 'Beta V 7.93';
 
 export const PATCH_NOTES: PatchNote[] = [
   {
-    version: 'Beta V 7.89',
+    version: 'Beta V 7.93',
     date: '2026-09-06',
     notes: [
       'The Site Editor can add a Certificates section: each certificate has a badge image, a name, the issuer and date, an optional credential ID and a confirmation link. A certificate with a badge is a tile, and the whole tile opens the confirmation; one without a badge is listed under the tiles with the same link. The same section the portfolio editor gained.',
+    ],
+  },
+  {
+    version: 'Beta V 7.92',
+    date: '2026-09-04',
+    notes: [
+      'The public demo\u2019s Live Wall no longer leaves empty space under its tiles on a phone. Each tile now fills a properly sized cell, so the chart and the live-stream slot draw at a real height instead of collapsing, and the watchlist tape takes only the height it needs.',
+    ],
+  },
+  {
+    version: 'Beta V 7.91',
+    date: '2026-09-04',
+    notes: [
+      'The public demo scrolls again on a desktop. The main column had been allowed to grow to the height of the page, so anything below the fold was clipped and could not be reached; it is now bounded by the window and scrolls, as it already did on a phone.',
+    ],
+  },
+  {
+    version: 'Beta V 7.90',
+    date: '2026-09-03',
+    notes: [
+      'The public terminal’s sign-in card no longer carries the notice about this not being the group terminal. It was written for the people who might land on the wrong one, and everyone else reading it is a visitor being told what the product does not have before they have seen what it does.',
+    ],
+  },
+  {
+    version: 'Beta V 7.89',
+    date: '2026-09-03',
+    notes: [
+      'The vitalistradingsystems.com landing page carries the Vitalis Trading Systems logo in its top bar — the same wordmark the terminal signs in under — in place of the typed-out name.',
     ],
   },
   {

@@ -316,6 +316,24 @@ flushed on unmount — a drag fires a layout change per frame, and leaving
 mid-arrangement is when the write matters most. A phone renders one column and
 never writes that back, the same rule the private board follows.
 
+**THE PHONE COLUMN'S CELLS HAVE REAL HEIGHTS, and a tile fills its cell**
+(owner report, 2026-09). A tile is `height: 100%` of its cell; on the grid the
+cell is an absolutely sized box, so that resolves. The first phone pass gave
+each cell only a `minHeight`, against which a percentage is `auto` — so every
+tile shrank to its content, the chart and the stream slot collapsed to whatever
+an unsized embed happens to be, and the rest of each cell sat empty UNDER the
+tile's border: a squat chart and a sliver of stream slot each above a hundred
+pixels of nothing. `phoneCellPx` now sets each cell to its tile's rows with a
+six-row floor, in the pixels a grid cell of that many rows would be, and the
+column reads top to bottom then left to right like the desktop board. **The
+ticker tape is the one exception** (`isTickerStrip`, the private board's own
+test): a strip of one fixed height that does not grow into a taller tile, so a
+floor could only pad its cell — it takes its content's height, and the stacked
+board's watchlist is three rows for the same reason. The visual suite asserts
+on a phone that every cell is exactly its tile and that an embed host is handed
+most of it, proved failing against a min-height cell (a 39px chart tile in a
+430px cell).
+
 ### The public board's WORKSPACE is sizable, and it is the private setup
 
 Ported from `ChartBoard.tsx` rather than re-invented (owner instruction,
@@ -408,6 +426,21 @@ labelled "Account settings" and also had no handler; there is a settings screen,
 so it now goes there. Both reached the shell the way the Help button does, by
 event, because the bar sits above the router.
 
+### The public shell's grid STATES its row, and that is what makes it scroll
+
+`.vts-public-shell` is a two-column grid the height of the viewport with
+`overflow: hidden`, and the main column inside it is the scroller. Left with an
+implicit row, that row is `auto` and sizes to its CONTENT, so the column's
+`height: 100%` resolved against a row as tall as the page rather than the
+viewport — the main column grew to fit everything, the shell clipped the rest,
+and **nothing on a desktop could scroll up or down** (owner report, 2026-09).
+The phone layout is `display: block`, where 100% resolves against the shell
+itself, so it scrolled fine and every capture in the visual suite is taken at
+the top of the page, which is why nothing noticed. `grid-template-rows:
+minmax(0, 1fr)` pins the row to the viewport. The visual suite now scrolls the
+longest screen on both widths and asserts the column is no taller than the
+window — proved failing against the old rule.
+
 ### Live streams show the SLOT in the public terminal
 
 `StreamChannel.placeholder` (`api/types.ts`) means **no player is mounted for
@@ -438,8 +471,18 @@ it deleted. It is written to stand on its own whatever the summary says about
 itself, and the live-account suite asserts it is on screen — a notice that can be
 quietly dropped is not a commitment.
 
-Styled slate rather than gold or amber on purpose: the blocks either side of it
-are an offer and a warning, and this is neither.
+Styled slate rather than gold or amber on purpose: the sign-in card's other
+blocks are offers — the demo door and the beta-access invitation — and this is
+neither an offer nor a warning.
+
+**THE "THIS IS NOT THE GROUP TERMINAL" NOTICE IS REMOVED AND IS NOT TO BE
+REBUILT** (owner instruction, 2026-09). An amber card on the sign-in screen told
+every visitor that group operations were unavailable and their features would be
+"significantly reduced". It was written for the handful of people who might land
+on the public terminal by mistake, and it was shown to everybody else — so the
+first thing a prospective customer read was what the product does not have,
+before they had seen what it does. The people it was for reach the private
+portal by its own address.
 
 `legal/content` is imported for the support address rather than hardcoding it, so
 there is one home for it; that is why the module is on the public import
@@ -851,6 +894,12 @@ collapsed, so the page cannot drift from the hand-written file without a check
 going red. **`src/index.html` stays in the tree as the thing the check compares
 against**; the server no longer serves it.
 
+- **The top bar carries the signature logo, not a typed wordmark** (owner
+  instruction, 2026-09): `apps/marketing/src/brand/vitalis-wordmark.png`, a copy
+  of the same file the terminal signs in under, served by the marketing server
+  from its own `src` like the stylesheet. The document's `bar.mark` /
+  `bar.markEm` still exist and are the image's ALT text — the editor labels
+  them as such, so nothing is typed into a field that is never drawn.
 - **The renderer is plain JavaScript with no dependencies and no DOM**, on
   purpose: it runs on the marketing server per request (a service with no build
   step), in the portal's preview page in the browser on every keystroke, and in
@@ -6700,6 +6749,26 @@ of it is **brief: a few sentences where a few sentences will do.** Say what
 changed and what it means. Do not explain the implementation, restate the request
 back, list the files touched, or write a summary of a summary. Length is not
 evidence of care here; it is the thing that makes the writing unreadable.
+
+**BREVITY IS A HARD RULE, NOT A STYLE PREFERENCE** (owner instruction,
+2026-09 — "often Claude is overly verbose and I want to reduce that in
+general"). It applies to every reply, report, document, patch note, blog post
+and commit body an agent produces for this repo. Concrete limits, because
+"be concise" has been said before and did not hold:
+
+- **A closing report is one paragraph, under about 120 words.** Lead with the
+  outcome. If something failed or needs a decision, that is the first sentence.
+- **A deliverable document (a brief, a catalogue, a plan) says each thing
+  once, in one to three sentences per item.** No introduction explaining what
+  the document is about to say, no closing summary restating it.
+- **No headers in anything under about 500 words.** No bullet that runs to a
+  paragraph. No restating the request back. No listing files touched.
+- **When in doubt, cut.** A reader who wants more will ask; a reader handed
+  too much stops reading, and then the one important sentence is lost.
+
+The one exception is THIS FILE: an AGENTS.md entry may be as long as it takes
+to stop a mistake being repeated, because it is read by agents rather than by
+the owner.
 
 ## Never write tips, tricks, or how-to-use-this copy in the UI
 

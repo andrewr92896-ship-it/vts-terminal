@@ -13,8 +13,7 @@ a{color:inherit}
   display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;
   padding:20px clamp(20px,5vw,64px);border-bottom:1px solid var(--line);
 }
-.mark{font-weight:700;letter-spacing:.22em;font-size:.85rem}
-.mark em{display:block;font-style:normal;color:var(--gold);font-size:.55rem;letter-spacing:.34em;margin-top:3px}
+.mark{display:block;width:156px;height:auto}
 .bar nav{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
 .bar nav a{padding:8px 12px;border-radius:7px;color:var(--muted);text-decoration:none;font-size:.9rem}
 .bar nav a:hover{color:var(--text)}

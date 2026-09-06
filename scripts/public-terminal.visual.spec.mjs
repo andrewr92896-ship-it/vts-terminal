@@ -297,6 +297,41 @@ test('the phone drawer opens with labels, not a column of icons', async ({ page 
   await expect(sidebar).not.toBeInViewport();
 });
 
+// THE TERMINAL SCROLLS, ON A DESKTOP AS WELL AS A PHONE. Every capture above is
+// `fullPage: false` at the top of the page, so a shell whose main column could
+// not scroll passed the whole suite: the desktop grid's one row was implicit,
+// sized to its content, and the column's `height: 100%` resolved against THAT
+// rather than the viewport — so the main column grew to fit the page, the
+// shell clipped the rest, and nothing below the fold could be reached. The
+// phone layout is `display: block` and scrolled fine, which is why nothing
+// noticed. Asserted on BOTH widths, and on the actual scroll rather than the
+// computed overflow: an element can be `overflow: auto` and still have nothing
+// to scroll because it was allowed to be as tall as its content.
+test('the main column is the scroller, on a desktop and on a phone', async ({ page }) => {
+  for (const [width, device] of [[1440, 'desktop'], [390, 'mobile']]) {
+    await page.setViewportSize({ width, height: 720 });
+    await page.goto('about:blank');
+    // Terms is the longest screen the demo has, so it is the one that has to
+    // scroll on any viewport.
+    await page.goto(`${base}/?demo=1&device=${device}#hp_terms`, { waitUntil: 'domcontentloaded' });
+    const main = page.locator('.vts-public-main');
+    await expect(main).toContainText('Terms');
+    // The column is bounded by the viewport, not by its content — the fault
+    // was exactly a column as tall as the page.
+    const box = await main.boundingBox();
+    expect(box.height, `${device}: main column height`).toBeLessThanOrEqual(720);
+    await main.hover();
+    await page.mouse.wheel(0, 600);
+    await expect
+      .poll(() => main.evaluate((el) => el.scrollTop), { message: `${device}: wheel scrolls the main column` })
+      .toBeGreaterThan(0);
+    // And the document itself did not move: the shell is the viewport, the
+    // column is the scroller, and a page scroll would put the top bar out of
+    // reach.
+    expect(await page.evaluate(() => window.scrollY)).toBe(0);
+  }
+});
+
 // The demo asks which device it is being shown on before it draws the terminal,
 // and the answer picks one of the two default board layouts. Every other test
 // here answers it in the URL (`?device=desktop`) so it can reach a screen; this
@@ -397,6 +432,42 @@ test('the watchlist uses the widget that fits the tile it is in', async ({ page 
   await page.goto(`${base}/?demo=1&device=mobile#live`, { waitUntil: 'networkidle' });
   // Full width and short: the scrolling tape, which is the strip it was built for.
   expect((await configs()).some((c) => c.includes('proName')), 'the stacked watchlist is not the tape').toBe(true);
+});
+
+// A PHONE'S CELLS HAVE REAL HEIGHTS, and a tile fills its cell. The first phone
+// pass gave each cell only a minimum height, against which the tile's `height:
+// 100%` is `auto` — so every tile shrank to its content, the embeds collapsed to
+// nothing, and the rest of each cell was empty page under the tile's border
+// (owner report, 2026-09). TradingView is blocked in this suite, so the embed
+// host's height here comes purely from the layout, which is exactly the thing
+// being asserted: a cell hands its embed a size whether or not the script loads.
+test('a phone stacks the board with no empty space under a tile', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 780 });
+  await page.goto('about:blank');
+  await page.goto(`${base}/?demo=1&device=mobile#live`, { waitUntil: 'domcontentloaded' });
+  await expect(page.locator('.wall-cell').first()).toBeVisible();
+  const cells = await page.locator('.wall-cell').evaluateAll((els) =>
+    els.map((el) => ({
+      strip: el.dataset.strip === '1',
+      cell: Math.round(el.getBoundingClientRect().height),
+      tile: Math.round(el.firstElementChild?.getBoundingClientRect().height ?? 0),
+      embed: Math.round(el.querySelector('.tradingview-widget-container')?.getBoundingClientRect().height ?? -1),
+      title: el.querySelector('.tile-header')?.textContent?.trim() ?? '',
+    })),
+  );
+  expect(cells.length, 'no stacked cells rendered').toBeGreaterThan(3);
+  for (const c of cells) {
+    // The tile is the cell — nothing of the cell shows below the tile's border.
+    expect(Math.abs(c.cell - c.tile), `${c.title}: tile ${c.tile}px in a ${c.cell}px cell`).toBeLessThanOrEqual(1);
+    if (c.strip) continue;
+    // Six rows is the floor, so a full-width tile is never a stub…
+    expect(c.cell, `${c.title}: ${c.cell}px is a stub`).toBeGreaterThanOrEqual(250);
+    // …and an embed inside one is handed most of that to draw into.
+    if (c.embed >= 0) expect(c.embed, `${c.title}: embed host is ${c.embed}px`).toBeGreaterThanOrEqual(200);
+  }
+  // The stream slot is the 16:9 box a player would be in, not a caption.
+  const slot = page.getByText('Live stream plays here').locator('..');
+  expect(await slot.evaluate((el) => el.getBoundingClientRect().height)).toBeGreaterThanOrEqual(200);
 });
 
 test('the demo asks which device it is on, and the answer picks the layout', async ({ page }) => {
