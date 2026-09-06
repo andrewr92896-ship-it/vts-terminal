@@ -940,16 +940,27 @@ against**; the server no longer serves it.
   admin's method names so a fix made in one editor is the same diff in the
   other. `SectionForm.tsx` mirrors what `render.mjs` draws — the portfolio
   editor's lesson about fields that are typed into and never drawn.
-- **Certificates (`certificates`) is the one section type added since, on the
-  parity rule** (2026-09): items carry `imgSrc`, `title`, `meta`, `credential`,
-  `href`/`linkLabel`, and the renderer sorts them — a badge is a tile that is
-  one link, the whole of it, so the badge is what confirms the completion and
-  the address is never printed; no badge is a row under the tiles with the same
-  link written out. `certificates()` in `render.mjs`, `.certs` in the site's
-  stylesheet, `CERTIFICATE` in `SectionForm.tsx`, spec section F2. **The
-  portfolio's image slideshow has NOT been brought across yet** — its player is
-  React, and this page is static HTML with no script but `viewer.js`, so it
-  needs a small carousel script of its own before parity holds there.
+- **Two section types were added since, on the parity rule** (2026-09).
+  **Certificates (`certificates`)**: items carry `imgSrc`, `title`, `meta`,
+  `credential`, `href`/`linkLabel`, and the renderer sorts them — a badge is a
+  tile that is one link, the whole of it, so the badge is what confirms the
+  completion and the address is never printed; no badge is a row under the
+  tiles with the same link written out. `certificates()` in `render.mjs`,
+  `.certs` in the stylesheet, `CERTIFICATE` in `SectionForm.tsx`, spec F2.
+  **Image slideshow (`gallery`)**: slides are items with `imgSrc`, `alt`,
+  `title`, `caption`; the section carries `imgFit` and `thumbs`. The page is
+  static HTML, so the player is **`apps/marketing/src/slideshow.js`** — plain
+  JavaScript, one file, run in two places: the site links it as a module
+  script only when a visible slideshow is on the page, and `sitePreview.ts`
+  imports `mountSlideshows` and calls it after every re-render, so the preview
+  and the site cannot move differently. Every slide is in the markup with all
+  but the first `hidden` (readable with scripts off; a hidden lazy image is not
+  fetched), the image is a `data-preview` link so `viewer.js` is the lightbox
+  (a page with a slideshow links the viewer too), and the link and image are
+  `draggable="false"` because a native drag starts after a few pixels and
+  cancels the pointer events a swipe is read from — the swipe test failed on
+  exactly that. `gallery()` in `render.mjs`, `.slideshow` in the stylesheet,
+  `SLIDE` + `FrameField` in `SectionForm.tsx`, spec F3.
 - **The preview is a third HTML entry** (`apps/web/site-preview.html` →
   `src/sitePreview.ts`), for the reason the portfolio settled: the page's
   layout resolves against the VIEWPORT, so it has to be its own document in an

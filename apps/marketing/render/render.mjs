@@ -33,6 +33,8 @@
  * @property {string} [body]
  * @property {string} [meta]        a certificate's issuer and date
  * @property {string} [credential]  a certificate's id, if the issuer gives one
+ * @property {string} [alt]         what a slide's image shows
+ * @property {string} [caption]     a line under a slide
  * @property {string} [imgSrc]
  * @property {string} [videoUrl]
  * @property {string} [href]
@@ -42,14 +44,16 @@
 /**
  * @typedef {Object} Section
  * @property {string} id
- * @property {'hero' | 'grid' | 'boundary' | 'early' | 'certificates'} type
+ * @property {'hero' | 'grid' | 'boundary' | 'early' | 'certificates' | 'gallery'} type
  * @property {boolean} [hidden]
  * @property {boolean} [anchor]   emit the id on the element (a link target)
  * @property {string} [eyebrow]
  * @property {string} [h1]
  * @property {string} [h1Em]      the second, gold line of the headline
  * @property {string} [title]
- * @property {string} [note]      a line under a certificates title
+ * @property {string} [note]      a line under a certificates or slideshow title
+ * @property {'cover' | 'contain'} [imgFit]  a slideshow's frame: whole image, or cropped to fill
+ * @property {boolean} [thumbs]   a slideshow's thumbnail strip; absent means shown
  * @property {string} [lede]
  * @property {string} [body]
  * @property {string} [fine]
@@ -313,6 +317,67 @@ function certificates(s) {
   return out.join('\n');
 }
 
+/**
+ * The image slideshow: one slide in a fixed 16:10 frame at a time, moved by
+ * slideshow.js. Every slide is in the markup with all but the first `hidden`,
+ * so the page reads without scripts and a hidden lazy image is not fetched
+ * until it is shown. The image is a preview link, so viewer.js is the
+ * lightbox — the same one a résumé link opens. The same section the portfolio
+ * has.
+ */
+function gallery(s) {
+  const out = [`    <section${s.anchor === false ? '' : ` id="${esc(s.id)}"`} class="slideshow" role="region" aria-roledescription="carousel" aria-label="${esc(s.title || 'Image slideshow')}" tabindex="0" data-fit="${s.imgFit === 'cover' ? 'cover' : 'contain'}">`];
+  if (s.eyebrow) out.push(`      <p class="eyebrow">${esc(s.eyebrow)}</p>`);
+  if (s.title) out.push(`      <h2>${esc(s.title)}</h2>`);
+  if (s.note) out.push(`      <p class="note">${esc(s.note)}</p>`);
+  const slides = (s.items ?? []).filter((it) => it && typeof it === 'object');
+  const count = slides.length;
+  if (count === 0) {
+    out.push(`      <div class="stage"><div class="slot">Slides to come</div></div>`, `    </section>`);
+    return out.join('\n');
+  }
+  out.push(`      <div class="stage">`, `        <ul class="slides">`);
+  slides.forEach((it, i) => {
+    const src = fileHref(it.imgSrc);
+    const alt = esc(it.alt ?? '');
+    const label = esc(it.alt || it.title || `slide ${i + 1}`);
+    const attrs = ` data-title="${esc(it.title ?? '')}" data-caption="${esc(it.caption ?? '')}"${i === 0 ? '' : ' hidden'}`;
+    out.push(`          <li class="slide"${attrs}>`);
+    out.push(
+      src
+        ? `            <a data-preview href="${esc(src)}" aria-label="Enlarge: ${label}" draggable="false"><img src="${esc(src)}" alt="${alt}" loading="${i === 0 ? 'eager' : 'lazy'}" decoding="async" draggable="false"></a>`
+        : `            <div class="slot">Image to come</div>`,
+    );
+    out.push(`          </li>`);
+  });
+  out.push(`        </ul>`);
+  if (count > 1) {
+    out.push(
+      `        <button type="button" class="nav prev" aria-label="Previous slide">&#8249;</button>`,
+      `        <button type="button" class="nav next" aria-label="Next slide">&#8250;</button>`,
+    );
+  }
+  out.push(`      </div>`);
+  const first = slides[0];
+  const firstText = [first.title ? `<strong>${esc(first.title)}</strong>` : '', first.caption ? `<span>${esc(first.caption)}</span>` : '']
+    .filter(Boolean)
+    .join('');
+  out.push(`      <div class="slide-bar" aria-live="polite"><span class="slide-text">${firstText}</span><span class="counter">1 / ${count}</span></div>`);
+  if (count > 1 && s.thumbs !== false) {
+    out.push(`      <div class="thumbs">`);
+    slides.forEach((it, i) => {
+      const src = fileHref(it.imgSrc);
+      const label = esc(`Slide ${i + 1}${it.alt ? `: ${it.alt}` : ''}`);
+      out.push(
+        `        <button type="button" aria-label="${label}"${i === 0 ? ' aria-current="true"' : ''}>${src ? `<img src="${esc(src)}" alt="" loading="lazy" decoding="async">` : ''}</button>`,
+      );
+    });
+    out.push(`      </div>`);
+  }
+  out.push(`    </section>`);
+  return out.join('\n');
+}
+
 function section(s) {
   switch (s.type) {
     case 'hero':
@@ -325,6 +390,8 @@ function section(s) {
       return panel(s, 'early');
     case 'certificates':
       return certificates(s);
+    case 'gallery':
+      return gallery(s);
     default:
       return '';
   }
@@ -350,8 +417,10 @@ export function renderMarketing(model, { stylesheet = '/styles.css', scripts = t
     .map(section)
     .filter(Boolean)
     .join('\n\n');
-  const needsViewer =
-    scripts && JSON.stringify(model).includes('"behavior":"preview"');
+  const needsSlideshow = scripts && (model.sections ?? []).some((s) => s && !s.hidden && s.type === 'gallery');
+  // The slideshow's images are preview links, so a page with one needs the
+  // viewer too — it is the lightbox.
+  const needsViewer = scripts && (JSON.stringify(model).includes('"behavior":"preview"') || needsSlideshow);
   return `<!doctype html>
 <html lang="en">
 <head>
@@ -363,7 +432,7 @@ export function renderMarketing(model, { stylesheet = '/styles.css', scripts = t
   <meta property="og:description" content="${esc(head.ogDescription)}">
   <meta property="og:type" content="website">
   <link rel="stylesheet" href="${esc(stylesheet)}">
-  <title>${esc(head.title)}</title>${needsViewer ? '\n  <script src="/viewer.js" defer></script>' : ''}
+  <title>${esc(head.title)}</title>${needsViewer ? '\n  <script src="/viewer.js" defer></script>' : ''}${needsSlideshow ? '\n  <script type="module" src="/slideshow.js"></script>' : ''}
 </head>
 <body>
   <header class="bar">

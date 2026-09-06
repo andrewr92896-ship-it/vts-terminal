@@ -21,6 +21,9 @@
 import { renderMarketingBody, validateMarketing } from '../../marketing/render/render.mjs';
 import type { Model } from '../../marketing/render/render.mjs';
 import '../../marketing/src/styles.css';
+// The slideshow's own script, so a preview slideshow moves the way the site's
+// does. It is the site's file: what the site links is what is imported here.
+import { mountSlideshows } from '../../marketing/src/slideshow.js';
 
 const SITE = 'marketing';
 const FILES = `/api/public/site/${SITE}/files/`;
@@ -32,6 +35,7 @@ let posted = false;
 function draw(model: Model) {
   const y = window.scrollY;
   document.body.innerHTML = renderMarketingBody(model, { files: FILES });
+  mountSlideshows(document.body);
   if (model.head?.title) document.title = model.head.title;
   // A re-render on every keystroke must not throw the reader back to the top.
   window.scrollTo(0, y);

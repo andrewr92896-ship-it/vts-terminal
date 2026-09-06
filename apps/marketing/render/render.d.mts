@@ -14,6 +14,8 @@ export type Item = {
   body?: string;
   meta?: string;
   credential?: string;
+  alt?: string;
+  caption?: string;
   imgSrc?: string;
   videoUrl?: string;
   href?: string;
@@ -22,7 +24,7 @@ export type Item = {
   [key: string]: unknown;
 };
 
-export type SectionType = 'hero' | 'grid' | 'boundary' | 'early' | 'certificates';
+export type SectionType = 'hero' | 'grid' | 'boundary' | 'early' | 'certificates' | 'gallery';
 
 export type Section = {
   id: string;
@@ -34,6 +36,8 @@ export type Section = {
   h1Em?: string;
   title?: string;
   note?: string;
+  imgFit?: 'cover' | 'contain';
+  thumbs?: boolean;
   lede?: string;
   body?: string;
   fine?: string;
