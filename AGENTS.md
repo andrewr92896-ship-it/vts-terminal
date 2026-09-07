@@ -183,7 +183,7 @@ The public builds must never import or contain private portal, partner/team, adm
 
 The code scaffolds separate deployments, private admission, cookies and configuration, but physical Railway services, public authentication, public/private databases, DNS, TLS and private MFA remain manual deployment blockers. Read `docs/architecture/public-private-separation.md` and `docs/implementation/public-private-migration-status.md` before changing this boundary. Never weaken it with a runtime feature flag or role-based redirect between applications.
 
-### App icons — three deployments, two pieces of art, and they are CIRCLES
+### App icons — three deployments, two pieces of art, one crop rule
 
 `scripts/generate-app-icons.mjs` rasterizes every home-screen and browser icon
 in the repository. A development-time tool, not part of any build: install sharp
@@ -198,21 +198,31 @@ and run it after editing a piece of source art.
   public directory, so anything else would need a build step that crosses the
   boundary.
 
-**THE ICONS ARE CIRCLES, WITH TRANSPARENT CORNERS** (owner instruction,
-2026-09). That is what makes a circle a circle in a browser tab, a bookmark and
-an Android launcher. **iOS is the exception and it is the platform's, not ours**:
-a home-screen icon there is composited over black and then masked to Apple's own
-squircle, so a transparent corner shows as a black one. Filling the corners with
-the ground colour instead would make it a rounded square again, which is the
-thing that was being changed.
+**A HOME-SCREEN ICON IS FULL BLEED. A FAVICON IS A CIRCLE.** That split is the
+whole rule, and it was arrived at the expensive way: every icon was cut to a
+circle in 7.96 on an owner instruction, and on an iPhone the result was a navy
+disc sitting in a **black rounded square** (owner report with a photograph,
+2026-09).
 
-**THE MASKABLE ICON IS DELIBERATELY NOT CIRCLED.** Its whole contract is that
-the launcher owns the shape and the art bleeds to the edges; a circle there is
-cropped a second time, into a smaller circle with a transparent ring around it.
-The mark must sit inside the centred circle of 80% diameter, and the script
-**measures** that rather than assuming it — 32.4% of the width against a 40%
-budget for the orange art, 32.8% against 50% (the inscribed circle) for the
-navy. Art that outgrows its budget fails the script with the remedy.
+**iOS does not honour transparency in a home-screen icon** — it composites the
+art over black and then applies Apple's own squircle mask — so a transparent
+corner is a black corner, every time. Android's maskable slot is the same idea
+from the other end: the launcher owns the shape and the art has to reach the
+edges, so a circle there is cropped a second time into a smaller circle with a
+transparent ring around it. **A browser tab is the one place the alpha
+survives**, so that is the one place a circle is cut.
+
+Nothing is lost on the home screen by going full bleed: iOS and most Android
+launchers round the tile themselves, which is the rounded icon the circle was
+reaching for. **Do not re-cut the app icons to circles** — the platform already
+does the rounding, and the only thing a circle adds is the black corner.
+
+**The mark must fit whatever crop its deployment applies**, and the script
+measures rather than assumes: 32.4% of the width from centre against a 40%
+budget for the orange art (which has a maskable variant, the tightest crop
+here), 32.8% against 50% for the navy (whose only crop is the favicon's
+inscribed circle). Art that outgrows its budget fails the script with the
+remedy.
 
 **The ground is read PER ROW, from that row's left edge**, so a vertical
 gradient counts as ground rather than as the mark — the navy art is a gradient

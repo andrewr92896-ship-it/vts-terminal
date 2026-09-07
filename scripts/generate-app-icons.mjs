@@ -17,30 +17,35 @@ import sharp from 'sharp';
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
-// THE ICONS ARE CIRCLES (owner instruction, 2026-09), cut from square art. The
-// corners are transparent, which is what makes the circle a circle in a browser
-// tab, a bookmark and an Android launcher.
+// A HOME-SCREEN ICON IS FULL BLEED. A FAVICON IS A CIRCLE. That split is the
+// whole rule here, and it was arrived at the expensive way: every icon was cut
+// to a circle in 7.96, and on an iPhone the result was a navy disc sitting in a
+// BLACK rounded square (owner report, 2026-09, with a photograph of it).
 //
-// iOS IS THE EXCEPTION AND IT IS THE PLATFORM'S, NOT OURS: a home-screen icon
-// there is composited over black and then masked to Apple's own squircle, so a
-// transparent corner shows as a black one. That is still a visible circle, which
-// is what was asked for; filling the corners with the ground colour instead
-// would make it a rounded square again.
+// iOS does not honour transparency in a home-screen icon — it composites the
+// art over black and then applies Apple's own squircle mask — so a transparent
+// corner is a black corner, every time. Android's maskable slot is the same
+// idea from the other end: the launcher owns the shape and the art has to reach
+// the edges, so a circle there is cropped a second time into a smaller circle
+// with a transparent ring around it.
 //
-// The MASKABLE icon is deliberately NOT circled. Its whole contract is that the
-// launcher owns the shape and the art must bleed to the edges — a circle there
-// would be cropped a second time, into a smaller circle with a transparent ring
-// around it.
+// A BROWSER TAB IS THE ONE PLACE THE ALPHA SURVIVES, so that is the one place a
+// circle is cut. Nothing is lost on the home screen by going full bleed: iOS and
+// most Android launchers round the tile themselves, which is the rounded icon
+// this was reaching for.
 const targets = [
   {
     name: 'private terminal',
     art: 'apps/web/public/brand/vts-app-icon.png',
     outDir: 'apps/web/public',
+    // Every one of these is an APP icon — the manifest's two, the maskable
+    // variant and the Apple touch icon — so every one is full bleed. The
+    // private terminal's favicon is the wordmark and is not generated here.
     icons: [
-      { file: 'icon-192.png', size: 192, shape: 'circle' },
-      { file: 'icon-512.png', size: 512, shape: 'circle' },
-      { file: 'icon-512-maskable.png', size: 512, shape: 'square' },
-      { file: 'apple-touch-icon-180.png', size: 180, shape: 'circle' },
+      { file: 'icon-192.png', size: 192, shape: 'square' },
+      { file: 'icon-512.png', size: 512, shape: 'square' },
+      { file: 'icon-512-maskable.png', size: 512, shape: 'maskable' },
+      { file: 'apple-touch-icon-180.png', size: 180, shape: 'square' },
     ],
   },
   {
@@ -50,8 +55,9 @@ const targets = [
     // No manifest here, deliberately — the public terminal is not installable —
     // so there is no maskable variant to generate.
     icons: [
+      // The favicon, and the only circle in the repository.
       { file: 'icon-192.png', size: 192, shape: 'circle' },
-      { file: 'apple-touch-icon-180.png', size: 180, shape: 'circle' },
+      { file: 'apple-touch-icon-180.png', size: 180, shape: 'square' },
     ],
   },
   {
@@ -59,8 +65,9 @@ const targets = [
     art: 'apps/marketing/src/brand/vts-app-icon.png',
     outDir: 'apps/marketing/src',
     icons: [
+      // The favicon, and the only circle in the repository.
       { file: 'icon-192.png', size: 192, shape: 'circle' },
-      { file: 'apple-touch-icon-180.png', size: 180, shape: 'circle' },
+      { file: 'apple-touch-icon-180.png', size: 180, shape: 'square' },
     ],
   },
 ];
@@ -72,9 +79,11 @@ const targets = [
 // mark and put the orange art's measurement at 70% of the width.
 const GROUND_TOLERANCE = 60;
 
-// The circle keeps the inscribed disc, so the mark has to be inside it. The
+// A circle keeps the inscribed disc, so the mark has to be inside it. The
 // maskable icon is cropped harder: a launcher may use any shape, so only the
-// centred circle of 80% diameter is guaranteed to survive.
+// centred circle of 80% diameter is guaranteed to survive. Plain full-bleed art
+// is never cropped by us at all, so it is only ever bounded by whichever of
+// these its deployment also generates.
 const CIRCLE_RADIUS = 0.5;
 const MASKABLE_RADIUS = 0.4;
 
@@ -119,7 +128,8 @@ async function main() {
   for (const target of targets) {
     const artPath = path.join(repoRoot, target.art);
     const radius = await contentRadius(artPath);
-    const needed = target.icons.some((i) => i.shape === 'square') ? MASKABLE_RADIUS : CIRCLE_RADIUS;
+    // The tightest crop this deployment actually applies decides the budget.
+    const needed = target.icons.some((i) => i.shape === 'maskable') ? MASKABLE_RADIUS : CIRCLE_RADIUS;
     console.log(`${target.name}: mark reaches ${(radius * 100).toFixed(1)}% of the width from centre (budget ${needed * 100}%)`);
     if (radius > needed) {
       console.error(`  The mark does not fit. Shrink it into the centre of ${target.art} and let the ground bleed to the edges.`);

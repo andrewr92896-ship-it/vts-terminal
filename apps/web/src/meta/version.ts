@@ -11,9 +11,17 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 7.96';
+export const APP_VERSION = 'Beta V 7.97';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 7.97',
+    date: '2026-09-07',
+    notes: [
+      'Home-screen icons are square again, on all three sites. Cut to a circle they came out as a disc in a black rounded square on an iPhone — iOS fills a transparent corner with black rather than leaving it clear. The phone rounds the tile itself, which is the rounded icon the circle was after.',
+      'The browser-tab icon on the landing page and the public terminal stays a circle, since a tab is the one place the transparency works.',
+    ],
+  },
   {
     version: 'Beta V 7.96',
     date: '2026-09-07',
