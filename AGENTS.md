@@ -183,6 +183,31 @@ The public builds must never import or contain private portal, partner/team, adm
 
 The code scaffolds separate deployments, private admission, cookies and configuration, but physical Railway services, public authentication, public/private databases, DNS, TLS and private MFA remain manual deployment blockers. Read `docs/architecture/public-private-separation.md` and `docs/implementation/public-private-migration-status.md` before changing this boundary. Never weaken it with a runtime feature flag or role-based redirect between applications.
 
+### The home-screen icon is the PRIVATE terminal's alone
+
+`apps/web/public/brand/vts-app-icon.png` is the source art; the four PNGs the
+manifest and the Apple touch icon point at are rasterized from it by
+`apps/web/scripts/generate-icons.mjs` (a development-time tool — install sharp
+and run it after editing the art, it is not part of the build). Gold VTS on an
+orange ground since 2026-09; it was navy before that.
+
+**It reaches nothing else.** The public terminal builds from
+`apps/public-terminal/public` and ships no manifest and no touch icon at all,
+and the marketing site has its own assets — so changing this cannot alter what
+a visitor sees. The employee portal shares the directory but links only the
+wordmark favicon, and is deliberately not installable.
+
+**The maskable icon is FULL BLEED, and the script measures rather than assumes
+that this is safe.** A launcher may crop a maskable icon to any shape, so only
+the centred circle of 80% diameter survives; the current mark reaches 32.4% of
+the width from centre against a 40% budget. Art that outgrows it has to be
+shrunk into the centre with the ground re-extended to the edges, which is what
+the script refuses on and says. The ground colour is read from the art's own
+corner, so re-colouring needs no edit — but the tolerance that separates ground
+from mark sits at 60 deliberately: the two populations are far apart (95% of
+pixels within 4 of the ground, the mark at 225 and up) and at 24 a single
+corner pixel of noise read as the mark and put the measurement at 70%.
+
 ## The public terminal (`apps/public-terminal`) and demo mode
 
 The public terminal is the **same React app as the private portal, with a

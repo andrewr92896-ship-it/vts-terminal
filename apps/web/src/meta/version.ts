@@ -11,9 +11,16 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 7.94';
+export const APP_VERSION = 'Beta V 7.95';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 7.95',
+    date: '2026-09-07',
+    notes: [
+      'A new home-screen icon for the private terminal — gold VTS on orange — so a shortcut added from Safari is easy to pick out. The public terminal and the landing page are unchanged.',
+    ],
+  },
   {
     version: 'Beta V 7.94',
     date: '2026-09-06',
