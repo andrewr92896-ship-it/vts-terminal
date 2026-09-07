@@ -11,9 +11,24 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 7.94';
+export const APP_VERSION = 'Beta V 7.96';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 7.96',
+    date: '2026-09-07',
+    notes: [
+      'The landing page and the public terminal have home-screen icons too — the navy VTS mark — so a shortcut to either is recognisable rather than a blank page symbol.',
+      'Every icon is now a circle rather than a square. On an iPhone the corners around it show as black, because iOS fills a transparent corner in rather than leaving it clear.',
+    ],
+  },
+  {
+    version: 'Beta V 7.95',
+    date: '2026-09-07',
+    notes: [
+      'A new home-screen icon for the private terminal — gold VTS on orange — so a shortcut added from Safari is easy to pick out.',
+    ],
+  },
   {
     version: 'Beta V 7.94',
     date: '2026-09-06',

@@ -432,6 +432,8 @@ export function renderMarketing(model, { stylesheet = '/styles.css', scripts = t
   <meta property="og:description" content="${esc(head.ogDescription)}">
   <meta property="og:type" content="website">
   <link rel="stylesheet" href="${esc(stylesheet)}">
+  <link rel="icon" type="image/png" href="/icon-192.png">
+  <link rel="apple-touch-icon" href="/apple-touch-icon-180.png">
   <title>${esc(head.title)}</title>${needsViewer ? '\n  <script src="/viewer.js" defer></script>' : ''}${needsSlideshow ? '\n  <script type="module" src="/slideshow.js"></script>' : ''}
 </head>
 <body>
