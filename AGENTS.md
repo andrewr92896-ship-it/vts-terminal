@@ -2725,11 +2725,19 @@ workspaces list** (see `theme/nav.ts` order).
         **`npm run verify:market-macro`** checks all of it offline against
         hand-computed fixtures; run it after touching a transform, a scale or the
         cadence gate.
-    - **20 rows are still design fixtures.** Seventeen are the ones **no free
-      provider covers** — CME FedWatch meeting odds, the SEP dot plot, BoE/BoJ
-      rates, the 1-year breakeven, the Cleveland nowcast, the GDP forecast, the
-      ISM surveys (licensed, pulled from FRED), the MOVE index, blended EPS, the
-      Citi surprise index and the three crypto flow/funding rows. The other three
+    - **17 rows can never go live, and 54 of the 71 non-session rows can.** The
+      seventeen are the ones **no free provider covers** — CME FedWatch meeting
+      odds, the SEP dot plot, BoE/BoJ rates, the 1-year breakeven, the Cleveland
+      nowcast, the GDP forecast, the ISM surveys (licensed), the MOVE index,
+      blended EPS, the Citi surprise index and the three crypto flow/funding
+      rows. **A row nothing can refresh must not claim a reading date**: every
+      one of them carries `asOf: 'sample'` rather than a specific day, because a
+      fixture stamped "Jul 28" is a fixture asserting somebody read it on the
+      28th of July. The ones with a verified figure behind them (the policy
+      rates, the ISM prints) keep a real date and are re-checked when the
+      catalog is refreshed. **A label must not name a period either** — "Cleveland
+      nowcast · Jul" and "Q2 advance GDP" put a stale month in the row's own
+      title, where no overlay can ever reach it. The other three
       are **gold, silver and copper**, which need an OANDA entity that carries
       metals and go live on their own once one is connected. **Stooq was tried
       twice for the metals and does not answer a server** — keyless CSV that
@@ -2758,11 +2766,53 @@ workspaces list** (see `theme/nav.ts` order).
       daily close — leaving it made the S&P and VIX rows say "close" and
       "continuous" at once. Restate the cycle whenever a source publishes on a
       different rhythm than the catalog assumed.
+    - **THE FOMC CALENDAR MUST NEVER RUN OUT, AND `verify:market-calendar` IS
+      WHAT GUARANTEES IT** (`trading/fomcCalendar.ts`). The schedule held one
+      year and `nextMeetingStamp` rolled an exhausted list onto `year + 1` reusing
+      its month-days — so the day after a year's last meeting the bar counted down
+      to a date the Fed had never published. 2027 opens on the **27th**, 2026 on
+      the 28th: one day wrong, stated with total confidence, on the one bar whose
+      entire job is saying when the decision lands. Exactly the rule this board
+      already enforces everywhere else, broken where it mattered most.
+      - **The resolvers refuse rather than extrapolate.** `nextMeetingFrom` /
+        `prevMeetingFrom` take full ISO dates and return **0** when the schedule
+        is spent; the bar is guarded on that and hides itself. `nextMeetingStamp`
+        and the MM-DD pair survive only for a service-worker-cached bundle
+        talking to an API from before `meetingDates` existed — **new code uses
+        the ISO pair.**
+      - **The payload carries both.** `meetingDates` (ISO, spanning years) is what
+        the client resolves against; `meetings` + `meetingYear` stay beside it
+        because an older cached bundle would read an ISO string as a month-day.
+      - **The check fails while three meetings are still ahead**, with the remedy
+        in the message — months of warning rather than a board that quietly starts
+        lying. When CI tells you to, add the next year. The module is
+        **import-free** for the same reason `pushoverRefusal.ts` is: the check has
+        to read the schedule with no config, database or network.
+      - The Fed publishes about two years ahead and labels the forward year
+        tentative. Keep two years loaded.
+    - **THE FED BAR STATES THE SCHEDULE, NOT THE ODDS ON IT.** It used to draw two
+      invented probabilities — "cut 78% · hold 22%" over a green bar, with "cut
+      fully priced by December" beneath — as bare fact, carrying **none** of the
+      Sample marking every placeholder row on the board carries. Nothing sources
+      meeting-by-meeting pricing (CME FedWatch is not a free feed), so it was a
+      design fixture that had escaped onto the panel readers treat as
+      authoritative — and it hard-coded a **direction**, so by late 2026, with the
+      Fed raising, it was still telling every reader a cut was fully priced. It
+      lists the next meetings instead, which the terminal genuinely knows. **Do
+      not put a probability back on that bar without a provider behind it.**
+    - **A meeting's year comes from the meeting.** The bar stamped its date line
+      with the payload's `meetingYear`, so January 2027's meeting read "Jan 27,
+      2026" the moment the countdown crossed the year.
     - **The Fed decision bar reads its target range from the `ffr` series**, never
       from a literal. It carried a hardcoded "4.25–4.50" in two places, which
       became a visible lie the moment that row went live off FRED — the bar
       claimed a hold at a range the row directly beneath it contradicted. Anything
-      the bar states about current policy must come from the payload.
+      the bar states about current policy must come from the payload. **One of the
+      two survived as a `|| '4.25–4.50'` fallback** and was still naming a range
+      the Fed had left 75bp behind; there is now no literal at all, and the Target
+      range stat drops out rather than state a rate nobody read. "Last reviewed"
+      says `target X%`, never `held at X%` — the terminal does not know whether the
+      last meeting held or moved.
     - **The `review` column ("Last → next review") is real only with a FRED key.**
       Observations cannot answer it — a FRED observation is dated for the period
       it *measures*, not the day it was published — but the keyed
@@ -2773,6 +2823,15 @@ workspaces list** (see `theme/nav.ts` order).
       that has already passed renders `tbc` rather than a date that has gone).
       Never wire the *observation* date into it — "last reviewed Jun 1" for a June
       CPI print released in July is a worse claim than the schedule it replaces.
+      **THE CATALOG HOLDS A CADENCE, NOT A DATE.** Twenty rows carried hand-typed
+      release dates and every one of them had passed — the whole column read
+      `tbc` on an unkeyed install, and the stored data was a lie waiting to be
+      read. Hand-typing twenty more is the treadmill that produced that, so a
+      FRED-covered row now states its rhythm (`'monthly'`, `'weekly · Thursday'`,
+      `'quarterly'`), which renders verbatim and never goes stale, and the keyed
+      release endpoints override it with real dates. **Only a date somebody
+      verified and that is still ahead belongs in the catalog** — the BoE's next
+      decision, and nothing else.
       A release happening **today is the last one, not the next**, and the **FOMC
       rows are never overwritten** (`next: 'fomc'` resolves off the live meeting
       list, which beats whichever statistical release carries the series).

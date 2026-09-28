@@ -118,6 +118,9 @@ export const etTime = (ms: number): string => timeFmt.format(ms);
 export const etClock = (ms: number): string => clockFmt.format(ms); // with seconds
 export const etDay = (ms: number): string => dayFmt.format(ms); // "Wed, Sep 16"
 export const etMonthDay = (ms: number): string => mdFmt.format(ms); // "Sep 16"
+// The Eastern calendar year of an instant. A meeting's year has to come from
+// the meeting, never from the catalog year the payload happens to carry.
+export const etYear = (ms: number): string => String(etParts(ms).y);
 
 // Are two instants on the same ET calendar day?
 export function sameEtDay(a: number, b: number): boolean {
@@ -158,9 +161,54 @@ function meetingStamp(year: number, md: string): number {
   return etStampYMD(year, Number(md.slice(0, 2)), Number(md.slice(3)), STATEMENT_HOUR, 0);
 }
 
-// The next statement — the first one less than an hour past, so the bar keeps
-// showing today's meeting through the decision itself. Rolls to the first
-// meeting of the following year once the list is exhausted.
+// ---- the ISO resolvers, which are what the terminal actually uses ----
+//
+// **THESE REFUSE RATHER THAN EXTRAPOLATE, AND THAT IS THE WHOLE POINT OF THEM.**
+// `nextMeetingStamp` below rolls an exhausted list onto the following year by
+// reusing its first month-day, which reads as harmless and is not: the Fed's
+// meetings are real published dates that move by a day or two each year, so the
+// day after a year's last meeting the bar began counting down to a date nobody
+// had published — 2027 opens on the 27th, not 2026's 28th. Returning 0 makes
+// the caller draw nothing, which is the honest answer, and
+// `verify:market-calendar` fails long before a deployed board could reach it.
+//
+// A date is matched an hour past its statement so the bar keeps showing today's
+// meeting through the decision itself.
+function statementStamp(iso: string): number {
+  const [y, m, d] = iso.split('-');
+  return etStampYMD(Number(y), Number(m), Number(d), STATEMENT_HOUR, 0);
+}
+
+// A statement date's own instant, exported so a caller can list the meetings
+// after the current one without re-deriving the 2:00 PM ET rule.
+export const statementStampOf = (iso: string): number => statementStamp(iso);
+
+export function nextMeetingFrom(now: number, dates: string[]): number {
+  for (const iso of dates) {
+    const t = statementStamp(iso);
+    if (now < t + 3600000) return t;
+  }
+  return 0;
+}
+
+export function prevMeetingFrom(before: number, dates: string[]): number {
+  let prev = 0;
+  for (const iso of dates) {
+    const t = statementStamp(iso);
+    if (t < before) prev = t;
+  }
+  return prev;
+}
+
+// ---- the MM-DD pair, kept only for an older payload ----
+//
+// Reached when the server predates `meetingDates` — a cached bundle talking to
+// a freshly rolled-back API, essentially. They keep the year-rolling behaviour
+// they always had rather than changing under a caller that was written for it.
+
+// The next statement — the first one less than an hour past. Rolls to the first
+// meeting of the following year once the list is exhausted, which is a guess;
+// prefer `nextMeetingFrom`.
 export function nextMeetingStamp(now: number, meetings: string[], year: number): number {
   for (const md of meetings) {
     const t = meetingStamp(year, md);

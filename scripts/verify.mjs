@@ -23,6 +23,7 @@ const STEPS = [
   ['credential encryption', 'verify:secretbox'],
   ['AI provider seam', 'verify:ai-provider'],
   ['market data macro', 'verify:market-macro'],
+  ['FOMC decision calendar', 'verify:market-calendar'],
   ['investments math', 'verify:investments'],
   ['investments math mirror (private ↔ public)', 'verify:investments-mirror'],
   ['position sizing (web ↔ server)', 'verify:sizing'],

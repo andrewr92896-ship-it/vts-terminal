@@ -59,6 +59,7 @@ import { getRolloverPlan, setRolloverPlan } from '../trading/rollover.js';
 import { NOTIF_LEVELS } from '../notifications/prefs.js';
 import { getReentryChecks } from '../trading/reentry.js';
 import {
+  FOMC_MEETING_DATES,
   FOMC_MEETING_YEAR,
   FOMC_MEETINGS_2026,
   getMarketData,
@@ -1849,7 +1850,11 @@ const marketDataLayoutSchema = z.object({
 // The FOMC statement dates, sent with the stream wall so the Federal Reserve
 // tile can say how long until the next meeting and how long since the last one.
 // Same list Market Data's countdown bar reads — one schedule, not two.
-const FOMC_SCHEDULE = { meetings: FOMC_MEETINGS_2026, meetingYear: FOMC_MEETING_YEAR };
+const FOMC_SCHEDULE = {
+  meetings: FOMC_MEETINGS_2026,
+  meetingYear: FOMC_MEETING_YEAR,
+  meetingDates: FOMC_MEETING_DATES,
+};
 
 // This trader's Market News view state. The channel catalog is code-resident,
 // so nothing here can introduce a channel — every key is checked against the

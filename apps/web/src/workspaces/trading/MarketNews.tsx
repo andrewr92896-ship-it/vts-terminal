@@ -12,7 +12,14 @@ import { C, tint } from '../../theme/tokens';
 import { ScreenTitle } from './ScreenTitle';
 import { newsFeeds, affectedInstruments, deriveWatchlist, DEFAULT_WATCHLIST } from './newsRelevance';
 import { decodeEntities, fmtDayKey, fmtTime } from './newsFormat';
-import { countdown, etDay, nextMeetingStamp, prevMeetingStamp } from './etClock';
+import {
+  countdown,
+  etDay,
+  nextMeetingFrom,
+  nextMeetingStamp,
+  prevMeetingFrom,
+  prevMeetingStamp,
+} from './etClock';
 import { STREAM_PLACEHOLDER_TEXT, embedSrc, isPlaceholder, liveKnown } from './streamEmbed';
 import type { MarketNewsData, MarketNewsStreams, MembershipTier, NewsItem, StreamChannel } from '../../api/types';
 import { useContentWidth } from '../../lib/measure';
@@ -22,6 +29,9 @@ import { useContentWidth } from '../../lib/measure';
 export interface FomcSchedule {
   meetings: string[];
   meetingYear: number;
+  // Full ISO statement dates. Optional only because a cached bundle may reach
+  // an API from before they were sent.
+  meetingDates?: string[];
 }
 
 // Market News — the desk's headline feed plus an embedded YouTube live-stream
@@ -152,10 +162,23 @@ function isFedChannel(c: StreamChannel): boolean {
 // whole point, and it must not be hidden behind the countdown just because the
 // server could not confirm the channel is live.
 function inFedMeetingWindow(fomc: FomcSchedule, now: number): boolean {
-  const next = nextMeetingStamp(now, fomc.meetings, fomc.meetingYear);
-  const prev = prevMeetingStamp(now, fomc.meetings, fomc.meetingYear);
-  const near = (t: number) => now >= t - 2 * 3600_000 && now <= t + 8 * 3600_000;
+  const { next, prev } = fedStamps(fomc, now);
+  const near = (t: number) => t > 0 && now >= t - 2 * 3600_000 && now <= t + 8 * 3600_000;
   return near(next) || near(prev);
+}
+
+// One resolution for both readers of the schedule, so the card and the
+// meeting-window test can never disagree about when the next decision is.
+// Prefers the full ISO dates; the MM-DD pair is the fallback for a payload
+// from before they were sent, and a zero means the schedule has run out rather
+// than a date nobody published.
+function fedStamps(fomc: FomcSchedule, now: number): { next: number; prev: number } {
+  const dates = fomc.meetingDates ?? [];
+  if (dates.length) return { next: nextMeetingFrom(now, dates), prev: prevMeetingFrom(now, dates) };
+  return {
+    next: nextMeetingStamp(now, fomc.meetings, fomc.meetingYear),
+    prev: prevMeetingStamp(now, fomc.meetings, fomc.meetingYear),
+  };
 }
 
 // "3d 5h ago" — the mirror of etGap's "in 3d 5h", for the meeting just gone.
@@ -1215,8 +1238,7 @@ const inputStyle: CSSProperties = {
 // The Fed is the one channel on the wall worth keeping open when it is *not*
 // broadcasting, and this is the reason why.
 function FedMeetingCard({ fomc, now }: { fomc: FomcSchedule; now: number }) {
-  const next = nextMeetingStamp(now, fomc.meetings, fomc.meetingYear);
-  const prev = prevMeetingStamp(now, fomc.meetings, fomc.meetingYear);
+  const { next, prev } = fedStamps(fomc, now);
   // Four tiles across leaves each one about 280px wide, so this has to fit a
   // ~155px-tall box. Everything here is sized to survive that: no explanatory
   // sentence (it wrapped to three lines and pushed the card over its own

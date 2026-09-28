@@ -1,5 +1,5 @@
 type MarketDataLayout={pinned:string[];hidden:string[];custom:Array<Record<string,unknown>>};
-type MarketDataPayload={groups:Array<{key:string;label:string}>;series:Array<Record<string,unknown>>;periods:string[];defaultPins:string[];meetings:string[];meetingYear:number;sampleValues:boolean};
+type MarketDataPayload={groups:Array<{key:string;label:string}>;series:Array<Record<string,unknown>>;periods:string[];defaultPins:string[];meetings:string[];meetingYear:number;meetingDates:string[];sampleValues:boolean};
 type MarketNewsData={aiTagging:boolean;headlines:Array<Record<string,unknown>>;calendar:Array<Record<string,unknown>>};
 import { isDemo, publicRequest } from '../../../web/src/public/PublicRuntime';
 import { DEMO_SCREENSHOT_METHODS, demoCall } from '../demo/demoStore';
@@ -23,7 +23,7 @@ const series:MarketDataPayload['series']=[
   {id:'vix',group:'macro',label:'VIX',value:'14.82',unit:'',asOf:'close',source:'live',money:false,session:null,changes:changes('−0.48','−1.10','−2.36','−3.20','−1.08'),review:review('Cboe','daily',''),sample:false},
   {id:'new-york',group:'session',label:'New York session',value:'',unit:'',asOf:'Eastern',source:'live',money:false,session:[480,1020],changes:changes('—','—','—','—','—'),review:review('Market hours'),sample:false},
 ];
-const marketDataPayload:MarketDataPayload={groups:[{key:'policy',label:'Policy & rates'},{key:'inflation',label:'Inflation'},{key:'labor',label:'Labor & growth'},{key:'yields',label:'Yields & curve'},{key:'fx',label:'FX & dollar'},{key:'commod',label:'Commodities'},{key:'crypto',label:'Crypto'},{key:'equity',label:'Indices & volatility'},{key:'macro',label:'Macro & liquidity'},{key:'session',label:'Sessions'}],series,periods:['1D','1W','1M','YTD','1Y'],defaultPins:['fed-target','cut-odds','cpi-yoy','cpi-ytd'],meetings:['09-16','10-28','12-09'],meetingYear:2026,sampleValues:true};
+const marketDataPayload:MarketDataPayload={groups:[{key:'policy',label:'Policy & rates'},{key:'inflation',label:'Inflation'},{key:'labor',label:'Labor & growth'},{key:'yields',label:'Yields & curve'},{key:'fx',label:'FX & dollar'},{key:'commod',label:'Commodities'},{key:'crypto',label:'Crypto'},{key:'equity',label:'Indices & volatility'},{key:'macro',label:'Macro & liquidity'},{key:'session',label:'Sessions'}],series,periods:['1D','1W','1M','YTD','1Y'],defaultPins:['fed-target','cut-odds','cpi-yoy','cpi-ytd'],meetings:['09-16','10-28','12-09'],meetingYear:2026,meetingDates:['2026-09-16','2026-10-28','2026-12-09','2027-01-27','2027-03-17','2027-04-28','2027-06-09','2027-07-28','2027-09-15','2027-10-27','2027-12-08'],sampleValues:true};
 const now=Date.now();
 const marketNewsData:MarketNewsData={aiTagging:false,headlines:[
   {id:'n1',title:'Treasury yields ease as investors review inflation data',body:'The moves were modest in early trading as participants assessed the path for rates.',tradeNote:null,source:'Fictional Wire',url:null,category:'markets',impact:'medium',bias:'neutral',publishedAt:now-12*60_000},

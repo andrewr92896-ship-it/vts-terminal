@@ -24,11 +24,15 @@ import {
   etGap,
   etMonthDay,
   etTime,
+  etYear,
   isoStamp,
+  nextMeetingFrom,
   nextMeetingStamp,
+  prevMeetingFrom,
   prevMeetingStamp,
   sameEtDay,
   sessionOpen,
+  statementStampOf,
 } from './etClock';
 import { useContentWidth } from '../../lib/measure';
 import type {
@@ -291,6 +295,10 @@ export function MarketData() {
   const groups = data?.groups ?? [];
   const meetings = data?.meetings ?? [];
   const meetingYear = data?.meetingYear ?? new Date().getFullYear();
+  // Full ISO dates when the API sends them, which is what resolves correctly
+  // across a year boundary. The MM-DD pair is only reached against an API from
+  // before `meetingDates` existed.
+  const meetingDates = data?.meetingDates ?? [];
 
   // Catalog + the trader's own metrics, sessions resolved against the clock.
   const allMetrics: BoardMetric[] = useMemo(() => {
@@ -310,16 +318,28 @@ export function MarketData() {
     [allMetrics, hidden],
   );
 
+  // Zero when the schedule has nothing left in it, which hides the Fed bar
+  // rather than counting down to a date the Fed never published.
   const fomc = useMemo(
-    () => (meetings.length ? nextMeetingStamp(now, meetings, meetingYear) : 0),
-    [now, meetings, meetingYear],
+    () =>
+      meetingDates.length
+        ? nextMeetingFrom(now, meetingDates)
+        : meetings.length
+          ? nextMeetingStamp(now, meetings, meetingYear)
+          : 0,
+    [now, meetingDates, meetings, meetingYear],
   );
   // The meeting before that one — what "last reviewed" means for anything on the
   // Fed's schedule. The Fed bar already derives it this way; sharing it is what
   // keeps the bar and the rows beneath it telling the same story.
   const fomcPrev = useMemo(
-    () => (fomc > 0 ? prevMeetingStamp(fomc, meetings, meetingYear) : 0),
-    [fomc, meetings, meetingYear],
+    () =>
+      fomc > 0
+        ? meetingDates.length
+          ? prevMeetingFrom(fomc, meetingDates)
+          : prevMeetingStamp(fomc, meetings, meetingYear)
+        : 0,
+    [fomc, meetingDates, meetings, meetingYear],
   );
 
   // ---- board filtering ----
@@ -453,7 +473,12 @@ export function MarketData() {
   // The Fed bar's target range comes from the `ffr` series, so the bar and the
   // row beneath it can never disagree. Read off the whole catalog rather than
   // `visible` — removing the row from your board must not blank the bar.
-  const fedTarget = data.series.find((m) => m.id === 'ffr')?.value || '4.25–4.50';
+  // NO LITERAL FALLBACK. AGENTS.md records that this used to carry "4.25–4.50"
+  // in two places and became a visible lie the moment `ffr` went live off FRED;
+  // one of the two survived as this `||`, still naming a range the Fed had left
+  // 75bp behind. An empty string renders nothing, and the bar's own guard below
+  // drops the Target range stat rather than stating a rate nobody read.
+  const fedTarget = data.series.find((m) => m.id === 'ffr')?.value ?? '';
   const liveGroups = groups.filter((g) => visible.some((m) => m.group === g.key && !m.sample));
   const liveGroupLabels = liveGroups.map((g) => g.label);
   // Whether the macro provider is demonstrably answering. The notice explains
@@ -538,7 +563,7 @@ export function MarketData() {
 
       {/* ---- Fed decision bar ---- */}
       {fomc > 0 && (
-        <FedBar now={now} fomc={fomc} meetings={meetings} year={meetingYear} targetRange={fedTarget} />
+        <FedBar now={now} fomc={fomc} meetingDates={meetingDates} meetings={meetings} year={meetingYear} targetRange={fedTarget} />
       )}
 
       {/* ---- pinned strip ---- */}
@@ -697,12 +722,14 @@ export function MarketData() {
 function FedBar({
   now,
   fomc,
+  meetingDates,
   meetings,
   year,
   targetRange,
 }: {
   now: number;
   fomc: number;
+  meetingDates: string[];
   meetings: string[];
   year: number;
   // The current target range, read from the `ffr` series rather than written
@@ -715,14 +742,29 @@ function FedBar({
   // Between the statement and the press conference the countdown re-targets.
   const afterStatement = now >= fomc;
   const target = afterStatement ? presser : fomc;
-  const prev = prevMeetingStamp(fomc, meetings, year);
+  const prev = meetingDates.length
+    ? prevMeetingFrom(fomc, meetingDates)
+    : prevMeetingStamp(fomc, meetings, year);
   const dateLine = sameEtDay(fomc, now) ? 'Today' : etDay(fomc);
+  // The meeting's OWN year, never the payload's. A bar showing January 2027's
+  // meeting stamped with the catalog year read "Jan 27, 2026".
+  const meetingYearLabel = etYear(fomc);
 
-  // The two nearest meetings' pricing. Sample figures, same as the board.
-  const odds = [
-    { label: etMonthDay(fomc), cut: 78, note: 'cut fully priced by December' },
-    { label: etMonthDay(nextMeetingStamp(fomc + 3600_000, meetings, year)), cut: 54, note: 'second cut a coin flip' },
-  ];
+  // THE MEETINGS AFTER THIS ONE, NOT THE ODDS ON THEM. This panel used to draw
+  // two invented probabilities — "cut 78% · hold 22%" over a green bar, with
+  // "cut fully priced by December" under it — as bare fact, with none of the
+  // Sample marking every placeholder row on the board carries. Nothing sources
+  // meeting-by-meeting pricing (CME FedWatch is not a free feed), so the figure
+  // was a design fixture that had escaped onto the one panel read as
+  // authoritative, and it hard-coded a DIRECTION: by late 2026 the Fed was
+  // raising and the bar still told every reader a cut was fully priced.
+  // The schedule is something the terminal genuinely knows, so it shows that.
+  const upcoming = meetingDates.length
+    ? meetingDates
+        .map((iso) => statementStampOf(iso))
+        .filter((t) => t > fomc)
+        .slice(0, 3)
+    : [];
 
   return (
     <div style={fedPanel}>
@@ -730,7 +772,7 @@ function FedBar({
         <div style={fedEyebrow}>Next Federal Reserve decision</div>
         <div style={fedDate}>{`${dateLine} · ${etTime(fomc)} ET`}</div>
         <div style={{ fontSize: 11, color: C.muted, marginTop: 3 }}>
-          {`Statement ${etTime(fomc)} · Powell press conference ${etTime(presser)} · ${etMonthDay(fomc)}, ${year}`}
+          {`Statement ${etTime(fomc)} · press conference ${etTime(presser)} · ${etMonthDay(fomc)}, ${meetingYearLabel}`}
         </div>
       </div>
 
@@ -739,32 +781,30 @@ function FedBar({
       </Stat>
 
       <Stat label="Last reviewed">
-        <span style={fedFigure}>{etMonthDay(prev)}</span>
-        <div style={{ fontSize: 10, color: C.faint, marginTop: 2 }}>{`held at ${targetRange}%`}</div>
+        <span style={fedFigure}>{prev > 0 ? etMonthDay(prev) : '—'}</span>
+        {targetRange && (
+          <div style={{ fontSize: 10, color: C.faint, marginTop: 2 }}>{`target ${targetRange}%`}</div>
+        )}
       </Stat>
 
-      <Stat label="Target range">
-        <span style={fedFigure}>
-          {targetRange}
-          <span style={{ fontSize: 11, color: C.faint, marginLeft: 3 }}>%</span>
-        </span>
-      </Stat>
+      {targetRange && (
+        <Stat label="Target range">
+          <span style={fedFigure}>
+            {targetRange}
+            <span style={{ fontSize: 11, color: C.faint, marginLeft: 3 }}>%</span>
+          </span>
+        </Stat>
+      )}
 
-      <div style={oddsGrid}>
-        {odds.map((o) => (
-          <div key={o.label}>
-            <div style={statLabel}>{o.label}</div>
-            <div style={{ fontSize: 10.5, color: C.muted, fontFamily: C.mono, margin: '3px 0 4px' }}>
-              {`cut ${o.cut}% · hold ${100 - o.cut}%`}
-            </div>
-            <div style={oddsTrack}>
-              <div style={{ width: `${o.cut}%`, background: C.green }} />
-              <div style={{ width: `${100 - o.cut}%`, background: C.hover }} />
-            </div>
-            <div style={{ fontSize: 10.5, color: C.faint, marginTop: 4 }}>{o.note}</div>
+      {upcoming.length > 0 && (
+        <Stat label="Then">
+          <div style={{ fontSize: 11.5, color: C.muted, fontFamily: C.mono, lineHeight: 1.6 }}>
+            {upcoming.map((t) => (
+              <div key={t}>{`${etMonthDay(t)}, ${etYear(t)}`}</div>
+            ))}
           </div>
-        ))}
-      </div>
+        </Stat>
+      )}
     </div>
   );
 }
@@ -1602,20 +1642,6 @@ const statLabel: CSSProperties = {
   textTransform: 'uppercase',
   color: C.faint,
 };
-const oddsGrid: CSSProperties = {
-  display: 'grid',
-  gridTemplateColumns: 'repeat(auto-fit, minmax(172px, 1fr))',
-  gap: 18,
-  flex: '1 1 360px',
-};
-const oddsTrack: CSSProperties = {
-  display: 'flex',
-  height: 5,
-  borderRadius: 3,
-  overflow: 'hidden',
-  background: 'rgba(255,255,255,.05)',
-};
-
 const stripHead: CSSProperties = {
   display: 'grid',
   gridTemplateColumns: 'minmax(0,1fr) auto',

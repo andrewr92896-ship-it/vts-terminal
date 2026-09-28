@@ -1732,7 +1732,7 @@ export interface MarketNewsStreamsPayload {
   // resolved keylessly per channel — so this now only governs the extras.
   liveConfigured: boolean;
   // The FOMC statement schedule, for the Federal Reserve tile's countdown.
-  fomc?: { meetings: string[]; meetingYear: number };
+  fomc?: { meetings: string[]; meetingYear: number; meetingDates?: string[] };
 }
 
 export interface NewsInput {
@@ -1803,6 +1803,10 @@ export interface MarketDataPayload {
   defaultPins: string[];
   meetings: string[]; // FOMC statement dates as 'MM-DD', 2:00 PM ET
   meetingYear: number;
+  // Full ISO statement dates spanning years — what the Fed bar resolves
+  // against. Optional because a cached bundle may still be talking to an API
+  // from before it existed; the pair above is the fallback.
+  meetingDates?: string[];
   // True while ANY series is still showing placeholder figures. The per-series
   // `sample` flag is the precise version.
   sampleValues: boolean;
