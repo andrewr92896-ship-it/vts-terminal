@@ -11,9 +11,19 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 7.97';
+export const APP_VERSION = 'Beta V 7.98';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 7.98',
+    date: '2026-09-28',
+    notes: [
+      'The Fed decision countdown knows next year. It held one year of meetings and, once past the last one, counted down to a date the Fed never set — it would have been a day out from January onward. It now carries the published 2027 dates, and a check fails months before the list can run out rather than letting the bar guess.',
+      'The bar no longer prints odds on the next meeting. Those figures were placeholders from the design with nothing behind them, they carried no sample marking, and they said a cut was coming while the Fed was raising. It lists the meetings after the next one instead.',
+      'Refreshed the rows no data provider covers, which had drifted two months behind: the BoJ rate, both ISM surveys, the dot-plot median and the Fed funds fallback were all wrong, ISM on the wrong side of the expansion line. Rows nothing can refresh now say "sample" rather than naming a day somebody supposedly read them.',
+      'The "next review" column states how often a figure publishes rather than a typed-in date that had already passed on every row.',
+    ],
+  },
   {
     version: 'Beta V 7.97',
     date: '2026-09-07',
