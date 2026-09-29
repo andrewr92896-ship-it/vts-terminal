@@ -11,6 +11,7 @@ import {
 } from './brokers/crypto.js';
 import { resolveOandaPricingConfig } from './priceSource.js';
 import { pctDecimals } from './marketFormat.js';
+import type { MarketFreshness } from './marketFreshness.js';
 
 // Live values for the Market Data board's price series, from OANDA.
 //
@@ -109,6 +110,13 @@ export interface LiveQuote {
   // answer this, so it is absent on a keyless install and the row keeps the
   // catalog's hand-entered date.
   reviewNext?: string;
+  // HOW CURRENT THE FIGURE ACTUALLY IS. Absent means `live`, which is correct
+  // for this file — an OANDA quote is a real-time price, so a row it filled is
+  // current by construction. It is the MACRO side that needs to say otherwise:
+  // a published daily close days past its own release rhythm is a real figure
+  // wearing a claim that is not, which is what an outside audit found on the
+  // Treasury, FX and VIX rows. See `marketFreshness.ts`.
+  freshness?: MarketFreshness;
 }
 
 interface Snapshot {

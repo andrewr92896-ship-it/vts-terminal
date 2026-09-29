@@ -51,6 +51,15 @@ async function getText(url) {
   }
 }
 
+// OLDEST FIRST, ALWAYS. Both providers happen to serve ascending today and
+// everything downstream depends on it — the latest reading is read off the end
+// of the array, and the look-back walk stops at the first observation past its
+// target, which is only correct on a sorted one. So the order is established
+// here rather than assumed: a provider that changed its mind about it would
+// otherwise put the wrong figure on the board, silently, and it would look like
+// a perfectly ordinary number.
+const sorted = (rows) => rows.sort((a, b) => a.timeMs - b.timeMs);
+
 // A parsed observation, or null for a row that is a header, blank, or one of
 // FRED's "." no-reading markers.
 function toObservation(date, raw) {
@@ -74,7 +83,7 @@ export function parseFredCsv(body) {
     const parsed = toObservation(date, value);
     if (parsed) out.push(parsed);
   }
-  return out;
+  return sorted(out);
 }
 
 export function parseFredJson(body) {
@@ -89,7 +98,7 @@ export function parseFredJson(body) {
     const parsed = toObservation(o?.date ?? '', o?.value ?? '');
     if (parsed) out.push(parsed);
   }
-  return out;
+  return sorted(out);
 }
 
 // Observations for one FRED series, oldest first, from `start` (ISO date).
@@ -105,9 +114,29 @@ export async function fetchFredSeries(seriesId, start) {
     );
     const viaJson = body ? parseFredJson(body) : [];
     if (viaJson.length > 0) return viaJson;
+    // A KEY THAT IS SET AND DOES NOT WORK USED TO BE COMPLETELY SILENT. The
+    // fallback below is deliberate and the board reads live without a key at
+    // all, so a rejected or mistyped one degrades rather than breaks — which is
+    // right, and meant an operator who had set the variable had no way whatever
+    // to tell whether it was doing anything. Logged once per series per refresh,
+    // naming neither the key nor any part of it.
+    noteKeyFallback(seriesId);
   }
   const csv = await getText(`${FRED_CSV}?id=${encodeURIComponent(seriesId)}&cosd=${start}`);
   return csv ? parseFredCsv(csv) : [];
+}
+
+// Said once per process rather than per series per refresh: fourteen identical
+// lines every ten minutes is a log nobody reads, and the point of this one is
+// that somebody does.
+let keyFallbackLogged = false;
+function noteKeyFallback(seriesId) {
+  if (keyFallbackLogged) return;
+  keyFallbackLogged = true;
+  console.warn(
+    `[market] FRED_API_KEY is set but the keyed read returned nothing (first: ${seriesId}); ` +
+      'falling back to the keyless CSV. The board still reads live — check the key is valid.',
+  );
 }
 
 // ---- coins ----
@@ -142,7 +171,7 @@ export function parseKrakenOhlc(body) {
     const timeMs = seconds * 1000;
     out.push({ date: new Date(timeMs).toISOString().slice(0, 10), timeMs, value: close });
   }
-  return out;
+  return sorted(out);
 }
 
 export async function fetchCoinCloses(pair) {

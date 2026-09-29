@@ -2,7 +2,7 @@
 import { readFileSync } from 'node:fs';
 import {
   CATALOG, GROUPS, buildPayload, changesFor, derive, fmtDelta, fmtPct, fmtValue,
-  freshnessFor, rowFor, subtractSeries,
+  mergeObservations, rowFor, subtractSeries,
 } from '../apps/public-terminal/server/marketFeed.mjs';
 import { parseFredCsv, parseKrakenOhlc } from '../apps/public-terminal/server/fredSource.mjs';
 import { mapCalendar, windowAndSort } from '../apps/public-terminal/server/calendarFeed.mjs';
@@ -71,11 +71,16 @@ const monthly = (year, values) =>
 }
 
 {
-  // Year-to-date is measured against the LAST reading of the previous calendar
-  // year, not against twelve months earlier.
-  const obs = [day('2025-11-01', 300), day('2025-12-01', 310), day('2026-01-01', 313.1)];
-  const points = derive(obs, { transform: 'ytdIndex', decimals: 1 });
-  check('ytd is measured from last December, not from twelve months back', fmtValue(points[points.length - 1].v, { decimals: 1 }), '1.0');
+  // THE `ytdIndex` TRANSFORM IS GONE, with the one row that used it. "CPI year
+  // to date" was a real figure — December's index to the latest — that an audit
+  // still could not reconcile, because the label does not say what it is
+  // measured from, over how many months, or whether it is annualised, and its
+  // own change columns were this year's run less last year's whole. The private
+  // board keeps the row unchanged; the demo board is a short showcase and does
+  // not lead with a figure a careful reader cannot check.
+  const obs = [day('2025-12-01', 310), day('2026-01-01', 313.1)];
+  check('the year-to-date transform is not carried here', derive(obs, { transform: 'ytdIndex', decimals: 1 }).length, 0);
+  check('...and no row asks for it', CATALOG.filter((d) => d.transform === 'ytdIndex').length, 0);
 }
 
 {
@@ -102,14 +107,25 @@ const monthly = (year, values) =>
 }
 
 {
-  // THE CADENCE GATE. A monthly series has no one-day move to report, and a
-  // naive date look-back lands on the PREVIOUS MONTH's reading and prints that
-  // monthly move in the daily column.
+  // THE CADENCE GATE, AND WHAT IT ANSWERS. A monthly series has no one-day
+  // move, so those columns read as the em dash the board uses for a period with
+  // no reading behind it. They used to read "0.0", which states that inflation
+  // was measured over a day and came out flat — a measurement nobody made, and
+  // the same class of claim as the freshness dot below.
+  //
+  // What the gate still prevents is the naive look-back: without it, a 1-day
+  // window on a monthly series lands on the PREVIOUS MONTH's reading and prints
+  // that monthly move in the daily column.
   const def = { transform: 'level', cadence: 'monthly', decimals: 1, changeMode: 'delta' };
   const points = derive([day('2026-07-01', 4.1), day('2026-08-01', 4.4)], def);
   const changes = changesFor(points, def, NOW);
-  check('a monthly series reports a flat day and week, not last month’s move', [changes[0], changes[1]], ['0.0', '0.0']);
+  check('a monthly series reports NO day or week move, never a flat zero', [changes[0], changes[1]], ['—', '—']);
   check('...and its own month is still a real move', changes[2], '+0.3');
+  // A daily series is not gated at all, so a genuine flat day still reads zero
+  // — which IS a measurement, and must not be swept up by the change above.
+  const daily = { transform: 'level', cadence: 'daily', decimals: 2, changeMode: 'delta' };
+  const flat = derive([day('2026-09-24', 4.1), day('2026-09-25', 4.1)], daily);
+  check('a daily series that genuinely did not move still reads zero', changesFor(flat, daily, NOW)[0], '0.00');
 }
 
 {
@@ -184,38 +200,26 @@ check(
 // ---- freshness ----
 //
 // THE AUDIT FINDING THIS FILE EXISTS TO STOP COMING BACK. Every row used to be
-// stamped `source: 'live'` outright, so a Treasury close four days old wore the
-// green Live feed dot, and the FX rows presented a once-a-day noon rate as a
-// quote. `MarketFreshness` carried a `stale` value the whole time that nothing
-// in the repository ever set.
-
-{
-  const now = Date.parse('2026-09-29T13:00:00Z');
-  const ago = (ms) => now - ms;
-  const DAY = 86400_000;
-  check('a daily close from yesterday is live', freshnessFor(ago(DAY), 'daily', now), 'live');
-  // A Friday close read on Monday is the current reading, not a stale one.
-  check('...and one from Friday read on Monday still is', freshnessFor(ago(3 * DAY), 'daily', now), 'live');
-  // Four days is the case the audit caught, and it is not live.
-  check('a daily close four days old is STALE', freshnessFor(ago(4 * DAY), 'daily', now), 'stale');
-  check('a monthly print from last month is live', freshnessFor(ago(28 * DAY), 'monthly', now), 'live');
-  check('a monthly print from two months ago is stale', freshnessFor(ago(60 * DAY), 'monthly', now), 'stale');
-  check('a weekly print from last week is live', freshnessFor(ago(8 * DAY), 'weekly', now), 'live');
-  // A coin trades every second, so a two-day-old reading of one is not a close
-  // — it is a figure nobody refreshed.
-  check('a coin read minutes ago is live', freshnessFor(ago(10 * 60_000), 'continuous', now), 'live');
-  check('a coin read hours ago is stale', freshnessFor(ago(6 * 3600_000), 'continuous', now), 'stale');
-}
+// stamped `source: 'live'` outright, so a Treasury close days old wore the
+// green dot, and the FX rows presented a once-a-day noon rate as a quote.
+// `MarketFreshness` carried a `stale` value the whole time that nothing in the
+// repository ever set.
+//
+// The RULE itself — how old a reading may be, per cadence — lives in
+// `marketFreshness.mjs` and is checked by `npm run verify:market-freshness`,
+// which also proves it is identical to the private board's copy. What is
+// checked here is that the board applies it: to the right timestamp, on every
+// row, without disturbing the date beside it.
 
 {
   // End to end: the same observations, read on two different days.
   const obs = new Map([['DGS10', [day('2026-09-24', 5.13), day('2026-09-25', 5.17)]]]);
   const d = def('y10');
-  check('a yield read the next day says live', rowFor(d, obs, Date.parse('2026-09-26T13:00:00Z'))?.source, 'live');
-  check('...and the same figure four days on says stale', rowFor(d, obs, Date.parse('2026-09-29T13:00:00Z'))?.source, 'stale');
+  check('a yield read the next business day says live', rowFor(d, obs, Date.parse('2026-09-28T13:00:00Z'))?.source, 'live');
+  check('...and the same figure a week on says stale', rowFor(d, obs, Date.parse('2026-10-02T13:00:00Z'))?.source, 'stale');
   // The DATE never moves — only the claim about it does. A stale row still
   // states what it is and when it was read, which is the whole point.
-  check('...while still stating the reading it actually has', rowFor(d, obs, Date.parse('2026-09-29T13:00:00Z'))?.asOf, 'Sep 25');
+  check('...while still stating the reading it actually has', rowFor(d, obs, Date.parse('2026-10-02T13:00:00Z'))?.asOf, 'Sep 25');
 }
 
 {
@@ -224,7 +228,28 @@ check(
   const candles = [day('2026-09-28', 84_000), day('2026-09-29', 84_341)];
   const row = rowFor(def('btc'), new Map([['XBTUSD', candles]]), Date.parse('2026-09-29T18:14:00Z'));
   check('a coin is stamped with the time it was read', row?.asOf, 'Sep 29 2:14 PM ET');
-  check('...and reads live because that is when it was read', row?.source, 'live');
+  check('...and reads live while its candle is today’s', row?.source, 'live');
+  // A COIN IS JUDGED ON ITS CANDLE, NOT ON WHEN WE FETCHED IT. Judged on the
+  // fetch — which is what the first cut did, and what the `asOf` above still
+  // shows — a continuous row is permanently live however old the feed's data
+  // is, because the only thing being tested is our own clock.
+  const stale = rowFor(def('btc'), new Map([['XBTUSD', candles]]), Date.parse('2026-10-03T18:14:00Z'));
+  check('a coin whose feed stopped days ago is STALE, not live-because-we-asked', stale?.source, 'stale');
+}
+
+{
+  // NEVER REPLACED BY A WORSE ANSWER, PER SERIES RATHER THAN PER BOARD. One
+  // series failing a single pass used to drop its row to Sample until a later
+  // refresh happened to catch it, so a row could flicker between a real figure
+  // and a placeholder with nothing to explain either. The freshness window is
+  // what ages a kept reading honestly.
+  const before = new Map([['DGS10', [day('2026-09-25', 5.17)]], ['VIXCLS', [day('2026-09-25', 14.8)]]]);
+  const after = mergeObservations(before, new Map([['DGS10', [day('2026-09-28', 5.2)]], ['VIXCLS', []]]));
+  check('a series that answered is replaced', after.get('DGS10')?.length, 1);
+  check('...with the NEW reading', after.get('DGS10')?.[0]?.value, 5.2);
+  check('a series that did not answer keeps its last good reading', after.get('VIXCLS')?.[0]?.value, 14.8);
+  // A cold process has nothing to keep, and must not invent anything either.
+  check('with nothing cached the read stands alone', mergeObservations(undefined, before).size, 2);
 }
 
 // ---- the payload ----

@@ -79,8 +79,16 @@ const GOLD_BORDER = 'rgba(235,203,116,.35)';
 // `MarketFreshness` values — it is the `sample` flag surfacing through the same
 // vocabulary, because "where did this number come from" is the question the dot
 // already answers and a placeholder figure is not a live feed.
+//
+// **IT READS "CURRENT", NOT "LIVE FEED"** (outside audit, 2026-09). A live feed
+// is a thing that ticks, and most of this board is not one: the macro rows are
+// published daily closes, the FX rows are a noon observation, and only the
+// OANDA-priced rows are a real-time quote. What the green dot actually means,
+// and all it has ever meant, is that this is the newest reading that exists —
+// which is what "Current" says and what `marketFreshness.ts` computes. The KEY
+// stays `live`: rename a label, never a key.
 const FRESHNESS: Record<MarketFreshness, { label: string; color: string }> = {
-  live: { label: 'Live feed', color: C.green },
+  live: { label: 'Current', color: C.green },
   manual: { label: 'Manual', color: C.amber },
   stale: { label: 'Stale', color: C.faint },
 };

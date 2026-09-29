@@ -30,6 +30,7 @@
 import { getMarketQuotes, type LiveQuote } from './marketQuotes.js';
 import { getMarketMacro } from './marketMacro.js';
 import { FOMC_MEETINGS_2026, FOMC_MEETING_YEAR, FOMC_MEETING_DATES } from './fomcCalendar.js';
+import type { MarketFreshness } from './marketFreshness.js';
 
 // Group order is the board's section order. Kept as a tuple so it doubles as the
 // Zod enum for a saved custom metric's group.
@@ -65,8 +66,10 @@ export const MARKET_DATA_GROUPS: { key: MarketGroupKey; label: string }[] = MARK
   (key) => ({ key, label: GROUP_LABELS[key] }),
 );
 
-// Freshness, rendered as the coloured dot on a tile / row.
-export type MarketFreshness = 'live' | 'manual' | 'stale';
+// Freshness, rendered as the coloured dot on a tile / row. Defined with the
+// rule that decides it, and re-exported here because this module is what every
+// consumer of the board's payload already imports from.
+export type { MarketFreshness };
 
 // Who publishes a series and when it is next revised. `last` is an ISO date, a
 // cadence phrase ('continuous', 'daily · 3:30 PM') which renders verbatim with
@@ -171,6 +174,17 @@ interface SeriesDef {
 
 const NO_CHANGE: [string, string, string, string, string] = ['—', '—', '—', '—', '—'];
 
+// A SAMPLE ROW'S CHANGE COLUMNS FOLLOW THE SAME RULE THE LIVE ONES DO: a period
+// SHORTER than the series' publication cadence has no reading behind it and
+// reads as an em dash, never as a flat zero. A monthly print showing "0.0" in
+// its 1D column states that CPI was measured over a day and came out flat, and
+// these are the figures on screen whenever a provider cannot be reached — the
+// one moment nobody is checking.
+//
+// A POLICY RATE IS THE EXCEPTION AND KEEPS ITS ZERO. A target rate is a
+// standing fact observable every day, so "unchanged today" is a real reading
+// rather than a window nobody measured.
+
 const DEFS: SeriesDef[] = [
   // ---- Policy & rates ----
   { g: 'policy', id: 'ffr', l: 'Fed funds target', v: '3.75–4.00', u: '%', a: 'raised Sep 16', c: ['0.00', '0.00', '+0.25', '−0.50', '−0.50'], rev: ['FOMC', 'fomc-prev', 'fomc'] },
@@ -183,38 +197,38 @@ const DEFS: SeriesDef[] = [
   // now, which is impossible on its face and undermines every other figure on a
   // board whose whole promise is that the numbers are real.
   { g: 'policy', id: 'hold7', l: 'Next meeting · hold priced', v: '—', u: '%', a: 'sample', c: NO_CHANGE, rev: ['CME FedWatch', 'continuous', ''] },
-  { g: 'policy', id: 'dots', l: 'Dot-plot median · year-end', v: '4.125', u: '%', a: 'September SEP', s: 'manual', c: ['0.00', '0.00', '0.00', '+0.25', '+0.25'], rev: ['FOMC · SEP', '2026-09-16', 'fomc'] },
+  { g: 'policy', id: 'dots', l: 'Dot-plot median · year-end', v: '4.125', u: '%', a: 'September SEP', s: 'manual', c: ['—', '—', '—', '+0.25', '+0.25'], rev: ['FOMC · SEP', '2026-09-16', 'fomc'] },
   { g: 'policy', id: 'disc', l: 'Primary credit rate', v: '4.50', u: '%', a: 'Jun 17', c: ['0.00', '0.00', '0.00', '−0.25', '−0.50'], rev: ['Fed Board', 'fomc-prev', 'fomc'] },
   { g: 'policy', id: 'ecb', l: 'ECB deposit rate', v: '2.00', u: '%', a: 'sample', c: NO_CHANGE, rev: ['ECB Governing Council', 'every six weeks', ''] },
   { g: 'policy', id: 'boe', l: 'BoE bank rate', v: '3.75', u: '%', a: 'held Sep 17', c: ['0.00', '0.00', '0.00', '−0.50', '−0.75'], rev: ['BoE MPC', '2026-09-17', '2026-11-05'] },
   { g: 'policy', id: 'boj', l: 'BoJ policy rate', v: '1.25', u: '%', a: 'raised Sep 18', c: ['0.00', '0.00', '+0.25', '+0.50', '+0.75'], rev: ['BoJ Policy Board', '2026-09-18', ''] },
 
   // ---- Inflation ----
-  { g: 'inflation', id: 'cpi', l: 'CPI y/y · 1-yr inflation', v: '2.6', u: '%', a: 'Jun · rel Jul 14', c: ['0.0', '0.0', '−0.1', '−0.3', '−0.5'], rev: ['BLS', 'monthly', ''] },
-  { g: 'inflation', id: 'ccpi', l: 'Core CPI y/y', v: '2.9', u: '%', a: 'Jun · rel Jul 14', c: ['0.0', '0.0', '−0.1', '−0.2', '−0.4'], rev: ['BLS', 'monthly', ''] },
-  { g: 'inflation', id: 'cpiytd', l: 'CPI year to date', v: '1.4', u: '%', a: 'Dec→Jun · ≈2.8% ann.', c: ['0.0', '+0.1', '+0.3', '+1.4', '—'], rev: ['BLS', 'monthly', ''] },
-  { g: 'inflation', id: 'pce', l: 'PCE y/y', v: '2.4', u: '%', a: 'Jun · released today', c: ['−0.2', '−0.2', '−0.2', '−0.3', '−0.6'], rev: ['BEA', 'monthly', ''] },
-  { g: 'inflation', id: 'cpce', l: 'Core PCE y/y', v: '2.7', u: '%', a: 'Jun · released today', c: ['−0.1', '−0.1', '−0.2', '−0.3', '−0.5'], rev: ['BEA', 'monthly', ''] },
-  { g: 'inflation', id: 'cpcemm', l: 'Core PCE m/m', v: '0.2', u: '%', a: 'Jun', c: ['0.0', '0.0', '−0.1', '−0.1', '−0.1'], rev: ['BEA', 'monthly', ''] },
-  { g: 'inflation', id: 'ppi', l: 'PPI y/y', v: '2.3', u: '%', a: 'Jun', c: ['0.0', '0.0', '+0.1', '−0.2', '−0.4'], rev: ['BLS', 'monthly', ''] },
+  { g: 'inflation', id: 'cpi', l: 'CPI y/y · 1-yr inflation', v: '2.6', u: '%', a: 'Jun · rel Jul 14', c: ['—', '—', '−0.1', '−0.3', '−0.5'], rev: ['BLS', 'monthly', ''] },
+  { g: 'inflation', id: 'ccpi', l: 'Core CPI y/y', v: '2.9', u: '%', a: 'Jun · rel Jul 14', c: ['—', '—', '−0.1', '−0.2', '−0.4'], rev: ['BLS', 'monthly', ''] },
+  { g: 'inflation', id: 'cpiytd', l: 'CPI year to date', v: '1.4', u: '%', a: 'Dec→Jun · ≈2.8% ann.', c: ['—', '—', '+0.3', '+1.4', '—'], rev: ['BLS', 'monthly', ''] },
+  { g: 'inflation', id: 'pce', l: 'PCE y/y', v: '2.4', u: '%', a: 'Jun · released today', c: ['—', '—', '−0.2', '−0.3', '−0.6'], rev: ['BEA', 'monthly', ''] },
+  { g: 'inflation', id: 'cpce', l: 'Core PCE y/y', v: '2.7', u: '%', a: 'Jun · released today', c: ['—', '—', '−0.2', '−0.3', '−0.5'], rev: ['BEA', 'monthly', ''] },
+  { g: 'inflation', id: 'cpcemm', l: 'Core PCE m/m', v: '0.2', u: '%', a: 'Jun', c: ['—', '—', '−0.1', '−0.1', '−0.1'], rev: ['BEA', 'monthly', ''] },
+  { g: 'inflation', id: 'ppi', l: 'PPI y/y', v: '2.3', u: '%', a: 'Jun', c: ['—', '—', '+0.1', '−0.2', '−0.4'], rev: ['BLS', 'monthly', ''] },
   { g: 'inflation', id: 'be1', l: '1-yr breakeven', v: '2.44', u: '%', a: 'sample', c: ['−0.03', '−0.06', '−0.11', '−0.24', '−0.38'], rev: ['US Treasury', 'daily · 3:30 PM', ''] },
   { g: 'inflation', id: 'be5', l: '5-yr breakeven', v: '2.31', u: '%', a: 'live · 1-day', c: ['−0.02', '−0.05', '−0.09', '−0.18', '−0.29'], rev: ['US Treasury', 'daily · 3:30 PM', ''] },
   { g: 'inflation', id: 'be10', l: '10-yr breakeven', v: '2.28', u: '%', a: 'live · 1-day', c: ['−0.01', '−0.03', '−0.07', '−0.14', '−0.22'], rev: ['US Treasury', 'daily · 3:30 PM', ''] },
-  { g: 'inflation', id: 'umich', l: 'UMich 1-yr expectations', v: '3.1', u: '%', a: 'Jul prelim', c: ['0.0', '−0.2', '−0.4', '−0.7', '−1.2'], rev: ['Univ. of Michigan', 'twice monthly', ''] },
+  { g: 'inflation', id: 'umich', l: 'UMich 1-yr expectations', v: '3.1', u: '%', a: 'Jul prelim', c: ['—', '—', '−0.4', '−0.7', '−1.2'], rev: ['Univ. of Michigan', 'twice monthly', ''] },
   { g: 'inflation', id: 'nowcast', l: 'Cleveland CPI nowcast', v: '2.5', u: '%', a: 'sample', s: 'manual', c: NO_CHANGE, rev: ['Cleveland Fed', 'daily', ''] },
 
   // ---- Labor & growth ----
-  { g: 'labor', id: 'unrate', l: 'Unemployment rate', v: '4.3', u: '%', a: 'Jun', c: ['0.0', '0.0', '+0.1', '+0.2', '+0.4'], rev: ['BLS', 'monthly', ''] },
-  { g: 'labor', id: 'nfp', l: 'Nonfarm payrolls', v: '+112', u: 'K', a: 'Jun · next Aug 7', c: ['0', '0', '−33', '−52', '−78'], rev: ['BLS', 'monthly', ''] },
-  { g: 'labor', id: 'nfp3', l: 'Payrolls 3-mo average', v: '+134', u: 'K', a: 'Apr–Jun', c: ['0', '0', '−21', '−44', '−69'], rev: ['BLS', 'monthly', ''] },
-  { g: 'labor', id: 'ahe', l: 'Avg hourly earnings y/y', v: '3.5', u: '%', a: 'Jun', c: ['0.0', '0.0', '0.0', '−0.2', '−0.6'], rev: ['BLS', 'monthly', ''] },
-  { g: 'labor', id: 'claims', l: 'Initial jobless claims', v: '217', u: 'K', a: 'wk to Jul 25', c: ['−4', '−4', '+9', '+14', '+22'], rev: ['DOL', 'weekly · Thursday', ''] },
-  { g: 'labor', id: 'part', l: 'Participation rate', v: '62.4', u: '%', a: 'Jun', c: ['0.0', '0.0', '−0.1', '−0.2', '−0.3'], rev: ['BLS', 'monthly', ''] },
-  { g: 'labor', id: 'gdp', l: 'Real GDP q/q saar', v: '3.8', u: '%', a: 'Q1 final', c: ['0.0', '0.0', '0.0', '−1.5', '+0.4'], rev: ['BEA', 'quarterly', ''] },
+  { g: 'labor', id: 'unrate', l: 'Unemployment rate', v: '4.3', u: '%', a: 'Jun', c: ['—', '—', '+0.1', '+0.2', '+0.4'], rev: ['BLS', 'monthly', ''] },
+  { g: 'labor', id: 'nfp', l: 'Nonfarm payrolls', v: '+112', u: 'K', a: 'Jun · next Aug 7', c: ['—', '—', '−33', '−52', '−78'], rev: ['BLS', 'monthly', ''] },
+  { g: 'labor', id: 'nfp3', l: 'Payrolls 3-mo average', v: '+134', u: 'K', a: 'Apr–Jun', c: ['—', '—', '−21', '−44', '−69'], rev: ['BLS', 'monthly', ''] },
+  { g: 'labor', id: 'ahe', l: 'Avg hourly earnings y/y', v: '3.5', u: '%', a: 'Jun', c: ['—', '—', '0.0', '−0.2', '−0.6'], rev: ['BLS', 'monthly', ''] },
+  { g: 'labor', id: 'claims', l: 'Initial jobless claims', v: '217', u: 'K', a: 'wk to Jul 25', c: ['—', '−4', '+9', '+14', '+22'], rev: ['DOL', 'weekly · Thursday', ''] },
+  { g: 'labor', id: 'part', l: 'Participation rate', v: '62.4', u: '%', a: 'Jun', c: ['—', '—', '−0.1', '−0.2', '−0.3'], rev: ['BLS', 'monthly', ''] },
+  { g: 'labor', id: 'gdp', l: 'Real GDP q/q saar', v: '3.8', u: '%', a: 'Q1 final', c: ['—', '—', '—', '−1.5', '+0.4'], rev: ['BEA', 'quarterly', ''] },
   { g: 'labor', id: 'gdpq2', l: 'Advance GDP · forecast', v: '2.3', u: '%', a: 'sample', s: 'manual', c: NO_CHANGE, rev: ['BEA', 'quarterly', ''] },
-  { g: 'labor', id: 'ismm', l: 'ISM manufacturing', v: '54.6', a: 'Aug', c: ['0.0', '0.0', '−1.0', '+4.6', '+5.5'], rev: ['ISM', '2026-09-01', ''] },
-  { g: 'labor', id: 'isms', l: 'ISM services', v: '55.4', a: 'Aug', c: ['0.0', '0.0', '+1.9', '+3.0', '+3.0'], rev: ['ISM', '2026-09-03', ''] },
-  { g: 'labor', id: 'retail', l: 'Retail sales m/m', v: '0.4', u: '%', a: 'Jun', c: ['0.0', '+0.2', '+0.1', '−0.3', '−0.5'], rev: ['Census Bureau', 'monthly', ''] },
+  { g: 'labor', id: 'ismm', l: 'ISM manufacturing', v: '54.6', a: 'Aug', c: ['—', '—', '−1.0', '+4.6', '+5.5'], rev: ['ISM', '2026-09-01', ''] },
+  { g: 'labor', id: 'isms', l: 'ISM services', v: '55.4', a: 'Aug', c: ['—', '—', '+1.9', '+3.0', '+3.0'], rev: ['ISM', '2026-09-03', ''] },
+  { g: 'labor', id: 'retail', l: 'Retail sales m/m', v: '0.4', u: '%', a: 'Jun', c: ['—', '—', '+0.1', '−0.3', '−0.5'], rev: ['Census Bureau', 'monthly', ''] },
 
   // ---- Yields & curve ----
   { g: 'yields', id: 'y3m', l: 'UST 3-month', v: '4.28', u: '%', a: 'live', c: ['−0.01', '−0.03', '−0.08', '−0.26', '−0.55'] },
@@ -224,7 +238,7 @@ const DEFS: SeriesDef[] = [
   { g: 'yields', id: 's2s10', l: 'UST 2y–10y spread', v: '+34', u: 'bps', a: '2s10s · live', c: ['+1', '−2', '+3', '−7', '+52'] },
   { g: 'yields', id: 's3m10', l: 'UST 3m–10y spread', v: '−26', u: 'bps', a: '3m10y · live', c: ['+3', '+8', '+10', '+29', '+21'] },
   { g: 'yields', id: 'real10', l: '10-yr real · TIPS', v: '1.74', u: '%', a: 'live', c: ['−0.05', '−0.09', '−0.14', '−0.42', '−0.31'] },
-  { g: 'yields', id: 'mtg30', l: '30-yr mortgage', v: '6.42', u: '%', a: 'wk to Jul 24', c: ['−0.06', '−0.14', '−0.22', '−0.61', '−0.88'], rev: ['Freddie Mac', 'weekly · Thursday', ''] },
+  { g: 'yields', id: 'mtg30', l: '30-yr mortgage', v: '6.42', u: '%', a: 'wk to Jul 24', c: ['—', '−0.14', '−0.22', '−0.61', '−0.88'], rev: ['Freddie Mac', 'weekly · Thursday', ''] },
 
   // ---- FX & dollar ----
   { g: 'fx', id: 'dxy', l: 'DXY dollar index', v: '96.84', a: '3-week low', c: ['−0.31%', '−0.9%', '−2.1%', '−4.8%', '−6.2%'], rev: ['ICE', 'continuous', ''] },
@@ -258,11 +272,11 @@ const DEFS: SeriesDef[] = [
   { g: 'equity', id: 'eps', l: 'S&P blended EPS y/y', v: '+8.4', u: '%', a: 'sample', s: 'manual', c: NO_CHANGE, rev: ['FactSet', 'weekly', ''] },
 
   // ---- Macro & liquidity ----
-  { g: 'macro', id: 'bs', l: 'Fed balance sheet', v: '6.42', u: 'T USD', a: 'H.4.1 · Jul 24', c: ['−12B', '−34B', '−96B', '−284B', '−512B'], rev: ['Fed H.4.1', 'weekly · Thursday', ''] },
+  { g: 'macro', id: 'bs', l: 'Fed balance sheet', v: '6.42', u: 'T USD', a: 'H.4.1 · Jul 24', c: ['—', '−34B', '−96B', '−284B', '−512B'], rev: ['Fed H.4.1', 'weekly · Thursday', ''] },
   { g: 'macro', id: 'rrp', l: 'Overnight reverse repo', v: '18', u: 'B USD', a: 'Jul 28', c: ['−4B', '−9B', '−22B', '−68B', '−141B'], rev: ['NY Fed', 'daily · 1:15 PM', ''] },
-  { g: 'macro', id: 'nfci', l: 'Chicago Fed NFCI', v: '−0.52', a: 'wk to Jul 24', c: ['0.00', '−0.02', '−0.06', '−0.14', '−0.22'], rev: ['Chicago Fed', 'weekly', ''] },
+  { g: 'macro', id: 'nfci', l: 'Chicago Fed NFCI', v: '−0.52', a: 'wk to Jul 24', c: ['—', '−0.02', '−0.06', '−0.14', '−0.22'], rev: ['Chicago Fed', 'weekly', ''] },
   { g: 'macro', id: 'recprob', l: 'NY Fed 12-mo recession prob', v: '28', u: '%', a: 'sample', c: NO_CHANGE, rev: ['NY Fed', 'monthly', ''] },
-  { g: 'macro', id: 'sahm', l: 'Sahm rule gap', v: '0.13', a: 'Jun', c: ['0.00', '+0.03', '+0.03', '+0.07', '+0.11'], rev: ['BLS · derived', 'monthly', ''] },
+  { g: 'macro', id: 'sahm', l: 'Sahm rule gap', v: '0.13', a: 'Jun', c: ['—', '—', '+0.03', '+0.07', '+0.11'], rev: ['BLS · derived', 'monthly', ''] },
   { g: 'macro', id: 'citi', l: 'Citi econ surprise · US', v: '+12.4', a: 'sample', s: 'manual', c: NO_CHANGE, rev: ['Citi', 'daily', ''] },
 
   // ---- Sessions ----
@@ -353,6 +367,10 @@ export function applyLiveQuotes(
       // the live meeting list client-side, which is a better answer than a
       // publication calendar for something decided at a meeting.
       review: reviewFor(s, q),
+      // A quote that says nothing about its own freshness is a real-time one —
+      // which is true of every OANDA row, and deliberately not of the macro
+      // rows, whose published closes state their own age.
+      source: q.freshness ?? 'live',
       sample: false,
     };
   });

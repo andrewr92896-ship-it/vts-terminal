@@ -367,10 +367,10 @@ never be reported as a measured one.**
   An outside audit of the deployed board (2026-09) found the green **Live feed**
   dot on Treasury yields, FX and the VIX that were four days old.
   `MarketFreshness` has carried a `stale` value since the board was built and
-  **nothing in the repository had ever set it**; `rowFor` stamped `source:
-  'live'` on everything it could fill. `freshnessFor` now decides from the
-  READING'S OWN AGE against a per-cadence window (`FRESH_FOR_MS`), so a Friday
-  close read on Monday is live and the same figure still up on Thursday is not.
+  **nothing in the repository had ever set it**; every row a provider could fill
+  was stamped `source: 'live'` outright. The figures were real; the claim about
+  them was not. **The rule is `marketFreshness.ts` and it now governs BOTH
+  BOARDS** — see its own section below.
   - **It degrades honestly whatever the cause** — FRED lagging, a provider gone
     quiet, the cache holding an old answer. Nothing has to diagnose why.
   - **The date never moves, only the claim about it.** A stale row still shows
@@ -380,7 +380,33 @@ never be reported as a measured one.**
     (`cadence: 'continuous'`). Kraken's last daily candle is the one still
     forming and its timestamp is midnight UTC, so stamping that prints a bare
     date over a price from minutes ago — which reads as a daily close. The row
-    carries the ET time of the fetch, and its freshness window is hours.
+    carries the ET time of the fetch. **Its FRESHNESS is judged on the candle
+    all the same**, and those are deliberately different timestamps: judged on
+    the fetch, a continuous row is permanently current however old the feed's
+    data is, because the only thing being tested is our own clock.
+  - **THE CACHE HOLDS THE OBSERVATIONS, NOT THE BOARD.** A payload is a set of
+    claims about how current its figures are, and those claims go out of date on
+    their own while the figures do not — so a built payload held through a
+    provider outage would go on saying "Current" about readings that had since
+    aged out. The board is rebuilt against the clock of whoever is asking, which
+    is sixteen rows of arithmetic over data already in memory.
+  - **"NEVER REPLACED BY A WORSE ANSWER" IS PER SERIES, NOT PER BOARD.** One
+    series failing a single pass — a timeout, a throttle, a provider hiccup —
+    used to drop its row to Sample until a later refresh happened to catch it,
+    so a row could flicker between a real figure and a placeholder with nothing
+    to explain either. The last good observations are kept for that series
+    alone, and the freshness window then ages them honestly: a provider gone
+    quiet for a day says Stale rather than pretending the row never existed.
+  - **A PERIOD SHORTER THAN THE PUBLICATION CADENCE READS AS AN EM DASH, NOT A
+    FLAT ZERO** (second audit pass, 2026-09). It used to read `0.0`, on the
+    reasoning that the published figure genuinely had not changed over the
+    window — which is true of the figure and false of the world. "CPI · 1D ·
+    0.0" states that inflation was measured over a day and came out flat; nobody
+    measured it. **Changed on both boards, and in both sets of fallback
+    figures.** A *daily* series is not gated at all, so a day that genuinely did
+    not move still reads zero — that zero IS a measurement and must not be swept
+    up. What the gate still prevents is the naive look-back putting a monthly
+    move in the daily column.
 - **THE FX ROWS SAY "NOON RATE" IN THE LABEL.** They are the Fed's H.10 noon
   buying rates — one published observation a day. "EUR/USD" alone on a market
   board is read as the price right now, and the review cycle underneath is not
@@ -393,19 +419,44 @@ never be reported as a measured one.**
   would price something close to it, but labelling PAXG as "Gold spot" is the
   same error as calling the Fed's broad basket DXY. **`SAMPLE_ROWS` is empty and
   nothing on the demo board is sample** — `verify:public-market` asserts it.
+- **CPI YEAR TO DATE IS OFF THE DEMO BOARD, AND STILL ON THE PRIVATE ONE.** The
+  figure was real — December's seasonally-adjusted index to the latest, the
+  private board's own `ytdIndex` — and two audit passes still could not
+  reconcile it, because "year to date" beside "CPI Y/Y" on four rows of
+  inflation does not say what it is measured from, over how many months, or
+  whether it is annualised. Its own change columns were worse: the year-to-date
+  move of a year-to-date figure is this year's run less last year's whole, which
+  is not a quantity anybody wants. The private board has seventy rows, a review
+  column and a reader who signed in; the demo board is a short showcase shown to
+  somebody seeing the product for the first time, and **a figure a careful
+  reader cannot check is not one to lead with**. So it is dropped here rather
+  than redefined — redefining would put the two boards out of step over a
+  definition neither audit disputed. The `ytdIndex` transform went with it, so
+  the demo feed now carries two transforms rather than three.
 - **What the audit checked and found CORRECT**, so nobody re-opens it: the fed
   funds target and effective rate, CPI Y/Y, core PCE, jobless claims,
   unemployment, the S&P close, and the 10Y−2Y spread reconciling with the two
-  yield rows above it. **CPI year to date** was queried and is unchanged: it is
-  the private board's own `ytdIndex` (December's seasonally-adjusted index to
-  the latest), and compounding the published rounded monthly changes instead
-  accumulates a few hundredths — which is what the auditor did. Changing it
-  would put the two boards' definitions out of step; raise it with the owner
-  rather than editing one side.
+  yield rows above it.
+- **THE VIX LAG IS FRED'S OWN, as far as anything here can establish.** The
+  audit found it several days behind the other daily rows. There is no bug
+  findable in the read — the two routes are plain, and observations are now
+  sorted on the way out of both parsers so the latest is provably the latest —
+  and **there is no second free provider for it**: Cboe's own endpoint would
+  have to be reached at a URL the public-build boundary guard forbids, and
+  defeating that guard to add one is not a trade worth making. What the board
+  does instead is **say so**: a daily row more than two business days old draws
+  the faint dot and reads Stale with its real date. Only the deployed board can
+  settle whether the lag is FRED's schedule or something upstream of it.
+- **A FRED KEY THAT IS SET AND REJECTED USED TO BE COMPLETELY SILENT.** The
+  keyless CSV fallback is deliberate and the board reads live with no key at
+  all, so a mistyped key degrades rather than breaks — which is right, and meant
+  an operator who had set the variable had no way whatever to tell whether it
+  was doing anything. It now logs once per process, naming the series and
+  neither the key nor any part of it.
 - **THE ROW SET IS SHORT, AND WIDENING IT IS A DECISION.** The private board
   carries seventy-odd series through a reader this deployment may not import, so
-  `marketFeed.mjs` copies the reader and **not** the catalog: seventeen showcase
-  rows and only the three transforms they need (`level`, `yoy`, `ytdIndex`).
+  `marketFeed.mjs` copies the reader and **not** the catalog: sixteen showcase
+  rows and only the two transforms they need (`level`, `yoy`).
   Copying the whole catalog would be a mirror nobody could keep in step. A row no
   free provider covers (gold, the meeting odds) is **not added at all** rather
   than added as a permanent placeholder — the meeting-odds row is gone for the
@@ -2844,7 +2895,8 @@ workspaces list** (see `theme/nav.ts` order).
         into the displayed one (`yoy`, `delta`, `qoqSaar`, … — FRED serves CPI as
         an index and payrolls as a running total); the change columns **subtract**
         rather than percent (a yield 4.05 → 4.02 is `−0.03`, not `−0.74%`);
-        a period **shorter than the series' cadence reads a flat zero**, because a
+        a period **shorter than the series' cadence reads an EM DASH** (it read a
+        flat zero until 2026-09 — see the freshness section below), because a
         date look-back from a monthly series' 1-day column otherwise prints the
         previous *month's* move as a one-day move; and look-backs **anchor on the
         latest reading**, not the wall clock, since a June print is still current
@@ -2853,7 +2905,52 @@ workspaces list** (see `theme/nav.ts` order).
         30 min, SWR, never replaced by an empty result.
         **`npm run verify:market-macro`** checks all of it offline against
         hand-computed fixtures; run it after touching a transform, a scale or the
-        cadence gate.
+        cadence gate. Its `boardRow` helper goes through `quoteFor` itself rather
+        than recomposing a row from `derive` + `changesFor` — the recomposed form
+        checks the arithmetic and nothing about what leaves the module, so a
+        field the builder stopped sending would pass every assertion in the file.
+
+    - **HOW CURRENT A FIGURE IS, IS ITS OWN QUESTION — `marketFreshness.ts`.**
+      Every row a provider could fill used to be stamped `source: 'live'`
+      outright, so a Treasury close days past its own publication rhythm wore
+      the green dot; `MarketFreshness` has carried a `stale` value since the
+      board was built and nothing had ever set it. An outside audit found it on
+      the deployed demo board, and **the private board had the identical
+      defect** — `applyLiveQuotes` never touched `source`, so a filled row kept
+      the catalog's standing default. A macro quote now carries its own
+      `freshness` and that is what the board takes; an OANDA quote carries none,
+      which means "real time" and is correct for a price this install just
+      fetched.
+      - **THE WINDOW IS "HOW LONG THIS READING STAYS THE NEWEST ONE THAT
+        EXISTS"**, which is a property of the RELEASE SCHEDULE rather than of
+        the clock. Tidy multiples of the period are wrong by a wide margin:
+        August CPI is dated 1 August and is not superseded until September's
+        prints in mid-October, so it is current at 73 days old. Each window is
+        period + publication lag + slack — weekly 17 days, monthly 80,
+        quarterly 230.
+      - **A DAILY SERIES IS COUNTED IN BUSINESS DAYS.** Friday's close read on
+        Monday is three calendar days old and is the current reading; the same
+        figure still up on Thursday is two missed publications. A calendar
+        window gets both wrong at once. Two business days, which absorbs a
+        public holiday.
+      - **IT EXISTS TWICE**, here and in the public terminal's own server, for
+        the usual reason — a separate deployment that may not import from this
+        one — and **`npm run verify:market-freshness` regenerates the mirror
+        from this file and fails on any difference**, then runs every window
+        through it. `--write` is how a drift is repaired; the check itself never
+        writes, because one that quietly fixed a drift could not fail on one.
+      - **The legend reads "Current", not "Live feed"** (`MarketData.tsx`). A
+        live feed is a thing that ticks and most of this board is not one: the
+        macro rows are published closes and the demo board's FX is a noon
+        observation. What the green dot has always meant is "this is the newest
+        reading that exists". **The KEY stays `live`** — rename a label, never a
+        key.
+      - **Both FRED parsers sort their observations oldest-first.** Everything
+        downstream depends on it — the latest reading is read off the end of the
+        array and the look-back walk stops at the first observation past its
+        target — and it was previously assumed rather than established. A
+        provider changing its mind about the order would have put the wrong
+        figure on the board, silently, looking like an ordinary number.
     - **17 rows can never go live, and 54 of the 71 non-session rows can.** The
       seventeen are the ones **no free provider covers** — CME FedWatch meeting
       odds, the SEP dot plot, BoE/BoJ rates, the 1-year breakeven, the Cleveland

@@ -26,14 +26,22 @@ const review=(body:string,last='',next='')=>({body,last,next});
 // KEEP THE IDS IN STEP WITH `server/marketFeed.mjs`. The live payload replaces
 // this wholesale, so an id here that is not in the catalog is a row that appears
 // only when the feed is down — which is the one moment nobody is checking.
+//
+// The change columns follow the live feed's own rule: a period SHORTER than the
+// series' publication cadence has no reading behind it and reads as an em dash,
+// never as a flat zero. A monthly row printing "0.0" in its 1D column states
+// that inflation was measured over a day and came out flat, which is a
+// measurement nobody made — and the fallback is precisely the board somebody is
+// looking at when the live one cannot be reached. A POLICY RATE keeps its zero:
+// a target rate is a standing fact observable every day, so "unchanged today"
+// is a real reading rather than a window nobody measured.
 const fallbackSeries:MarketDataPayload['series']=[
   {id:'ffr',group:'policy',label:'Fed funds target',value:'3.75–4.00',unit:'%',asOf:'sample',source:'manual',money:false,session:null,changes:changes('0.00','0.00','0.00','−0.25','−0.25'),review:review('FOMC','fomc-prev','fomc'),sample:true},
   {id:'effr',group:'policy',label:'Effective fed funds',value:'3.87',unit:'%',asOf:'sample',source:'manual',money:false,session:null,changes:changes('0.00','0.00','−0.01','−0.25','−0.25'),review:review('New York Fed','daily'),sample:true},
-  {id:'cpi',group:'inflation',label:'CPI Y/Y',value:'3.0',unit:'%',asOf:'sample',source:'manual',money:false,session:null,changes:changes('0.0','0.0','−0.1','+0.1','−0.2'),review:review('BLS','monthly'),sample:true},
-  {id:'cpiytd',group:'inflation',label:'CPI year to date',value:'2.4',unit:'%',asOf:'sample',source:'manual',money:false,session:null,changes:changes('0.0','0.0','+0.2','+2.4','—'),review:review('BLS','monthly'),sample:true},
-  {id:'cpce',group:'inflation',label:'Core PCE Y/Y',value:'2.9',unit:'%',asOf:'sample',source:'manual',money:false,session:null,changes:changes('0.0','0.0','−0.1','+0.1','−0.1'),review:review('BEA','monthly'),sample:true},
-  {id:'claims',group:'labor',label:'Initial jobless claims',value:'223',unit:'k',asOf:'sample',source:'manual',money:false,session:null,changes:changes('0','+4','−6','+5','−2'),review:review('DOL','weekly · Thursday'),sample:true},
-  {id:'unrate',group:'labor',label:'Unemployment rate',value:'4.4',unit:'%',asOf:'sample',source:'manual',money:false,session:null,changes:changes('0.0','0.0','+0.1','+0.3','+0.3'),review:review('BLS','monthly'),sample:true},
+  {id:'cpi',group:'inflation',label:'CPI Y/Y',value:'3.0',unit:'%',asOf:'sample',source:'manual',money:false,session:null,changes:changes('—','—','−0.1','+0.1','−0.2'),review:review('BLS','monthly'),sample:true},
+  {id:'cpce',group:'inflation',label:'Core PCE Y/Y',value:'2.9',unit:'%',asOf:'sample',source:'manual',money:false,session:null,changes:changes('—','—','−0.1','+0.1','−0.1'),review:review('BEA','monthly'),sample:true},
+  {id:'claims',group:'labor',label:'Initial jobless claims',value:'223',unit:'k',asOf:'sample',source:'manual',money:false,session:null,changes:changes('—','+4','−6','+5','−2'),review:review('DOL','weekly · Thursday'),sample:true},
+  {id:'unrate',group:'labor',label:'Unemployment rate',value:'4.4',unit:'%',asOf:'sample',source:'manual',money:false,session:null,changes:changes('—','—','+0.1','+0.3','+0.3'),review:review('BLS','monthly'),sample:true},
   {id:'y2',group:'yields',label:'2Y Treasury',value:'3.58',unit:'%',asOf:'sample',source:'manual',money:false,session:null,changes:changes('+0.01','−0.03','−0.09','−0.66','−0.52'),review:review('U.S. Treasury','daily'),sample:true},
   {id:'y10',group:'yields',label:'10Y Treasury',value:'4.14',unit:'%',asOf:'sample',source:'manual',money:false,session:null,changes:changes('+0.02','−0.04','−0.11','−0.43','+0.02'),review:review('U.S. Treasury','daily'),sample:true},
   {id:'s2s10',group:'macro',label:'10Y − 2Y spread',value:'+56',unit:'bp',asOf:'sample',source:'manual',money:false,session:null,changes:changes('+1','−1','−2','+23','+54'),review:review('Derived from the two Treasury rows','daily'),sample:true},
