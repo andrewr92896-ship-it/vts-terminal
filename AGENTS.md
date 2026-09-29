@@ -355,13 +355,53 @@ never be reported as a measured one.**
   `publicRequest` still refuses from inside the demo; this is a same-origin,
   read-only route carrying no session, no account and nothing stored, so
   "leaving is the reset" is untouched — there is still nothing to reset.
-- **A ROW IS LIVE OR IT SAYS SAMPLE. There is no third state.** A provider that
-  will not answer leaves its row on the bundled fallback with `sample: true` and
-  the grey dot, and `sampleValues` says part of the board is sample. **The
+- **A ROW NEVER CLAIMS MORE THAN IT HAS.** A provider that will not answer
+  leaves its row on the bundled fallback with `sample: true` and the grey dot,
+  and `sampleValues` says part of the board is sample; a provider that answered
+  with an old reading says **Stale** (see below). **The
   fallback board in the bundle is ALL Sample but one row** — the New York
   session, which is the clock rather than a reading — and `verify:public-market`
   asserts exactly that, because the fallback is what a demonstration sees when
   the feed is down and it is where the original bug would come back.
+- **A ROW IS LIVE, STALE OR SAMPLE — AND THE FIRST CUT ONLY EVER SAID LIVE.**
+  An outside audit of the deployed board (2026-09) found the green **Live feed**
+  dot on Treasury yields, FX and the VIX that were four days old.
+  `MarketFreshness` has carried a `stale` value since the board was built and
+  **nothing in the repository had ever set it**; `rowFor` stamped `source:
+  'live'` on everything it could fill. `freshnessFor` now decides from the
+  READING'S OWN AGE against a per-cadence window (`FRESH_FOR_MS`), so a Friday
+  close read on Monday is live and the same figure still up on Thursday is not.
+  - **It degrades honestly whatever the cause** — FRED lagging, a provider gone
+    quiet, the cache holding an old answer. Nothing has to diagnose why.
+  - **The date never moves, only the claim about it.** A stale row still shows
+    the reading it actually has; what changes is that the board stops calling it
+    current.
+  - **A COIN IS STAMPED WITH WHEN IT WAS READ, NOT WITH ITS CANDLE**
+    (`cadence: 'continuous'`). Kraken's last daily candle is the one still
+    forming and its timestamp is midnight UTC, so stamping that prints a bare
+    date over a price from minutes ago — which reads as a daily close. The row
+    carries the ET time of the fetch, and its freshness window is hours.
+- **THE FX ROWS SAY "NOON RATE" IN THE LABEL.** They are the Fed's H.10 noon
+  buying rates — one published observation a day. "EUR/USD" alone on a market
+  board is read as the price right now, and the review cycle underneath is not
+  what anybody checks first. The private board's FX comes from OANDA and
+  genuinely is a quote, which is why it carries no such qualifier and this does.
+- **GOLD IS NOT ON THE BOARD, and that is this file's own rule being followed.**
+  It shipped as a permanent placeholder reading "—", which the audit called
+  broken and was right to: a dash in a price column reads as a fault rather than
+  an absence, and it had no prospect of ever filling. Kraken's tokenized gold
+  would price something close to it, but labelling PAXG as "Gold spot" is the
+  same error as calling the Fed's broad basket DXY. **`SAMPLE_ROWS` is empty and
+  nothing on the demo board is sample** — `verify:public-market` asserts it.
+- **What the audit checked and found CORRECT**, so nobody re-opens it: the fed
+  funds target and effective rate, CPI Y/Y, core PCE, jobless claims,
+  unemployment, the S&P close, and the 10Y−2Y spread reconciling with the two
+  yield rows above it. **CPI year to date** was queried and is unchanged: it is
+  the private board's own `ytdIndex` (December's seasonally-adjusted index to
+  the latest), and compounding the published rounded monthly changes instead
+  accumulates a few hundredths — which is what the auditor did. Changing it
+  would put the two boards' definitions out of step; raise it with the owner
+  rather than editing one side.
 - **THE ROW SET IS SHORT, AND WIDENING IT IS A DECISION.** The private board
   carries seventy-odd series through a reader this deployment may not import, so
   `marketFeed.mjs` copies the reader and **not** the catalog: seventeen showcase

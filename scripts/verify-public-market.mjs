@@ -2,7 +2,7 @@
 import { readFileSync } from 'node:fs';
 import {
   CATALOG, GROUPS, buildPayload, changesFor, derive, fmtDelta, fmtPct, fmtValue,
-  rowFor, subtractSeries,
+  freshnessFor, rowFor, subtractSeries,
 } from '../apps/public-terminal/server/marketFeed.mjs';
 import { parseFredCsv, parseKrakenOhlc } from '../apps/public-terminal/server/fredSource.mjs';
 import { mapCalendar, windowAndSort } from '../apps/public-terminal/server/calendarFeed.mjs';
@@ -181,6 +181,52 @@ check(
   check('without the lower bound it refuses rather than stating a point target', rowFor(def('ffr'), new Map([['DFEDTARU', upper]]), NOW), null);
 }
 
+// ---- freshness ----
+//
+// THE AUDIT FINDING THIS FILE EXISTS TO STOP COMING BACK. Every row used to be
+// stamped `source: 'live'` outright, so a Treasury close four days old wore the
+// green Live feed dot, and the FX rows presented a once-a-day noon rate as a
+// quote. `MarketFreshness` carried a `stale` value the whole time that nothing
+// in the repository ever set.
+
+{
+  const now = Date.parse('2026-09-29T13:00:00Z');
+  const ago = (ms) => now - ms;
+  const DAY = 86400_000;
+  check('a daily close from yesterday is live', freshnessFor(ago(DAY), 'daily', now), 'live');
+  // A Friday close read on Monday is the current reading, not a stale one.
+  check('...and one from Friday read on Monday still is', freshnessFor(ago(3 * DAY), 'daily', now), 'live');
+  // Four days is the case the audit caught, and it is not live.
+  check('a daily close four days old is STALE', freshnessFor(ago(4 * DAY), 'daily', now), 'stale');
+  check('a monthly print from last month is live', freshnessFor(ago(28 * DAY), 'monthly', now), 'live');
+  check('a monthly print from two months ago is stale', freshnessFor(ago(60 * DAY), 'monthly', now), 'stale');
+  check('a weekly print from last week is live', freshnessFor(ago(8 * DAY), 'weekly', now), 'live');
+  // A coin trades every second, so a two-day-old reading of one is not a close
+  // — it is a figure nobody refreshed.
+  check('a coin read minutes ago is live', freshnessFor(ago(10 * 60_000), 'continuous', now), 'live');
+  check('a coin read hours ago is stale', freshnessFor(ago(6 * 3600_000), 'continuous', now), 'stale');
+}
+
+{
+  // End to end: the same observations, read on two different days.
+  const obs = new Map([['DGS10', [day('2026-09-24', 5.13), day('2026-09-25', 5.17)]]]);
+  const d = def('y10');
+  check('a yield read the next day says live', rowFor(d, obs, Date.parse('2026-09-26T13:00:00Z'))?.source, 'live');
+  check('...and the same figure four days on says stale', rowFor(d, obs, Date.parse('2026-09-29T13:00:00Z'))?.source, 'stale');
+  // The DATE never moves — only the claim about it does. A stale row still
+  // states what it is and when it was read, which is the whole point.
+  check('...while still stating the reading it actually has', rowFor(d, obs, Date.parse('2026-09-29T13:00:00Z'))?.asOf, 'Sep 25');
+}
+
+{
+  // A continuous row is stamped with the moment it was read, carrying a TIME:
+  // a bare date over a coin price reads as a daily close.
+  const candles = [day('2026-09-28', 84_000), day('2026-09-29', 84_341)];
+  const row = rowFor(def('btc'), new Map([['XBTUSD', candles]]), Date.parse('2026-09-29T18:14:00Z'));
+  check('a coin is stamped with the time it was read', row?.asOf, 'Sep 29 2:14 PM ET');
+  check('...and reads live because that is when it was read', row?.source, 'live');
+}
+
 // ---- the payload ----
 
 {
@@ -190,7 +236,7 @@ check(
   const live = payload.series.filter((row) => !row.sample).map((row) => row.id);
   check('with no data every row is marked sample but the session', live, ['ny']);
   check('...and the payload says part of the board is sample', payload.sampleValues, true);
-  check('...and no row is dropped, so no group is left with a hole', payload.series.length, CATALOG.length + 2);
+  check('...and no row is dropped, so no group is left with a hole', payload.series.length, CATALOG.length + 1);
 }
 
 {
@@ -236,8 +282,10 @@ check(
     obs.set(id, points);
   }
   const payload = buildPayload(obs, NOW);
-  check('with data behind it, every catalog row renders live', payload.series.filter((row) => row.sample).map((row) => row.id), ['gold']);
-  check('...leaving sampleValues true only because of the row with no provider', payload.sampleValues, true);
+  check('with data behind it, every catalog row renders', payload.series.filter((row) => row.sample).map((row) => row.id), []);
+  // Nothing is a permanent placeholder any more: gold was the last one and it
+  // was removed rather than left showing a dash for ever.
+  check('...and nothing on the board is sample', payload.sampleValues, false);
   check('no live row renders an empty value', payload.series.filter((row) => !row.sample && row.id !== 'ny' && (!row.value || row.value === '\u2014')).map((row) => row.id), []);
   check('every row carries five change columns', payload.series.filter((row) => !Array.isArray(row.changes) || row.changes.length !== 5).map((row) => row.id), []);
   check('the default pins all exist on the board', payload.defaultPins.filter((id) => !payload.series.some((row) => row.id === id)), []);
@@ -257,7 +305,7 @@ check(
   const privateCatalog = readFileSync(new URL('../apps/api/src/trading/marketData.ts', import.meta.url), 'utf8');
   const privateIds = new Set([...privateCatalog.matchAll(/id: '([a-z0-9-]+)'/g)].map((m) => m[1]));
   const ownNames = new Set(['broad-usd']);
-  const strays = [...CATALOG.map((d) => d.id), 'gold', 'ny'].filter((id) => !privateIds.has(id) && !ownNames.has(id));
+  const strays = [...CATALOG.map((d) => d.id), 'ny'].filter((id) => !privateIds.has(id) && !ownNames.has(id));
   check('every row id is the private board\u2019s, bar the documented exception', strays, []);
   check('the Fed bar\u2019s row is present under the id it reads', CATALOG.some((d) => d.id === 'ffr'), true);
 }
@@ -339,7 +387,7 @@ check(
   check('only the session row claims to be live', rows.filter(([, s]) => s === 'false').map(([id]) => id), ['ny']);
   check('no fallback row wears the live source', block.includes("source:'live'") ? block.split("source:'live'").length - 1 : 0, 1);
   const fallbackIds = rows.map(([id]) => id);
-  const catalogIds = new Set([...CATALOG.map((d) => d.id), 'gold', 'ny']);
+  const catalogIds = new Set([...CATALOG.map((d) => d.id), 'ny']);
   check('every fallback row is one the live catalog also serves', fallbackIds.filter((id) => !catalogIds.has(id)), []);
 }
 
