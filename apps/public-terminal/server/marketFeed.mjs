@@ -42,7 +42,33 @@ const HISTORY_YEARS = 4; // enough for a y/y rate's own 1-year look-back
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
-const CADENCE_DAYS = { daily: 1, weekly: 7, monthly: 28, quarterly: 90 };
+const CADENCE_DAYS = { continuous: 1, daily: 1, weekly: 7, monthly: 28, quarterly: 90 };
+
+// HOW OLD A READING MAY BE AND STILL BE CALLED LIVE.
+//
+// This is the correction the first cut needed: every row was stamped
+// `source: 'live'` outright, so a Treasury close from four days ago wore the
+// green Live feed dot on a board a reader treats as current. `MarketFreshness`
+// has carried a `stale` value the whole time and nothing in the repository had
+// ever set it.
+//
+// The windows tolerate each series' own publication lag and nothing more: a
+// daily close read on a Monday is the Friday one and is perfectly live, while
+// the same figure still on the board on Thursday is not. Measured against the
+// READING's own date, so the row degrades honestly whatever the reason — FRED
+// lagging, a provider gone quiet, or the cache holding an old answer.
+const FRESH_FOR_MS = {
+  continuous: 2 * 3600_000,
+  daily: 3 * DAY_MS,
+  weekly: 12 * DAY_MS,
+  monthly: 45 * DAY_MS,
+  quarterly: 120 * DAY_MS,
+};
+
+export function freshnessFor(timeMs, cadence, now) {
+  const window = FRESH_FOR_MS[cadence] ?? FRESH_FOR_MS.daily;
+  return now - timeMs > window ? 'stale' : 'live';
+}
 
 export const GROUPS = [
   { key: 'policy', label: 'Policy & rates' },
@@ -50,7 +76,6 @@ export const GROUPS = [
   { key: 'labor', label: 'Labor & growth' },
   { key: 'yields', label: 'Yields & curve' },
   { key: 'fx', label: 'FX & dollar' },
-  { key: 'commod', label: 'Commodities' },
   { key: 'crypto', label: 'Crypto' },
   { key: 'equity', label: 'Indices & volatility' },
   { key: 'macro', label: 'Macro & liquidity' },
@@ -79,25 +104,36 @@ export const CATALOG = [
   // day the yield rows had not and print a spread the board's own numbers
   // contradict. Subtracting makes the three reconcile by construction.
   { id: 's2s10', group: 'macro', label: '10Y − 2Y spread', unit: 'bp', fred: 'DGS10', fredMinus: 'DGS2', transform: 'level', cadence: 'daily', decimals: 0, scale: 100, signed: true, changeMode: 'delta', review: 'Derived from the two Treasury rows', reviewCycle: 'daily' },
-  { id: 'eurusd', group: 'fx', label: 'EUR/USD', unit: '', fred: 'DEXUSEU', transform: 'level', cadence: 'daily', decimals: 4, changeMode: 'pct', review: 'Federal Reserve H.10', reviewCycle: 'daily · noon rate' },
-  { id: 'gbpusd', group: 'fx', label: 'GBP/USD', unit: '', fred: 'DEXUSUK', transform: 'level', cadence: 'daily', decimals: 4, changeMode: 'pct', review: 'Federal Reserve H.10', reviewCycle: 'daily · noon rate' },
+  // THE LABEL SAYS "NOON RATE" BECAUSE THE ROW IS NOT A QUOTE. These are the
+  // Fed's H.10 noon buying rates — one published observation a day, not a tick.
+  // "EUR/USD" alone on a market board is read as the price right now, and the
+  // review cycle underneath it is not what anybody checks first. The private
+  // board's FX comes from OANDA and genuinely is a quote, which is why it has
+  // no such qualifier and this does.
+  { id: 'eurusd', group: 'fx', label: 'EUR/USD · noon rate', unit: '', fred: 'DEXUSEU', transform: 'level', cadence: 'daily', decimals: 4, changeMode: 'pct', review: 'Federal Reserve H.10', reviewCycle: 'daily · noon rate' },
+  { id: 'gbpusd', group: 'fx', label: 'GBP/USD · noon rate', unit: '', fred: 'DEXUSUK', transform: 'level', cadence: 'daily', decimals: 4, changeMode: 'pct', review: 'Federal Reserve H.10', reviewCycle: 'daily · noon rate' },
   // Deliberately NOT labelled DXY, and deliberately NOT given the private
   // board's `dxy` id. This is the Fed's own broad trade-weighted index, a
   // different basket from ICE's dollar index — sharing the id would make two
   // boards disagree about one row, which is worse than carrying two rows.
   // Every other id here matches the private catalog on purpose.
   { id: 'broad-usd', group: 'fx', label: 'Broad dollar index', unit: '', fred: 'DTWEXBGS', transform: 'level', cadence: 'daily', decimals: 2, changeMode: 'pct', review: 'Federal Reserve H.10', reviewCycle: 'daily' },
-  { id: 'btc', group: 'crypto', label: 'Bitcoin', unit: 'USD', money: true, kraken: 'XBTUSD', transform: 'level', cadence: 'daily', decimals: 0, changeMode: 'pct', review: 'Kraken', reviewCycle: 'continuous' },
-  { id: 'eth', group: 'crypto', label: 'Ethereum', unit: 'USD', money: true, kraken: 'ETHUSD', transform: 'level', cadence: 'daily', decimals: 0, changeMode: 'pct', review: 'Kraken', reviewCycle: 'continuous' },
+  { id: 'btc', group: 'crypto', label: 'Bitcoin', unit: 'USD', money: true, kraken: 'XBTUSD', transform: 'level', cadence: 'continuous', decimals: 0, changeMode: 'pct', review: 'Kraken', reviewCycle: 'continuous' },
+  { id: 'eth', group: 'crypto', label: 'Ethereum', unit: 'USD', money: true, kraken: 'ETHUSD', transform: 'level', cadence: 'continuous', decimals: 0, changeMode: 'pct', review: 'Kraken', reviewCycle: 'continuous' },
   { id: 'us500', group: 'equity', label: 'S&P 500', unit: '', fred: 'SP500', transform: 'level', cadence: 'daily', decimals: 2, changeMode: 'pct', review: 'S&P Dow Jones Indices', reviewCycle: 'daily close' },
   { id: 'vix', group: 'equity', label: 'VIX', unit: '', fred: 'VIXCLS', transform: 'level', cadence: 'daily', decimals: 2, changeMode: 'delta', review: 'Cboe', reviewCycle: 'daily close' },
 ];
 
-// Rows no free provider covers. They are carried so the board's groups are not
-// left with holes, and they are marked Sample — never dressed as live.
-export const SAMPLE_ROWS = [
-  { id: 'gold', group: 'commod', label: 'Gold spot', value: '—', unit: 'USD', money: true, asOf: 'sample', changes: ['—', '—', '—', '—', '—'], review: { body: 'No free provider', last: 'sample', next: '' } },
-];
+// A ROW NO FREE PROVIDER COVERS IS NOT CARRIED AT ALL.
+//
+// Gold was here, as a permanent placeholder reading "—". That is the thing this
+// file's own rule forbids and the audit duly called it broken: a dash in a
+// price column reads as a fault, not as an absence, and it sat there on every
+// visit with no prospect of ever filling. Kraken's tokenized gold would price
+// something close to it, but labelling PAXG as "Gold spot" is the same error as
+// calling the Fed's broad basket DXY — a different instrument under a borrowed
+// name. So the row is gone, and the Commodities group with it.
+export const SAMPLE_ROWS = [];
 
 // ---- derivation ----
 
@@ -232,6 +268,18 @@ export function fmtPct(pct, decimals) {
 // dated for the period it measures, so June CPI is dated 2026-06-01 and comes
 // out in July.
 export function asOfLabel(point, cadence, now) {
+  // A CONTINUOUS ROW IS STAMPED WITH WHEN IT WAS READ, NOT WITH ITS CANDLE.
+  // Kraken's last daily candle is the one still forming and its timestamp is
+  // midnight UTC, so stamping that would print "Sep 29" — or worse, "12:00 AM"
+  // — over a price from minutes ago. What is true of the figure is that we read
+  // it just now, which is also the only thing that makes the freshness window
+  // above mean anything for a coin.
+  if (cadence === 'continuous') {
+    return new Intl.DateTimeFormat('en-US', {
+      timeZone: 'America/New_York', month: 'short', day: 'numeric',
+      hour: 'numeric', minute: '2-digit',
+    }).format(now).replace(',', '') + ' ET';
+  }
   const d = new Date(point.timeMs);
   const month = MONTHS[d.getUTCMonth()];
   const year = d.getUTCFullYear();
@@ -315,6 +363,10 @@ export function rowFor(def, observations, now) {
     value = `${fmtValue(lowerLatest.v, def)}–${fmtValue(latest.v, def)}`;
   }
 
+  // A continuous row's reading IS the moment it was fetched; everything else is
+  // dated by its own published observation.
+  const readAt = def.cadence === 'continuous' ? now : latest.timeMs;
+
   return {
     id: def.id,
     group: def.group,
@@ -322,7 +374,10 @@ export function rowFor(def, observations, now) {
     value,
     unit: def.unit ?? '',
     asOf: asOfLabel(latest, def.cadence, now),
-    source: 'live',
+    // NEVER A BARE 'live'. See `freshnessFor` — a published close that is days
+    // old is `stale`, which draws the faint dot instead of the green one and
+    // still shows its real date beside it.
+    source: freshnessFor(readAt, def.cadence, now),
     money: def.money === true,
     session: null,
     changes: changesFor(points, def, now),
@@ -332,10 +387,16 @@ export function rowFor(def, observations, now) {
 }
 
 // The one row with no provider behind it at all: the New York session, whose
-// value is the clock rather than a reading.
+// value is the clock rather than a reading — so it is genuinely live, and is
+// the only row that may say so outright.
+//
+// IT STATES ITS WINDOW, because the name alone does not. "New York session"
+// reads as the forex session (8am\u20135pm) to a trader and as NYSE hours to
+// everybody else, and this row is NYSE \u2014 an audit duly asked which was meant.
+// The private board prints the same hours for the same reason.
 const sessionRow = () => ({
   id: 'ny', group: 'session', label: 'New York session', value: '', unit: '',
-  asOf: 'Eastern', source: 'live', money: false, session: [570, 960],
+  asOf: '09:30\u201316:00 ET', source: 'live', money: false, session: [570, 960],
   changes: ['—', '—', '—', '—', '—'],
   review: { body: 'Market hours', last: 'continuous', next: '' }, sample: false,
 });

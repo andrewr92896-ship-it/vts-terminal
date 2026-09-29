@@ -11,9 +11,19 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 7.99';
+export const APP_VERSION = 'Beta V 8.00';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 8.00',
+    date: '2026-09-29',
+    notes: [
+      'The demo board stops calling old numbers live. Treasury yields, the FX rows and the VIX were showing the green \u201CLive feed\u201D dot on readings four days old \u2014 the figures were real, the freshness claim was not. A row now says Stale, with the date it actually has, once it is older than its own publishing rhythm.',
+      'The two FX rows say \u201Cnoon rate\u201D in their names. They are the Federal Reserve\u2019s once-a-day published rate, not a live quote, and the old label read as one.',
+      'Bitcoin and Ethereum carry the time they were read rather than just a date, which is what a price that moves every second needs.',
+      'Gold is off the demo board. No free source covers it, so it had been sitting there as a permanent dash \u2014 which reads as something broken rather than something missing.',
+    ],
+  },
   {
     version: 'Beta V 7.99',
     date: '2026-09-29',
