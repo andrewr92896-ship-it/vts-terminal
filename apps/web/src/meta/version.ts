@@ -11,9 +11,20 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 8.00';
+export const APP_VERSION = 'Beta V 8.01';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 8.01',
+    date: '2026-09-29',
+    notes: [
+      'The Market Data legend reads \u201CCurrent\u201D where it read \u201CLive feed\u201D. Most of the board is a published daily close rather than something that ticks, and the green dot has only ever meant \u201Cthis is the newest reading there is\u201D.',
+      'The private Market Data board now marks a stale row too. It had the same fault the demo board did \u2014 every figure a source could fill was labelled current, however old it was \u2014 and both boards now judge it the same way, against each series\u2019 own publishing schedule.',
+      'A change column with nothing behind it shows a dash instead of 0.0. CPI does not have a one-day move, and printing \u201C0.0\u201D there said inflation had been measured over a day and come out flat.',
+      'A daily row is judged in working days, so Friday\u2019s close read on Monday is current rather than three days old \u2014 and a row that has genuinely missed two publications now says so instead of hiding among the weekends.',
+      'CPI year to date is off the demo board. The figure was real, but nothing on the row said what it was measured from or over how many months, and it is the kind of number a visitor cannot check. The full board inside the terminal still carries it.',
+    ],
+  },
   {
     version: 'Beta V 8.00',
     date: '2026-09-29',

@@ -8,6 +8,7 @@ import {
 } from './brokers/fred.js';
 import type { LiveQuote } from './marketQuotes.js';
 import { pctDecimals } from './marketFormat.js';
+import { freshnessFor } from './marketFreshness.js';
 
 // Live values for the Market Data board's MACRO series, from FRED.
 //
@@ -32,11 +33,13 @@ import { pctDecimals } from './marketFormat.js';
 //    The price side percent-changes; this side subtracts.
 //
 // 3. **Most of these series do not move daily, and a change column must not
-//    imply otherwise.** CPI prints monthly, so its 1D and 1W columns can only
-//    honestly read zero — but a naive date look-back would land on the previous
-//    *month's* reading and print that monthly move in the 1D column. Every row
-//    therefore declares its `cadence`, and a period shorter than the cadence
-//    resolves to a flat zero instead of borrowing a longer period's move.
+//    imply otherwise.** CPI prints monthly, so its 1D and 1W columns have no
+//    reading behind them at all and render as an em dash — a naive date
+//    look-back would instead land on the previous *month's* reading and print
+//    that monthly move in the 1D column. Every row therefore declares its
+//    `cadence`, and a period shorter than the cadence resolves to nothing.
+//    It used to resolve to a flat zero, which reads as a measurement that came
+//    out flat rather than as one nobody made.
 //
 // What is deliberately NOT here: the rows no free provider covers — CME
 // FedWatch meeting odds, the ISM surveys, the MOVE index, FactSet earnings, the
@@ -429,12 +432,22 @@ function changesFor(
     return ref.v > 0 ? (latest.v / ref.v - 1) * 100 : null;
   };
 
-  // A period shorter than the publication cadence cannot contain a move, so it
-  // reports a flat zero rather than the previous reading's move. Zero is right
-  // here and blank is not: the figure genuinely has not changed over that
-  // window, which is a different statement from having no reading for it.
+  // A PERIOD SHORTER THAN THE PUBLICATION CADENCE HAS NO READING BEHIND IT, so
+  // it renders as the em dash the board already uses for exactly that, and NOT
+  // as a zero. It used to read "0.0", on the reasoning that the published
+  // figure genuinely had not changed over the window — which is true of the
+  // figure and false of the world. "CPI · 1D · 0.0" states that inflation was
+  // measured over a day and came out flat; nobody measured it, and a board that
+  // says otherwise is doing the thing this repository forbids everywhere else.
+  // Reported by an outside audit, and it is the same correction the freshness
+  // dot needed.
+  //
+  // What must still never happen is the naive look-back: a 1-day window on a
+  // monthly series lands on the PREVIOUS MONTH's reading and prints a monthly
+  // move in the daily column. The gate is what prevents that; only its answer
+  // changed.
   const gated = (periodDays: number, at: number): number | null =>
-    periodDays < cadenceDays ? 0 : moveAt(at);
+    periodDays < cadenceDays ? null : moveAt(at);
 
   const yearStart = Date.UTC(etYear(now), 0, 1);
 
@@ -544,6 +557,12 @@ function quoteFor(
     value,
     changes: changesFor(points, def, now),
     asOf: asOfLabel(latest, def.cadence, now),
+    // HOW CURRENT THIS ACTUALLY IS, rather than the catalog's standing `live`.
+    // Every row a provider could fill used to be stamped live outright, so a
+    // Treasury close days past its own publication rhythm wore the green dot —
+    // the figure real, the claim about it not. Judged on the reading's OWN
+    // date; see `marketFreshness.ts` for why each window is what it is.
+    freshness: freshnessFor(latest.timeMs, def.cadence, now),
     ...(def.review ? { reviewBody: def.review } : {}),
     ...(def.reviewLast ? { reviewLast: def.reviewLast } : {}),
     ...(schedule?.last ? { reviewLast: schedule.last } : {}),

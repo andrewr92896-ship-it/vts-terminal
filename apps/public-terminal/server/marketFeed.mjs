@@ -1,4 +1,5 @@
 import { fetchCoinCloses, fetchFredSeries } from './fredSource.mjs';
+import { freshnessFor } from './marketFreshness.mjs';
 import { PUBLIC_FOMC_MEETING_DATES } from './fomcDates.mjs';
 
 // The demo board's market data, read live on the public terminal's own server.
@@ -24,7 +25,7 @@ import { PUBLIC_FOMC_MEETING_DATES } from './fomcDates.mjs';
 // 2. **The row set is SHORT, and widening it is a decision.** The private board
 //    carries seventy-odd series through a reader this may not import. Copying
 //    that catalog would be a mirror nobody could keep in step, so what is here
-//    is the showcase set — and only the three transforms those rows need. A row
+//    is the showcase set — and only the two transforms those rows need. A row
 //    no free provider covers (gold, the meeting odds) is not added at all
 //    rather than added as a permanent placeholder.
 //
@@ -44,31 +45,10 @@ const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', '
 
 const CADENCE_DAYS = { continuous: 1, daily: 1, weekly: 7, monthly: 28, quarterly: 90 };
 
-// HOW OLD A READING MAY BE AND STILL BE CALLED LIVE.
-//
-// This is the correction the first cut needed: every row was stamped
-// `source: 'live'` outright, so a Treasury close from four days ago wore the
-// green Live feed dot on a board a reader treats as current. `MarketFreshness`
-// has carried a `stale` value the whole time and nothing in the repository had
-// ever set it.
-//
-// The windows tolerate each series' own publication lag and nothing more: a
-// daily close read on a Monday is the Friday one and is perfectly live, while
-// the same figure still on the board on Thursday is not. Measured against the
-// READING's own date, so the row degrades honestly whatever the reason — FRED
-// lagging, a provider gone quiet, or the cache holding an old answer.
-const FRESH_FOR_MS = {
-  continuous: 2 * 3600_000,
-  daily: 3 * DAY_MS,
-  weekly: 12 * DAY_MS,
-  monthly: 45 * DAY_MS,
-  quarterly: 120 * DAY_MS,
-};
-
-export function freshnessFor(timeMs, cadence, now) {
-  const window = FRESH_FOR_MS[cadence] ?? FRESH_FOR_MS.daily;
-  return now - timeMs > window ? 'stale' : 'live';
-}
+// How old a reading may be and still be called current is decided by
+// `marketFreshness.mjs` — a documented mirror of the private board's own rule,
+// so the two deployments cannot disagree about whether a figure is current.
+// See that file for the windows and why each is what it is.
 
 export const GROUPS = [
   { key: 'policy', label: 'Policy & rates' },
@@ -84,8 +64,8 @@ export const GROUPS = [
 
 // ---- the catalog ----
 //
-// `transform` is one of `level`, `yoy`, `ytdIndex` — deliberately the only three
-// the showcase rows need. `changeMode` decides how a move reads: a RATE moves by
+// `transform` is `level` or `yoy` — deliberately the only two the showcase rows
+// need. `changeMode` decides how a move reads: a RATE moves by
 // subtraction (a yield 4.05 -> 4.02 is "−0.03", not "−0.74%") and a PRICE moves
 // by percent. Getting that the wrong way round is the most plausible mistake
 // here, which is why `verify:public-market` pins one of each.
@@ -93,7 +73,6 @@ export const CATALOG = [
   { id: 'ffr', group: 'policy', label: 'Fed funds target', unit: '%', fred: 'DFEDTARU', fredLower: 'DFEDTARL', transform: 'level', cadence: 'daily', decimals: 2, changeMode: 'delta', review: 'FOMC', reviewLast: 'fomc-prev', reviewNext: 'fomc' },
   { id: 'effr', group: 'policy', label: 'Effective fed funds', unit: '%', fred: 'EFFR', transform: 'level', cadence: 'daily', decimals: 2, changeMode: 'delta', review: 'New York Fed', reviewCycle: 'daily' },
   { id: 'cpi', group: 'inflation', label: 'CPI Y/Y', unit: '%', fred: 'CPIAUCSL', transform: 'yoy', cadence: 'monthly', decimals: 1, changeMode: 'delta', review: 'BLS', reviewCycle: 'monthly' },
-  { id: 'cpiytd', group: 'inflation', label: 'CPI year to date', unit: '%', fred: 'CPIAUCSL', transform: 'ytdIndex', cadence: 'monthly', decimals: 1, changeMode: 'delta', review: 'BLS', reviewCycle: 'monthly' },
   { id: 'cpce', group: 'inflation', label: 'Core PCE Y/Y', unit: '%', fred: 'PCEPILFE', transform: 'yoy', cadence: 'monthly', decimals: 1, changeMode: 'delta', review: 'BEA', reviewCycle: 'monthly' },
   { id: 'claims', group: 'labor', label: 'Initial jobless claims', unit: 'k', fred: 'ICSA', transform: 'level', cadence: 'weekly', decimals: 0, scale: 1 / 1000, changeMode: 'delta', review: 'DOL', reviewCycle: 'weekly · Thursday' },
   { id: 'unrate', group: 'labor', label: 'Unemployment rate', unit: '%', fred: 'UNRATE', transform: 'level', cadence: 'monthly', decimals: 1, changeMode: 'delta', review: 'BLS', reviewCycle: 'monthly' },
@@ -123,6 +102,23 @@ export const CATALOG = [
   { id: 'us500', group: 'equity', label: 'S&P 500', unit: '', fred: 'SP500', transform: 'level', cadence: 'daily', decimals: 2, changeMode: 'pct', review: 'S&P Dow Jones Indices', reviewCycle: 'daily close' },
   { id: 'vix', group: 'equity', label: 'VIX', unit: '', fred: 'VIXCLS', transform: 'level', cadence: 'daily', decimals: 2, changeMode: 'delta', review: 'Cboe', reviewCycle: 'daily close' },
 ];
+
+// CPI YEAR TO DATE IS NOT ON THE DEMO BOARD, AND THAT IS THE SAME RULE.
+//
+// The figure was real — December's index to the latest, which is the private
+// board's own `ytdIndex` — and an audit still could not reconcile it, because
+// "year to date" beside "CPI Y/Y" on four rows of inflation does not say what
+// it is measured from, over how many months, or whether it is annualised.
+// Worse, its own change columns were nonsense: the year-to-date move of a
+// year-to-date figure is this year's run less last year's whole, which is not a
+// quantity anybody wants.
+//
+// The private board keeps the row unchanged — it has seventy rows, a review
+// column and a reader who signed in — and the demo board is a short showcase
+// shown to somebody seeing the product for the first time. A figure a careful
+// reader cannot check is not one to lead with, so it is dropped here rather
+// than redefined, which would put the two boards out of step over a definition
+// neither audit disputed.
 
 // A ROW NO FREE PROVIDER COVERS IS NOT CARRIED AT ALL.
 //
@@ -173,8 +169,6 @@ function yearEarlier(obs, i) {
   return found.value;
 }
 
-const utcYear = (t) => new Date(t).getUTCFullYear();
-
 // The year it is right now on the desk. Deliberately Eastern, matching every
 // other clock in the terminal: between 7pm and midnight ET on 31 December the
 // UTC year has already turned, and a year-to-date measured against it would
@@ -195,14 +189,6 @@ export function derive(obs, def) {
       const base = yearEarlier(obs, i);
       if (base != null && base !== 0) push(o, (o.value / base - 1) * 100);
       continue;
-    }
-    if (def.transform === 'ytdIndex') {
-      const year = utcYear(o.timeMs);
-      let base = null;
-      for (let j = i - 1; j >= 0; j -= 1) {
-        if (utcYear(obs[j].timeMs) < year) { base = obs[j].value; break; }
-      }
-      if (base != null && base !== 0) push(o, (o.value / base - 1) * 100);
     }
   }
   return out;
@@ -301,11 +287,19 @@ export function asOfLabel(point, cadence, now) {
 // before this year began — which is what a desk means by the move so far this
 // year regardless of when the series last printed.
 //
-// A period SHORTER than the publication cadence resolves to a flat zero rather
-// than borrowing a longer period's move. CPI prints monthly, so a naive 1-day
-// look-back lands on the previous MONTH's reading and prints a monthly move in
-// the daily column. Zero is right here and blank is not: the figure genuinely
-// has not changed over that window.
+// A PERIOD SHORTER THAN THE PUBLICATION CADENCE HAS NO READING BEHIND IT, so it
+// renders as the em dash the board already uses for exactly that, and NOT as a
+// zero. It used to read "0.0", on the reasoning that the published figure
+// genuinely had not changed over the window — which is true of the figure and
+// false of the world. "CPI · 1D · 0.0" states that inflation was measured over
+// a day and came out flat; nobody measured it, and a board that says otherwise
+// is doing the thing this repository forbids everywhere else. Reported by an
+// outside audit, and it is the same correction the freshness dot needed.
+//
+// What must still never happen is the naive look-back: a 1-day window on a
+// monthly series lands on the PREVIOUS MONTH's reading and prints a monthly
+// move in the daily column. The gate is what prevents that; only its answer
+// changed.
 export function changesFor(points, def, now) {
   const latest = points[points.length - 1];
   const cadenceDays = CADENCE_DAYS[def.cadence];
@@ -317,7 +311,7 @@ export function changesFor(points, def, now) {
     if (!pct) return latest.v - ref.v;
     return ref.v > 0 ? (latest.v / ref.v - 1) * 100 : null;
   };
-  const gated = (periodDays, at) => (periodDays < cadenceDays ? 0 : moveAt(at));
+  const gated = (periodDays, at) => (periodDays < cadenceDays ? null : moveAt(at));
 
   const moves = [
     gated(1, latest.timeMs - DAY_MS),
@@ -363,9 +357,6 @@ export function rowFor(def, observations, now) {
     value = `${fmtValue(lowerLatest.v, def)}–${fmtValue(latest.v, def)}`;
   }
 
-  // A continuous row's reading IS the moment it was fetched; everything else is
-  // dated by its own published observation.
-  const readAt = def.cadence === 'continuous' ? now : latest.timeMs;
 
   return {
     id: def.id,
@@ -374,10 +365,15 @@ export function rowFor(def, observations, now) {
     value,
     unit: def.unit ?? '',
     asOf: asOfLabel(latest, def.cadence, now),
-    // NEVER A BARE 'live'. See `freshnessFor` — a published close that is days
-    // old is `stale`, which draws the faint dot instead of the green one and
-    // still shows its real date beside it.
-    source: freshnessFor(readAt, def.cadence, now),
+    // NEVER A BARE 'live'. A published close older than its own release rhythm
+    // is `stale`, which draws the faint dot instead of the green one and still
+    // shows the real date beside it.
+    //
+    // JUDGED ON THE READING'S OWN DATE, COINS INCLUDED. A continuous row is
+    // stamped with the moment it was FETCHED (see `asOfLabel`), and judging it
+    // on that too would make it permanently current — the only thing tested
+    // would be our own clock, so a feed serving week-old candles would pass.
+    source: freshnessFor(latest.timeMs, def.cadence, now),
     money: def.money === true,
     session: null,
     changes: changesFor(points, def, now),
@@ -473,31 +469,54 @@ export function buildPayload(observations, now) {
 }
 
 // ---- cache ----
+//
+// WHAT IS CACHED IS THE OBSERVATIONS, NOT THE BOARD, and the board is built
+// against the clock of whoever is asking. A payload is a set of claims about
+// how current its figures are, and those claims go out of date on their own
+// while the figures do not — so a built payload held through an outage would go
+// on saying "Current" about readings that had since aged out, which is the
+// audit finding arriving by a different route. Rebuilding is sixteen rows of
+// arithmetic over data already in memory.
+//
+// NEVER REPLACED BY A WORSE ANSWER, AND THAT IS PER SERIES RATHER THAN PER
+// BOARD. One series failing a single pass — a timeout, a throttle, a provider
+// hiccup — used to drop its row to Sample until the next refresh happened to
+// catch it, so a row could flicker between a real figure and a placeholder with
+// nothing to explain either. Keeping the last good observations for that series
+// alone leaves the row on the reading it genuinely has, which the freshness
+// window then ages honestly: a provider gone quiet for a day says Stale rather
+// than pretending it never existed.
 
 let cached = null;
 let inFlight = null;
 
+// The new read for every series that answered, the previous one for every
+// series that did not.
+export function mergeObservations(previous, incoming) {
+  if (!previous) return incoming;
+  const out = new Map(previous);
+  for (const [id, rows] of incoming) {
+    if (rows && rows.length > 0) out.set(id, rows);
+  }
+  return out;
+}
+
 async function refresh(now) {
-  const observations = await loadObservations(now);
-  const payload = buildPayload(observations, now);
-  const liveRows = payload.series.filter((row) => !row.sample).length;
-  // Never replace a good answer with a worse one. If every provider failed this
-  // pass, the previous payload stands and the next pass tries again.
-  if (cached && liveRows <= 1) return cached.payload;
-  cached = { at: now, payload };
-  return payload;
+  const observations = mergeObservations(cached?.observations, await loadObservations(now));
+  cached = { at: now, observations };
+  return buildPayload(observations, now);
 }
 
 export async function readPublicMarketData(now = Date.now()) {
-  if (cached && now - cached.at < TTL_MS) return cached.payload;
+  if (cached && now - cached.at < TTL_MS) return buildPayload(cached.observations, now);
   if (!inFlight) {
     inFlight = refresh(now)
-      .catch(() => cached?.payload ?? buildPayload(new Map(), now))
+      .catch(() => (cached ? buildPayload(cached.observations, now) : buildPayload(new Map(), now)))
       .finally(() => { inFlight = null; });
   }
-  // A cached payload past its TTL is served immediately and refreshed behind
-  // the request; only a cold process waits.
-  if (cached) return cached.payload;
+  // Cached observations past their TTL are served immediately — re-judged
+  // against now — and refreshed behind the request; only a cold process waits.
+  if (cached) return buildPayload(cached.observations, now);
   return inFlight;
 }
 

@@ -61,6 +61,15 @@ function toObservation(date: string, raw: string): FredObservation | null {
   return { date: d, timeMs, value };
 }
 
+// OLDEST FIRST, ALWAYS. Both routes happen to serve ascending today and
+// everything downstream depends on it — the latest reading is read off the end
+// of the array, and the look-back walk stops at the first observation past its
+// target, which is only correct on a sorted one. Established here rather than
+// assumed: a provider that changed its mind about the order would otherwise put
+// the wrong figure on the board, silently, looking like an ordinary number.
+const sorted = (rows: FredObservation[]): FredObservation[] =>
+  rows.sort((a, b) => a.timeMs - b.timeMs);
+
 interface FredApiResponse {
   observations?: { date?: string; value?: string }[];
 }
@@ -83,7 +92,7 @@ async function readViaApi(seriesId: string, start: string): Promise<FredObservat
     const parsed = toObservation(o.date ?? '', o.value ?? '');
     if (parsed) out.push(parsed);
   }
-  return out;
+  return sorted(out);
 }
 
 // The chart-download CSV. Two columns — a date and the series — with a header
@@ -97,7 +106,7 @@ export function parseFredCsv(body: string): FredObservation[] {
     const parsed = toObservation(date, value);
     if (parsed) out.push(parsed);
   }
-  return out;
+  return sorted(out);
 }
 
 async function readViaCsv(seriesId: string, start: string): Promise<FredObservation[]> {

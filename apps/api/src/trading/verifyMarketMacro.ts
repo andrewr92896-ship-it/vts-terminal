@@ -40,7 +40,11 @@ function monthly(start: string, values: number[]): FredObservation[] {
 
 let failures = 0;
 
-function check(name: string, actual: string, expected: string): void {
+// `actual` admits undefined deliberately: a row's freshness is optional on the
+// quote contract — absent means "real time", which is right for an OANDA price
+// and wrong for a published close — so an absent one is a real answer this has
+// to be able to report against, not a type error to assert away.
+function check(name: string, actual: string | undefined, expected: string): void {
   const ok = actual === expected;
   if (!ok) failures += 1;
   const mark = ok ? 'ok  ' : 'FAIL';
@@ -53,7 +57,10 @@ function def(id: string): Def {
   return d;
 }
 
-// Render a definition against fixture observations, as the board would.
+// Render a definition against fixture observations, as the board would. Takes
+// the observations ALREADY composed — a spread row is fed its subtracted
+// series, a range row its upper bound — which is what keeps the transform
+// fixtures below readable.
 function render(id: string, observations: FredObservation[], now: number) {
   const d = def(id);
   const points = derive(observations, d);
@@ -61,6 +68,18 @@ function render(id: string, observations: FredObservation[], now: number) {
     value: fmtValue(points[points.length - 1].v, d),
     changes: changesFor(points, d, now),
   };
+}
+
+// THE ROW THE BOARD ACTUALLY EMITS, through `quoteFor` itself rather than
+// recomposed from its parts. `render` above checks the arithmetic and nothing
+// about what leaves the module, so a field the builder stopped sending — the
+// freshness is exactly that shape of field — would pass every other assertion
+// in this file. Single-series definitions only, which is all the callers need.
+function boardRow(id: string, observations: FredObservation[], now: number) {
+  const d = def(id);
+  const q = quoteFor(d, new Map([[d.fred, observations]]), now, undefined);
+  if (!q) throw new Error(`"${id}" produced no row from its fixture observations`);
+  return q;
 }
 
 console.log('Market Data · macro transform check\n');
@@ -78,13 +97,26 @@ console.log('Market Data · macro transform check\n');
   const now = Date.parse('2026-08-02T12:00:00Z');
   const r = render('cpi', idx, now);
   check('cpi · y/y rate from an index', r.value, '2.6');
-  // Monthly series: 1D and 1W cannot contain a move, so they are flat zeros
-  // rather than the −0.3 that a naive date look-back would put there.
-  check('cpi · 1D gated flat (monthly cadence)', r.changes[0], '0.0');
-  check('cpi · 1W gated flat (monthly cadence)', r.changes[1], '0.0');
+  // A PERIOD SHORTER THAN THE CADENCE HAS NO READING BEHIND IT, so it reads as
+  // an em dash rather than a flat zero. These used to assert '0.0', on the
+  // reasoning that the published figure had not changed — true of the figure
+  // and false of the world: "CPI · 1D · 0.0" states that inflation was measured
+  // over a day and came out flat, which nobody did.
+  check('cpi · 1D has no reading, not a flat zero', r.changes[0], '—');
+  check('cpi · 1W has no reading, not a flat zero', r.changes[1], '—');
   check('cpi · 1M vs the previous print', r.changes[2], '−0.3');
   // Dec 2025 was 100 vs Dec 2024 — no y/y point exists there, so YTD has no base.
   check('cpi · YTD with no base reads em dash', r.changes[3], '—');
+  // June's print, read in early August, is still the newest CPI there is.
+  check('cpi · a current monthly print says live', boardRow('cpi', idx, now).freshness, 'live');
+  // Read in December it is three prints behind, and the board must say so
+  // rather than showing it under the green dot. Every row used to be stamped
+  // live outright, which is the audit finding this closes.
+  check(
+    'cpi · the same print in December says stale',
+    boardRow('cpi', idx, Date.parse('2026-12-02T12:00:00Z')).freshness,
+    'stale',
+  );
 }
 
 // ---- a level series, daily, with real 1D ----
@@ -99,6 +131,20 @@ console.log('Market Data · macro transform check\n');
   const r = render('y10', y10, now);
   check('y10 · level value', r.value, '4.02');
   check('y10 · 1D is a real move (daily cadence)', r.changes[0], '−0.04');
+  // A DAILY SERIES IS NOT GATED, so a day that genuinely did not move still
+  // reads zero. That zero IS a measurement and must not be swept up by the
+  // em dash rule above, which is about windows nobody measured at all.
+  const flat = render('y10', obs([['2026-07-30', 4.02], ['2026-07-31', 4.02]]), now);
+  check('y10 · a genuinely flat day still reads zero', flat.changes[0], '0.00');
+  // Friday's close read on the following Tuesday is the newest one there is —
+  // three calendar days, one business day. Counted in calendar days this row
+  // would wear the faint dot on a working board.
+  check('y10 · Friday’s close read on Monday is current', boardRow('y10', y10, now).freshness, 'live');
+  check(
+    'y10 · ...and a week later it is not',
+    boardRow('y10', y10, Date.parse('2026-08-07T12:00:00Z')).freshness,
+    'stale',
+  );
 }
 
 // ---- basis-point scaling and a signed value ----
@@ -139,7 +185,7 @@ console.log('Market Data · macro transform check\n');
   const r = render('bs', wal, now);
   check('bs · millions shown as trillions', r.value, '6.42');
   check('bs · weekly change shown in billions', r.changes[1], '−12B');
-  check('bs · 1D gated flat (weekly cadence)', r.changes[0], '0B');
+  check('bs · 1D has no reading (weekly cadence)', r.changes[0], '—');
 }
 
 // ---- quarterly growth, annualized ----
@@ -152,7 +198,7 @@ console.log('Market Data · macro transform check\n');
   const now = Date.parse('2026-08-02T12:00:00Z');
   const r = render('gdp', gdp, now);
   check('gdp · q/q annualized', r.value, '3.8');
-  check('gdp · 1M gated flat (quarterly cadence)', r.changes[2], '0.0');
+  check('gdp · 1M has no reading (quarterly cadence)', r.changes[2], '—');
 }
 
 // ---- year to date against last year's final reading ----
