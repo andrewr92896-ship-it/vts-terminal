@@ -24,6 +24,7 @@ const STEPS = [
   ['AI provider seam', 'verify:ai-provider'],
   ['market data macro', 'verify:market-macro'],
   ['FOMC decision calendar', 'verify:market-calendar'],
+  ['Demo market feed', 'verify:public-market'],
   ['investments math', 'verify:investments'],
   ['investments math mirror (private ↔ public)', 'verify:investments-mirror'],
   ['position sizing (web ↔ server)', 'verify:sizing'],

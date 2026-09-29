@@ -5,7 +5,7 @@
     "buildCommand": "npm install --include=dev && npm run build:public"
   },
   "deploy": {
-    "startCommand": "node scripts/serve-static-app.mjs apps/public-terminal",
+    "startCommand": "node scripts/serve-static-app.mjs apps/public-terminal --market",
     "healthcheckPath": "/",
     "healthcheckTimeout": 100,
     "restartPolicyType": "ON_FAILURE",

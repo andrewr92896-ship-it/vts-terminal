@@ -46,6 +46,11 @@ for (const script of ['build:marketing', 'build:public']) {
 for (const root of PUBLIC_ROOTS) {
   scan(path.join(root, 'src'));
   scan(path.join(root, 'dist'));
+  // The public terminal serves its own demo market feed from here, so this is
+  // public-build code and is held to the same rules as `src` — without it a
+  // whole directory of the public deployment would be outside the guard.
+  const server = path.join(root, 'server');
+  if (existsSync(server)) scan(server);
 }
 const marketing = readFileSync('apps/marketing/src/index.html', 'utf8');
 if (!marketing.includes('https://app.vitalistradingsystems.com')) {
