@@ -11,9 +11,19 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 7.98';
+export const APP_VERSION = 'Beta V 7.99';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 7.99',
+    date: '2026-09-29',
+    notes: [
+      'The demo\u2019s market board reads live. Every figure on it was a number typed into the code months ago, most of them styled as live readings \u2014 a Fed target policy had moved past, review dates a month gone. It now reads seventeen rows from the St. Louis Fed and Kraken: policy rates, CPI, core PCE, jobless claims, unemployment, the 2- and 10-year Treasury and the curve between them, EUR/USD, GBP/USD, the dollar index, Bitcoin, Ethereum, the S&P 500 and the VIX.',
+      'Anything that could not be read says so. A provider having a bad minute leaves its row marked sample with the grey dot instead of showing a stale number as though it were current, and the board says outright when part of it is sample.',
+      'Gold and the meeting-odds row are gone from the demo board rather than sitting there as permanent placeholders \u2014 no free provider covers either.',
+      'The economic calendar on that screen is real now too \u2014 the week\u2019s actual releases with their forecasts and previous readings, instead of three invented ones. The headlines beside it are still sample copy and still say so.',
+    ],
+  },
   {
     version: 'Beta V 7.98',
     date: '2026-09-28',

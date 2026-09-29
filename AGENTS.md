@@ -319,6 +319,95 @@ both the demo and real accounts.
   demo store is consulted, so a showcase never implies a capability that is not
   wired.
 
+
+### THE DEMO'S MARKET BOARD IS READ LIVE, AND THE SERVER THAT SERVES THE BUNDLE IS WHAT READS IT
+
+Owner request, 2026-09: the demo is shown in demonstrations, and the board has
+to be current. It was not. Every figure on it was a literal in
+`adapters/publicApi.ts`, and most of them were marked `source:'live'` with
+`sample:false` — so during a demonstration the first screen a prospective
+customer sees showed a Fed target policy had moved past, review dates a month
+gone, and frozen quotes wearing the live styling. **That is the rule this
+repository states everywhere else and broke here: a figure nobody measured must
+never be reported as a measured one.**
+
+- **`apps/public-terminal/server/` IS PUBLIC-BUILD CODE AND IS SCANNED AS SUCH.**
+  `verify-public-boundary` now walks it beside `src` and `dist`; without that a
+  whole directory of the public deployment would sit outside the guard. Nothing
+  in it may name the portal, a private route or a credential — every source is a
+  public one (the St. Louis Fed; Kraken's keyless public candles).
+- **IT HAS TO BE SERVER-SIDE, and the reason is the CSP rather than the design.**
+  The demo runs in a browser with no session, and `serve-static-app.mjs` sends
+  `connect-src 'self'` plus TradingView and nothing else — so a browser-side
+  fetch to a data provider is refused before it is made. The one process on the
+  public side that can read a provider on the demo's behalf is the server that
+  serves the bundle, which is where `GET /demo/market-data` is mounted. It is
+  behind a `--market` flag (set in `deploy/railway/public-terminal.json`)
+  because that script also serves apps with no board.
+  - **`FRED_API_KEY` on the `public-terminal` service is what keys it**, and it
+    is optional exactly as it is privately: the chart-download CSV is keyless and
+    is the fallback, and a key that is set but REJECTED falls through to it. The
+    key on the `marketing` service does nothing — nothing there reads one.
+  - **The cache is warmed on boot and every ten minutes.** A cold process would
+    make the first visitor wait on the providers, and during a demonstration the
+    first visitor is the demonstration.
+- **THE DEMO STILL REACHES NO ACCOUNT SERVICE, and that property is unchanged.**
+  `publicRequest` still refuses from inside the demo; this is a same-origin,
+  read-only route carrying no session, no account and nothing stored, so
+  "leaving is the reset" is untouched — there is still nothing to reset.
+- **A ROW IS LIVE OR IT SAYS SAMPLE. There is no third state.** A provider that
+  will not answer leaves its row on the bundled fallback with `sample: true` and
+  the grey dot, and `sampleValues` says part of the board is sample. **The
+  fallback board in the bundle is ALL Sample but one row** — the New York
+  session, which is the clock rather than a reading — and `verify:public-market`
+  asserts exactly that, because the fallback is what a demonstration sees when
+  the feed is down and it is where the original bug would come back.
+- **THE ROW SET IS SHORT, AND WIDENING IT IS A DECISION.** The private board
+  carries seventy-odd series through a reader this deployment may not import, so
+  `marketFeed.mjs` copies the reader and **not** the catalog: seventeen showcase
+  rows and only the three transforms they need (`level`, `yoy`, `ytdIndex`).
+  Copying the whole catalog would be a mirror nobody could keep in step. A row no
+  free provider covers (gold, the meeting odds) is **not added at all** rather
+  than added as a permanent placeholder — the meeting-odds row is gone for the
+  same reason it left the private board in 7.98.
+- **The rules that make a figure right travel with it**, and each is pinned by a
+  fixture proved to fail: a RATE moves by subtraction and a PRICE by percent; a
+  period shorter than the publication cadence reads a flat zero rather than
+  borrowing last month's move; look-backs anchor on the latest READING, not on
+  the wall clock, except year-to-date which anchors on the calendar; the 10Y−2Y
+  spread is the board's own two yield rows subtracted on a date join, so the
+  three reconcile by construction; a range row refuses without its lower bound
+  rather than stating policy as a point target; **Kraken answers HTTP 200 to a
+  refusal**, so its `error` array is read first.
+- **THE FOMC SCHEDULE NOW EXISTS THREE TIMES** — the private calendar, the public
+  server feed (`server/fomcDates.mjs`) and the bundle's fallback
+  (`FALLBACK_MEETING_DATES`). `verify:market-calendar` reads all three **as
+  text** and fails when they disagree, because one is an `.mjs` outside that
+  workspace and one is a non-exported const, and a check that can only see what a
+  module exports has a blind spot exactly where a copy would hide. The runway
+  guard covers all three at once.
+- **`npm run verify:public-market` is offline and stays offline.** It proves the
+  transforms, the change columns, the parsers, the payload assembly, the route
+  wiring and the fallback's honesty. **What it cannot prove is that a provider
+  knows a series name** — the fixtures are built from the catalog's own ids — so
+  a name FRED does not publish passes here and comes back Sample in production.
+  Only the deployed board establishes that.
+- **THE ECONOMIC CALENDAR IS LIVE TOO, AND THE HEADLINES ARE NOT**
+  (`server/calendarFeed.mjs`, `GET /demo/market-news`). The calendar shares a
+  screen with the board — Market Data is its only home — so an invented one
+  would be the only panel there with made-up dates on it; it reads Forex
+  Factory's keyless weekly JSON, the same feed the private terminal ingests.
+  **Headlines stay the bundled set**, each naming "Fictional Wire": a calendar
+  is a schedule of public statistical releases, and republishing somebody's
+  copy on a public marketing demo is a licensing question rather than a build.
+  Releases carry **no explainer** — the private board's plain-language note is
+  written by AI, which fails closed everywhere here — and an empty read leaves
+  the bundled calendar up, because an empty schedule reads as "nothing is
+  coming", which is a claim rather than an absence.
+- **The capture suite deliberately runs WITHOUT `--market`**, so it screenshots
+  the fallback and reaches no third party — the same rule that blocks TradingView
+  and YouTube there. A green capture run says nothing about the live feed.
+
 ### The screenshot test is the evidence, so it has to assert something
 
 `scripts/public-terminal.visual.spec.mjs` captures every retained page family at
@@ -2790,6 +2879,14 @@ workspaces list** (see `theme/nav.ts` order).
         to read the schedule with no config, database or network.
       - The Fed publishes about two years ahead and labels the forward year
         tentative. Keep two years loaded.
+      - **THE SCHEDULE EXISTS THREE TIMES**, because the public terminal is a
+        separate deployment that cannot import it: here, in
+        `apps/public-terminal/server/fomcDates.mjs` (the demo feed) and in
+        `FALLBACK_MEETING_DATES` in the public adapter. The check reads all
+        three **as text** and fails when any disagrees — one is an `.mjs`
+        outside that workspace and one is a non-exported const, so importing
+        would leave a blind spot exactly where a drifted copy would hide.
+        Adding a year means editing three files, and the check names them.
     - **THE FED BAR STATES THE SCHEDULE, NOT THE ODDS ON IT.** It used to draw two
       invented probabilities — "cut 78% · hold 22%" over a green bar, with "cut
       fully priced by December" beneath — as bare fact, carrying **none** of the
@@ -6787,7 +6884,10 @@ defaults; the app runs locally with almost nothing set.
   reads live without it** (the keyless chart-download CSV is the fallback).
   Setting it switches to the documented JSON API **and turns on the real
   "Last → next review" release dates**, which have no keyless equivalent; a
-  rejected key falls back to keyless rather than blanking the board.
+  rejected key falls back to keyless rather than blanking the board. **The same
+  variable is read by the `public-terminal` service**, whose own server fills the
+  demo board — see the demo market feed above. Setting it on `marketing` does
+  nothing; nothing there reads one.
 - **YouTube (Market News live streams):** `YOUTUBE_API_KEY` (unset = poller off,
   every channel reads offline and live figures are marked sample),
   `YOUTUBE_WATCH_SECONDS` (300), `YOUTUBE_CHANNELS_PER_TICK` (8),
@@ -7321,7 +7421,7 @@ JSON). Two services, both deploying from `main` of this repo:
 | service | serves | config |
 | --- | --- | --- |
 | `marketing` | `vitalistradingsystems.com` — the landing page | `deploy/railway/marketing.json`; variables `PUBLIC_APP_ORIGIN`, `SITE_CONTENT_ORIGIN` |
-| `public-terminal` | `app.vitalistradingsystems.com` — the demo and public accounts | `deploy/railway/public-terminal.json` |
+| `public-terminal` | `app.vitalistradingsystems.com` — the demo and public accounts | `deploy/railway/public-terminal.json`; variable `FRED_API_KEY` (optional — keys the demo market feed) |
 
 **So a variable for the landing page goes on `marketing` in
 `vts-public-and-demo`**, and `SITE_CONTENT_ORIGIN` (the Site Editor's link to

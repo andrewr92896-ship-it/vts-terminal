@@ -7,23 +7,87 @@ import { DEMO_SCREENSHOT_METHODS, demoCall } from '../demo/demoStore';
 export class ApiError extends Error { constructor(public status:number,message:string){super(message)} }
 
 const changes=(day:string,week:string,month:string,ytd:string,year:string):[string,string,string,string,string]=>[day,week,month,ytd,year];
-const review=(body:string,last='continuous',next='')=>({body,last,next});
-const series:MarketDataPayload['series']=[
-  {id:'fed-target',group:'policy',label:'Fed funds target',value:'3.50–3.75',unit:'%',asOf:'Aug 26',source:'live',money:false,session:null,changes:changes('0.00','0.00','0.00','−0.75','−0.75'),review:review('FOMC','fomc-prev','fomc'),sample:false},
-  {id:'cut-odds',group:'policy',label:'Next meeting cut odds',value:'78',unit:'%',asOf:'implied · 1-week change',source:'manual',money:false,session:null,changes:changes('+2','+6','+18','+41','+63'),review:review('CME FedWatch'),sample:true},
-  {id:'cpi-yoy',group:'inflation',label:'CPI Y/Y · 1-YR inflation',value:'3.3',unit:'%',asOf:'Jul',source:'live',money:false,session:null,changes:changes('0.0','0.0','−0.2','+0.7','+0.6'),review:review('BLS','2026-07-14','2026-09-11'),sample:false},
-  {id:'cpi-ytd',group:'inflation',label:'CPI year to date',value:'2.1',unit:'%',asOf:'Jul',source:'live',money:false,session:null,changes:changes('0.0','0.0','+0.1','+0.6','+0.6'),review:review('BLS','2026-07-14','2026-09-11'),sample:false},
-  {id:'claims',group:'labor',label:'Initial jobless claims',value:'231',unit:'k',asOf:'Aug 20',source:'live',money:false,session:null,changes:changes('+3','+3','−8','+12','+7'),review:review('DOL','2026-08-20','2026-08-27'),sample:false},
-  {id:'ten-year',group:'yields',label:'10Y Treasury',value:'4.18',unit:'%',asOf:'Aug 26',source:'live',money:false,session:null,changes:changes('+0.03','−0.05','−0.16','−0.27','+0.05'),review:review('U.S. Treasury','daily',''),sample:false},
-  {id:'eurusd',group:'fx',label:'EUR/USD',value:'1.16580',unit:'',asOf:'10:00 PM ET',source:'live',money:false,session:null,changes:changes('+0.04%','+0.22%','+0.86%','+3.42%','+4.10%'),review:review('Public quote feed'),sample:false},
-  {id:'gbpusd',group:'fx',label:'GBP/USD',value:'1.35934',unit:'',asOf:'10:00 PM ET',source:'live',money:false,session:null,changes:changes('−0.03%','+0.14%','+0.78%','+2.61%','+3.22%'),review:review('Public quote feed'),sample:false},
-  {id:'gold',group:'commod',label:'Gold spot',value:'4,640.82',unit:'USD',asOf:'10:00 PM ET',source:'live',money:true,session:null,changes:changes('+1.00%','+1.82%','+4.30%','+14.2%','+18.6%'),review:review('Public quote feed'),sample:false},
-  {id:'btc',group:'crypto',label:'Bitcoin',value:'112,420',unit:'USD',asOf:'10:00 PM ET',source:'live',money:true,session:null,changes:changes('+0.62%','−1.20%','+5.80%','+22.4%','+41.1%'),review:review('Public quote feed'),sample:false},
-  {id:'spx',group:'equity',label:'S&P 500',value:'6,482.9',unit:'',asOf:'close',source:'live',money:false,session:null,changes:changes('+0.31%','+0.74%','+2.18%','+9.4%','+13.2%'),review:review('Public quote feed'),sample:false},
-  {id:'vix',group:'macro',label:'VIX',value:'14.82',unit:'',asOf:'close',source:'live',money:false,session:null,changes:changes('−0.48','−1.10','−2.36','−3.20','−1.08'),review:review('Cboe','daily',''),sample:false},
-  {id:'new-york',group:'session',label:'New York session',value:'',unit:'',asOf:'Eastern',source:'live',money:false,session:[480,1020],changes:changes('—','—','—','—','—'),review:review('Market hours'),sample:false},
+const review=(body:string,last='',next='')=>({body,last,next});
+
+// THE FALLBACK BOARD, AND EVERY ROW ON IT SAYS SAMPLE.
+//
+// The live board is read by the public terminal's own server and fetched below.
+// This is what is drawn while that request is in flight, and what stays if it
+// fails — so it must never be mistaken for a reading.
+//
+// It used to be the whole board, and it was marked `source:'live'` with
+// `sample:false` on frozen literals: during a demonstration it showed a Fed
+// target policy had moved past and review dates a month gone, wearing the live
+// styling. That is the one thing this repository forbids outright — a figure
+// nobody measured reported as a measured one — and it was on the first screen a
+// prospective customer sees. Every row here is `sample:true` now, which is what
+// draws the grey Sample dot and what makes `sampleValues` true.
+//
+// KEEP THE IDS IN STEP WITH `server/marketFeed.mjs`. The live payload replaces
+// this wholesale, so an id here that is not in the catalog is a row that appears
+// only when the feed is down — which is the one moment nobody is checking.
+const fallbackSeries:MarketDataPayload['series']=[
+  {id:'ffr',group:'policy',label:'Fed funds target',value:'3.75–4.00',unit:'%',asOf:'sample',source:'manual',money:false,session:null,changes:changes('0.00','0.00','0.00','−0.25','−0.25'),review:review('FOMC','fomc-prev','fomc'),sample:true},
+  {id:'effr',group:'policy',label:'Effective fed funds',value:'3.87',unit:'%',asOf:'sample',source:'manual',money:false,session:null,changes:changes('0.00','0.00','−0.01','−0.25','−0.25'),review:review('New York Fed','daily'),sample:true},
+  {id:'cpi',group:'inflation',label:'CPI Y/Y',value:'3.0',unit:'%',asOf:'sample',source:'manual',money:false,session:null,changes:changes('0.0','0.0','−0.1','+0.1','−0.2'),review:review('BLS','monthly'),sample:true},
+  {id:'cpiytd',group:'inflation',label:'CPI year to date',value:'2.4',unit:'%',asOf:'sample',source:'manual',money:false,session:null,changes:changes('0.0','0.0','+0.2','+2.4','—'),review:review('BLS','monthly'),sample:true},
+  {id:'cpce',group:'inflation',label:'Core PCE Y/Y',value:'2.9',unit:'%',asOf:'sample',source:'manual',money:false,session:null,changes:changes('0.0','0.0','−0.1','+0.1','−0.1'),review:review('BEA','monthly'),sample:true},
+  {id:'claims',group:'labor',label:'Initial jobless claims',value:'223',unit:'k',asOf:'sample',source:'manual',money:false,session:null,changes:changes('0','+4','−6','+5','−2'),review:review('DOL','weekly · Thursday'),sample:true},
+  {id:'unrate',group:'labor',label:'Unemployment rate',value:'4.4',unit:'%',asOf:'sample',source:'manual',money:false,session:null,changes:changes('0.0','0.0','+0.1','+0.3','+0.3'),review:review('BLS','monthly'),sample:true},
+  {id:'y2',group:'yields',label:'2Y Treasury',value:'3.58',unit:'%',asOf:'sample',source:'manual',money:false,session:null,changes:changes('+0.01','−0.03','−0.09','−0.66','−0.52'),review:review('U.S. Treasury','daily'),sample:true},
+  {id:'y10',group:'yields',label:'10Y Treasury',value:'4.14',unit:'%',asOf:'sample',source:'manual',money:false,session:null,changes:changes('+0.02','−0.04','−0.11','−0.43','+0.02'),review:review('U.S. Treasury','daily'),sample:true},
+  {id:'s2s10',group:'macro',label:'10Y − 2Y spread',value:'+56',unit:'bp',asOf:'sample',source:'manual',money:false,session:null,changes:changes('+1','−1','−2','+23','+54'),review:review('Derived from the two Treasury rows','daily'),sample:true},
+  {id:'eurusd',group:'fx',label:'EUR/USD',value:'1.1658',unit:'',asOf:'sample',source:'manual',money:false,session:null,changes:changes('+0.04%','+0.22%','+0.86%','+3.42%','+4.10%'),review:review('Federal Reserve H.10','daily'),sample:true},
+  {id:'gbpusd',group:'fx',label:'GBP/USD',value:'1.3593',unit:'',asOf:'sample',source:'manual',money:false,session:null,changes:changes('−0.03%','+0.14%','+0.78%','+2.61%','+3.22%'),review:review('Federal Reserve H.10','daily'),sample:true},
+  {id:'broad-usd',group:'fx',label:'Broad dollar index',value:'121.4',unit:'',asOf:'sample',source:'manual',money:false,session:null,changes:changes('−0.05%','−0.18%','−0.62%','−2.80%','−1.90%'),review:review('Federal Reserve H.10','daily'),sample:true},
+  {id:'gold',group:'commod',label:'Gold spot',value:'—',unit:'USD',asOf:'sample',source:'manual',money:true,session:null,changes:changes('—','—','—','—','—'),review:review('No free provider','sample'),sample:true},
+  {id:'btc',group:'crypto',label:'Bitcoin',value:'112,420',unit:'USD',asOf:'sample',source:'manual',money:true,session:null,changes:changes('+0.62%','−1.20%','+5.80%','+22.4%','+41.1%'),review:review('Kraken','continuous'),sample:true},
+  {id:'eth',group:'crypto',label:'Ethereum',value:'4,120',unit:'USD',asOf:'sample',source:'manual',money:true,session:null,changes:changes('+0.41%','−0.90%','+4.10%','+18.2%','+29.4%'),review:review('Kraken','continuous'),sample:true},
+  {id:'us500',group:'equity',label:'S&P 500',value:'6,482.90',unit:'',asOf:'sample',source:'manual',money:false,session:null,changes:changes('+0.31%','+0.74%','+2.18%','+9.4%','+13.2%'),review:review('S&P Dow Jones Indices','daily close'),sample:true},
+  {id:'vix',group:'equity',label:'VIX',value:'14.82',unit:'',asOf:'sample',source:'manual',money:false,session:null,changes:changes('−0.48','−1.10','−2.36','−3.20','−1.08'),review:review('Cboe','daily close'),sample:true},
+  // The one row that is genuinely live in the fallback: a session window is the
+  // clock, not a reading, so there is nothing to be stale about.
+  {id:'ny',group:'session',label:'New York session',value:'',unit:'',asOf:'Eastern',source:'live',money:false,session:[570,960],changes:changes('—','—','—','—','—'),review:review('Market hours','continuous'),sample:false},
 ];
-const marketDataPayload:MarketDataPayload={groups:[{key:'policy',label:'Policy & rates'},{key:'inflation',label:'Inflation'},{key:'labor',label:'Labor & growth'},{key:'yields',label:'Yields & curve'},{key:'fx',label:'FX & dollar'},{key:'commod',label:'Commodities'},{key:'crypto',label:'Crypto'},{key:'equity',label:'Indices & volatility'},{key:'macro',label:'Macro & liquidity'},{key:'session',label:'Sessions'}],series,periods:['1D','1W','1M','YTD','1Y'],defaultPins:['fed-target','cut-odds','cpi-yoy','cpi-ytd'],meetings:['09-16','10-28','12-09'],meetingYear:2026,meetingDates:['2026-09-16','2026-10-28','2026-12-09','2027-01-27','2027-03-17','2027-04-28','2027-06-09','2027-07-28','2027-09-15','2027-10-27','2027-12-08'],sampleValues:true};
+// Mirrors `PUBLIC_FOMC_MEETING_DATES` in `server/fomcDates.mjs`, for the case
+// where the feed is unreachable. `verify:market-calendar` checks all three
+// copies against each other and fails while only three meetings remain ahead.
+const FALLBACK_MEETING_DATES=['2026-01-28','2026-03-18','2026-04-29','2026-06-17','2026-07-29','2026-09-16','2026-10-28','2026-12-09','2027-01-27','2027-03-17','2027-04-28','2027-06-09','2027-07-28','2027-09-15','2027-10-27','2027-12-08'];
+const marketDataPayload:MarketDataPayload={groups:[{key:'policy',label:'Policy & rates'},{key:'inflation',label:'Inflation'},{key:'labor',label:'Labor & growth'},{key:'yields',label:'Yields & curve'},{key:'fx',label:'FX & dollar'},{key:'commod',label:'Commodities'},{key:'crypto',label:'Crypto'},{key:'equity',label:'Indices & volatility'},{key:'macro',label:'Macro & liquidity'},{key:'session',label:'Sessions'}],series:fallbackSeries,periods:['1D','1W','1M','YTD','1Y'],defaultPins:['ffr','cpi','y10','us500'],meetings:FALLBACK_MEETING_DATES.map((iso)=>iso.slice(5)),meetingYear:2026,meetingDates:FALLBACK_MEETING_DATES,sampleValues:true};
+
+// THE DEMO BOARD IS READ LIVE, FROM THE PUBLIC TERMINAL'S OWN SERVER.
+//
+// `publicRequest` refuses to reach the account service from inside the demo and
+// that is unchanged — this is a different thing: a same-origin, read-only route
+// on the static server that fetches public data (the St. Louis Fed, Kraken's
+// keyless candles) on the demo's behalf. No session, no account, no credential,
+// nothing stored. The demo's "leaving is the reset" property is untouched,
+// because there is still nothing to reset.
+//
+// It is a FETCH WITH A FALLBACK and never throws: the board is what a
+// demonstration opens on, so a provider having a bad minute must leave the
+// sample board up rather than an error. A good answer is held for the visit.
+let liveMarketData:MarketDataPayload|null=null;
+let liveMarketAt=0;
+const LIVE_MARKET_TTL=60_000;
+async function readMarketData():Promise<MarketDataPayload>{
+  const now=Date.now();
+  if(liveMarketData&&now-liveMarketAt<LIVE_MARKET_TTL) return structuredClone(liveMarketData);
+  try{
+    const res=await fetch('/demo/market-data',{headers:{Accept:'application/json'}});
+    if(res.ok){
+      const payload=await res.json() as MarketDataPayload;
+      // A payload with no rows is not an answer. Taking it would blank the
+      // board, which is strictly worse than the sample one already on screen.
+      if(Array.isArray(payload?.series)&&payload.series.length>0){
+        liveMarketData=payload;
+        liveMarketAt=now;
+        return structuredClone(payload);
+      }
+    }
+  }catch{/* the fallback below is the answer */}
+  return structuredClone(liveMarketData??marketDataPayload);
+}
 const now=Date.now();
 const marketNewsData:MarketNewsData={aiTagging:false,headlines:[
   {id:'n1',title:'Treasury yields ease as investors review inflation data',body:'The moves were modest in early trading as participants assessed the path for rates.',tradeNote:null,source:'Fictional Wire',url:null,category:'markets',impact:'medium',bias:'neutral',publishedAt:now-12*60_000},
@@ -34,6 +98,39 @@ const marketNewsData:MarketNewsData={aiTagging:false,headlines:[
   {id:'e2',title:'Pending home sales',country:'USD',impact:'medium',eventTime:now+118*60_000,forecast:'0.4%',previous:'0.1%',actual:null,explainer:'Monthly housing activity.',source:'Fictional calendar'},
   {id:'e3',title:'Consumer confidence',country:'USD',impact:'medium',eventTime:now+24*3600_000,forecast:'98.2',previous:'97.6',actual:null,explainer:'Survey-based confidence index.',source:'Fictional calendar'},
 ]};
+// THE CALENDAR IS READ LIVE; THE HEADLINES ARE NOT, AND THAT IS DELIBERATE.
+//
+// A calendar is a schedule of public statistical releases and the demo board
+// puts it on the same screen as the market rows, so an invented one would be
+// the only panel there with made-up dates on it. Headlines are somebody's copy,
+// and republishing them on a public marketing demo is a licensing question
+// rather than a build — so the bundled set stays, each item naming "Fictional
+// Wire" so nobody can mistake one for a report.
+let liveCalendar:MarketNewsData['calendar']|null=null;
+let liveCalendarAt=0;
+const LIVE_CALENDAR_TTL=5*60_000;
+async function readMarketNews():Promise<MarketNewsData>{
+  const base=structuredClone(marketNewsData);
+  const now=Date.now();
+  if(!liveCalendar||now-liveCalendarAt>=LIVE_CALENDAR_TTL){
+    try{
+      const res=await fetch('/demo/market-news',{headers:{Accept:'application/json'}});
+      if(res.ok){
+        const payload=await res.json() as {calendar?:MarketNewsData['calendar']};
+        // An empty calendar is not an answer — it would read as "nothing is
+        // coming", which is a claim rather than an absence. The bundled one
+        // stands instead, and it says outright that it is fictional.
+        if(Array.isArray(payload?.calendar)&&payload.calendar.length>0){
+          liveCalendar=payload.calendar;
+          liveCalendarAt=now;
+        }
+      }
+    }catch{/* the bundled calendar below is the answer */}
+  }
+  if(liveCalendar) base.calendar=structuredClone(liveCalendar);
+  return base;
+}
+
 let layout:MarketDataLayout={pinned:[...marketDataPayload.defaultPins],hidden:[],custom:[]};
 
 const PUBLIC_STREAM_CHANNELS=[
@@ -44,8 +141,8 @@ const PUBLIC_STREAM_CHANNELS=[
 ];
 
 const baseApi={
-  async marketData(){return isDemo()?structuredClone(marketDataPayload):publicRequest<MarketDataPayload>('/market-data')},
-  async marketNews(){return isDemo()?structuredClone(marketNewsData):publicRequest<MarketNewsData>('/market-news')},
+  async marketData(){return isDemo()?readMarketData():publicRequest<MarketDataPayload>('/market-data')},
+  async marketNews(){return isDemo()?readMarketNews():publicRequest<MarketNewsData>('/market-news')},
   async marketDataLayout(){return isDemo()?{layout:structuredClone(layout)}:publicRequest<{layout:MarketDataLayout}>('/market-data/layout')},
   async saveMarketDataLayout(next:MarketDataLayout){if(isDemo()){layout=structuredClone(next);return {layout:structuredClone(layout)}}return publicRequest<{layout:MarketDataLayout}>('/market-data/layout',{method:'PUT',body:JSON.stringify(next)})},
   // The whole MarketNewsStreams shape, not just the catalog: the screen reads

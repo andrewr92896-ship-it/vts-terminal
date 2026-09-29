@@ -5,6 +5,11 @@ import {
   upcomingMeetingCount,
 } from '../../../../api/src/trading/fomcCalendar';
 import { etMonthDay, etStampYMD, etYear, nextMeetingFrom, prevMeetingFrom } from './etClock';
+import { readFileSync } from 'node:fs';
+import { dirname, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const here = dirname(fileURLToPath(import.meta.url));
 
 // Offline check of the Fed decision countdown.
 //
@@ -131,6 +136,36 @@ if (!hasRunway) {
       `Until you do, the Fed decision bar hides itself once the list is spent —\n` +
       `it will not guess a date.`,
   );
+}
+
+// ---- the public terminal's two copies ----
+//
+// The public terminal is a separate deployment and cannot import the schedule
+// above, so it carries its own: one in the server feed that fills the demo
+// board, and one in the bundle as the fallback for when that feed is down.
+// Nothing in either build would notice them drifting from this one, and a
+// drifted copy is the original bug wearing a different hat — a Fed bar counting
+// down to a date the Fed never published, on the board a prospective customer
+// is shown first.
+//
+// Read as TEXT rather than imported: one is an `.mjs` outside this workspace
+// and the other is a non-exported const inside the public adapter, and a check
+// that can only see what a module chooses to export is a check with a blind
+// spot exactly where a copy would hide.
+
+const readDates = (file: string, label: string): string[] => {
+  const text = readFileSync(resolve(here, file), 'utf8');
+  const block = text.match(new RegExp(`${label}\\s*=\\s*\\[([^\\]]*)\\]`));
+  if (!block) return [];
+  return [...block[1].matchAll(/'(\d{4}-\d{2}-\d{2})'/g)].map((m) => m[1] as string);
+};
+
+const mirrors: [string, string, string][] = [
+  ['public terminal server feed', '../../../../public-terminal/server/fomcDates.mjs', 'PUBLIC_FOMC_MEETING_DATES'],
+  ['public terminal bundle fallback', '../../../../public-terminal/src/adapters/publicApi.ts', 'FALLBACK_MEETING_DATES'],
+];
+for (const [name, file, label] of mirrors) {
+  check(`${name} matches the schedule`, readDates(file, label).join(','), FOMC_MEETING_DATES.join(','));
 }
 
 console.log();
