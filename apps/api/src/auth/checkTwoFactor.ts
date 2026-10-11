@@ -74,6 +74,10 @@ const insert: typeof users.$inferInsert = {
   viewBrokerage: false,
   active: true,
   mustChangePassword: false,
+  // The emailed code is per-account now, so the account under test has to have
+  // asked for it — AUTH_REQUIRE_2FA alone no longer challenges anybody.
+  twoFactorEnabled: true,
+  mustUpdateEmail: false,
   termsAcceptedVersion: null,
   termsAcceptedAt: null,
   createdAt: now,
@@ -432,6 +436,54 @@ check('password change revokes remembered trust',
   (await db.select().from(terminalTrustedDevices).where(eq(terminalTrustedDevices.userId, USER_ID))).length === 0,
   { status: changed.statusCode, body: changed.body, tokenLength: trustBeforePasswordChange.token.length });
 password = nextPassword;
+
+// THE CODE IS AN OPT-IN, AND OFF IS THE DEFAULT.
+//
+// This is the property the whole change rests on: the code is emailed to the
+// account's own address, so a mandatory one means an account whose mailbox is
+// closing cannot sign in at all. AUTH_REQUIRE_2FA is true for this whole
+// process, so the only thing deciding below is the account's own flag.
+console.log('\nThe code is the account\'s own choice');
+await resetAuthState();
+await db.update(users).set({ twoFactorEnabled: false }).where(eq(users.id, USER_ID));
+const optedOut = await login('192.0.2.60');
+check('an account with the code off signs in on the password alone',
+  optedOut.statusCode === 200 &&
+  optedOut.json<{ requiresTwoFactor: boolean }>().requiresTwoFactor === false,
+  { status: optedOut.statusCode, body: optedOut.body });
+check('...and gets a real session rather than a challenge',
+  !!cookiePair(optedOut, SESSION_COOKIE) && !cookiePair(optedOut, LOGIN_CHALLENGE_COOKIE));
+check('...with nothing emailed to the address that is going away',
+  (await db.select().from(loginChallenges)).length === 0);
+
+await resetAuthState();
+await db.update(users).set({ twoFactorEnabled: true }).where(eq(users.id, USER_ID));
+const optedIn = await login('192.0.2.61');
+check('an account that asked for the code is still challenged',
+  optedIn.statusCode === 200 &&
+  optedIn.json<{ requiresTwoFactor: boolean }>().requiresTwoFactor === true,
+  { status: optedIn.statusCode, body: optedIn.body });
+
+// The account is admitted by its ID in this process's allowlist, so moving its
+// email cannot drop it out of the admitted set — and the prompt stops asking.
+console.log('\nChanging the sign-in address');
+await resetAuthState();
+await db.update(users).set({ mustUpdateEmail: true }).where(eq(users.id, USER_ID));
+const sessionForEmail = await createSession(USER_ID, 'synthetic-browser');
+const movedEmail = await app.inject({
+  method: 'PATCH',
+  url: '/api/auth/profile',
+  headers: { cookie: signedCookiePair(SESSION_COOKIE, sessionForEmail.token) },
+  payload: { email: 'moved-on@example.com' },
+  remoteAddress: '192.0.2.62',
+});
+const afterMove = (await db.select().from(users).where(eq(users.id, USER_ID)).limit(1))[0]!;
+check('an account admitted by its ID may move its address',
+  movedEmail.statusCode === 200 && afterMove.email === 'moved-on@example.com',
+  { status: movedEmail.statusCode, body: movedEmail.body });
+check('...and saving one stops the prompt asking', afterMove.mustUpdateEmail === false);
+check('...while the trusted browser tied to the old mailbox is forgotten',
+  (await db.select().from(terminalTrustedDevices).where(eq(terminalTrustedDevices.userId, USER_ID))).length === 0);
 
 await app.close();
 console.log(failures === 0 ? '\nAll terminal email two-factor checks passed.' :

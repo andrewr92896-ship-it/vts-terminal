@@ -224,6 +224,13 @@ export interface PublicUser {
   teamName: string | null;
   viewBrokerage: boolean;
   mustChangePassword: boolean;
+  // Whether this account asks for an emailed code when signing in on a device it
+  // has not seen before. The account's own choice, default off.
+  twoFactorEnabled: boolean;
+  // An admin has marked this account's sign-in address as being retired, so the
+  // terminal asks for a new one. Skippable — see the column comment. Never true
+  // for the demo, which signs in with no address at all.
+  mustUpdateEmail: boolean;
   // The user has not yet accepted the currently-effective Terms of Service and
   // Privacy Policy (their stored version differs from LEGAL_VERSION). When true,
   // the client gates them into the acceptance screen before the terminal loads.
@@ -319,6 +326,8 @@ export function toPublicUser(
     teamName: teamName ?? null,
     viewBrokerage: u.viewBrokerage,
     mustChangePassword: u.mustChangePassword,
+    twoFactorEnabled: !isDemo && u.twoFactorEnabled === true,
+    mustUpdateEmail: !isDemo && u.mustUpdateEmail === true,
     // The demo has nothing to consent to (it can't operate on anything and the
     // demo guard blocks the accept write anyway), so it is never gated.
     mustAcceptTerms: !isDemo && u.termsAcceptedVersion !== LEGAL_VERSION,

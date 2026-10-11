@@ -29,6 +29,7 @@ interface AuthState {
     avatar?: string;
     displayTimezone?: string;
     hideFromLeaderboards?: boolean;
+    twoFactorEnabled?: boolean;
   }) => Promise<void>;
   // Re-read the signed-in user from the server. Used after a change that alters
   // what the account can reach — turning a feature on or off — so the sidebar

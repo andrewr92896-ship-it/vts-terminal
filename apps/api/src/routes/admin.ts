@@ -48,6 +48,9 @@ const updateSchema = z.object({
   viewBrokerage: z.boolean().optional(),
   teamId: z.string().min(1).max(64).nullable().optional(),
   password: z.string().min(8).max(256).optional(),
+  // Ask this account for a new sign-in address at its next sign-in, for a
+  // mailbox that is being retired.
+  mustUpdateEmail: z.boolean().optional(),
 });
 
 // A membership grant. `note` is required and non-empty: the owner's rule is that

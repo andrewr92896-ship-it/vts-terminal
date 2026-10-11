@@ -98,6 +98,7 @@ import { destroyUserSessions } from '../auth/sessions.js';
 import { forgetTerminalAuthForUser } from '../auth/twoFactor.js';
 import { forgetAllDevices as forgetEmployeeDevices } from '../employee/trustedDevices.js';
 import { destroyEmployeeSessionsForUser } from '../employee/sessions.js';
+import { wouldRemainAdmitted } from '../auth/privateAccess.js';
 import { isAdmin, isFounder, isRoleKey, parseRoles, parseBadges, type RoleKey } from '../auth/rbac.js';
 import { teamExists } from '../teams/service.js';
 import { assignableBadgeKeys } from '../badges/service.js';
@@ -177,6 +178,10 @@ export interface AdminUserView {
   active: boolean;
   viewBrokerage: boolean;
   mustChangePassword: boolean;
+  // Waiting to be asked for a new sign-in address at its next sign-in.
+  mustUpdateEmail: boolean;
+  // Whether this account asks for an emailed code on an unrecognised device.
+  twoFactorEnabled: boolean;
   createdAt: number;
   // The paid tier this account holds. Resolved rather than read straight off the
   // row: admins, software developers and founders are always Max by role and
@@ -205,6 +210,8 @@ function toView(
     active: u.active,
     viewBrokerage: u.viewBrokerage,
     mustChangePassword: u.mustChangePassword,
+    mustUpdateEmail: u.mustUpdateEmail === true,
+    twoFactorEnabled: u.twoFactorEnabled === true,
     createdAt: u.createdAt.getTime(),
     membership,
     tradingTeams,
@@ -367,6 +374,10 @@ export async function createUser(actingUserId: string, input: CreateUserInput): 
     active: true,
     // Admin sets a temporary password; force a change on first login.
     mustChangePassword: true,
+    // The emailed sign-in code is each account's own choice and starts off.
+    twoFactorEnabled: false,
+    // The address an admin just typed in is the one to use; nothing to re-confirm.
+    mustUpdateEmail: false,
     // New account has not accepted the Terms/Privacy yet; the acceptance gate
     // prompts them on first sign-in.
     termsAcceptedVersion: null,
@@ -395,6 +406,10 @@ export interface UpdateUserInput {
   // When provided, sets a new temporary password and forces a change at next
   // login, revoking the user's existing sessions.
   password?: string;
+  // Ask this account to set a new sign-in address at its next sign-in, because
+  // the current mailbox is being retired. Skippable for the account — see the
+  // column comment in db/schema.ts — and cleared by them saving an address.
+  mustUpdateEmail?: boolean;
 }
 
 export async function updateUser(
@@ -435,6 +450,17 @@ export async function updateUser(
     const email = input.email.trim().toLowerCase();
     if (!email) throw new AdminError('Email cannot be empty');
     await assertEmailFree(email, targetId);
+    // The same refusal the account's own profile route makes, for the same
+    // reason: PRIVATE_ACCESS_USER_IDS may name this account by its email, and
+    // the sign-in refusal is generic — so saving an address the allowlist does
+    // not name locks them out of a working terminal with nothing saying why.
+    // An admin is the one who can repair the allowlist, so the refusal names
+    // that as the order to do it in rather than leaving a dead end.
+    if (!wouldRemainAdmitted({ id: target.id, username: target.username, email: target.email }, email)) {
+      throw new AdminError(
+        'This account is admitted to the terminal by its current email address, so changing it would lock them out. Add their account ID to PRIVATE_ACCESS_USER_IDS first.',
+      );
+    }
     patch.email = email;
   }
   if (input.roles != null) patch.roles = JSON.stringify(cleanRoles(input.roles));
@@ -442,6 +468,11 @@ export async function updateUser(
   if (input.active != null) patch.active = input.active;
   if (input.viewBrokerage != null) patch.viewBrokerage = input.viewBrokerage;
   if (input.teamId !== undefined) patch.teamId = await resolveTeamId(input.teamId);
+  if (input.mustUpdateEmail != null) patch.mustUpdateEmail = input.mustUpdateEmail;
+  // An admin typing a new address in has already answered the prompt, so asking
+  // the account to answer it again would be asking about an address that is
+  // gone. Only an explicit flag in the same request keeps it standing.
+  if (input.email != null && input.mustUpdateEmail == null) patch.mustUpdateEmail = false;
 
   let revoke = false;
   if (input.password != null) {

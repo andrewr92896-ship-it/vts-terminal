@@ -1,8 +1,9 @@
-import type { ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
 import { useAuth } from './auth/AuthContext';
 import { Login } from './pages/Login';
 import { ChangePassword } from './pages/ChangePassword';
 import { AcceptTerms } from './pages/AcceptTerms';
+import { UpdateEmail } from './pages/UpdateEmail';
 import { Maintenance, useMaintenance } from './pages/Maintenance';
 import { Portal } from './components/Portal';
 import { UpdatePrompt } from './components/UpdatePrompt';
@@ -15,6 +16,10 @@ export function App() {
   // page, so this is the only way that notice reaches a device that already has
   // the app — see `lib/maintenance.ts`.
   const closed = useMaintenance();
+  // "Not now" on the sign-in email prompt, for this page load only. The flag it
+  // is skipping is server state, so the prompt returns at the next sign-in —
+  // there is deliberately nothing stored here to remember a dismissal.
+  const [emailPromptSkipped, setEmailPromptSkipped] = useState(false);
 
   let content: ReactNode;
   if (closed) {
@@ -46,6 +51,13 @@ export function App() {
     // Everyone must review and accept the current Terms of Service and Privacy
     // Policy before operating the terminal (re-prompted when the docs are updated).
     content = <AcceptTerms />;
+  } else if (user.mustUpdateEmail && !emailPromptSkipped) {
+    // The account's sign-in address is being retired. LAST in the chain, and
+    // skippable, because the two gates above are mandatory and this one is not —
+    // a dismissible card must not sit in front of a legal gate, and a hard block
+    // on somebody whose mailbox is already closing is the lockout this exists to
+    // avoid.
+    content = <UpdateEmail onSkip={() => setEmailPromptSkipped(true)} />;
   } else {
     content = <Portal />;
   }

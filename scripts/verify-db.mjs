@@ -39,6 +39,15 @@ const CHECKS = [
     },
   },
   {
+    // One account named by its EMAIL and one by its USERNAME — both legal forms,
+    // and only one survives the account changing its address.
+    script: 'db:check-signin-email',
+    env: {
+      AUTH_REQUIRE_2FA: 'true',
+      PRIVATE_ACCESS_USER_IDS: 'admitted-by-email@example.com,admitted-by-username',
+    },
+  },
+  {
     script: 'db:check-password-reset',
     env: { PRIVATE_ACCESS_USER_IDS: '11111111-1111-4111-8111-111111111111' },
   },

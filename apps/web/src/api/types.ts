@@ -123,6 +123,12 @@ export interface User {
   teamName: string | null;
   viewBrokerage: boolean;
   mustChangePassword: boolean;
+  // Whether this account asks for an emailed code when signing in on a device
+  // it has not seen before. The account's own choice, default off.
+  twoFactorEnabled: boolean;
+  // An admin has marked this account's sign-in address as being retired, so the
+  // terminal asks for a new one at sign-in. Skippable.
+  mustUpdateEmail: boolean;
   // The user has not yet accepted the current Terms of Service / Privacy Policy.
   // When true, App gates them into the acceptance screen before the terminal
   // renders. Never true for the read-only demo.
@@ -331,6 +337,10 @@ export interface AdminUser {
   active: boolean;
   viewBrokerage: boolean;
   mustChangePassword: boolean;
+  // Waiting to be asked for a new sign-in address at its next sign-in.
+  mustUpdateEmail: boolean;
+  // Whether this account asks for an emailed code on an unrecognised device.
+  twoFactorEnabled: boolean;
   createdAt: number;
   /**
    * The paid tier this account holds. Resolved rather than read off a row:

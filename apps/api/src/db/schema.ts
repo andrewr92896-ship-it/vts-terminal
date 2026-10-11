@@ -87,6 +87,28 @@ export const users = sqliteTable('users', {
   mustChangePassword: integer('must_change_password', { mode: 'boolean' })
     .notNull()
     .default(false),
+  // The emailed sign-in code, as this account's own CHOICE (migration 0142).
+  // Default false, which is what every account was before the column existed.
+  //
+  // AUTH_REQUIRE_2FA is still the deployment-wide availability switch — mail has
+  // to work — but it no longer decides who is challenged. It cannot: the code
+  // goes to `email` above, so an account whose mailbox is being closed cannot
+  // sign in at all while the code is mandatory. A sign-in requirement that
+  // depends on a mailbox staying alive is a lockout waiting to happen.
+  twoFactorEnabled: integer('two_factor_enabled', { mode: 'boolean' })
+    .notNull()
+    .default(false),
+  // Set by an admin when this account's sign-in address is being retired
+  // (migration 0142). The terminal then asks for a new one at sign-in — the same
+  // shape as `mustChangePassword` above, and skippable, because a hard block on
+  // somebody whose mailbox is already dead is the lockout this exists to avoid.
+  // Cleared by the account saving a new address.
+  //
+  // A FLAG RATHER THAN A NAME IN CODE. Which address is being retired is a fact
+  // about one account, and the next person's will change too.
+  mustUpdateEmail: integer('must_update_email', { mode: 'boolean' })
+    .notNull()
+    .default(false),
   // Legal acceptance. `termsAcceptedVersion` records the version string of the
   // Terms of Service / Privacy Policy the user last accepted (see LEGAL_VERSION
   // in legal/version.ts). When it does not equal the current LEGAL_VERSION, the

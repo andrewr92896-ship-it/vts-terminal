@@ -1,0 +1,21 @@
+-- Two per-account flags, both default OFF so nothing already working changes on
+-- deploy.
+--
+-- `two_factor_enabled` makes the emailed sign-in code a CHOICE rather than an
+-- install-wide setting. AUTH_REQUIRE_2FA stays as the availability switch (the
+-- deployment needs working mail), but whether a given account is challenged is
+-- now that account's own decision, and the default is off.
+--
+-- The reason it had to stop being install-wide: the code is emailed to
+-- `users.email`, so an account whose mailbox is being closed cannot sign in AT
+-- ALL while the code is mandatory — the second factor goes to an address nobody
+-- can read. A sign-in requirement that depends on a mailbox staying alive is a
+-- lockout waiting for the mailbox to be cancelled.
+--
+-- `must_update_email` is the admin-set prompt to re-confirm the sign-in address,
+-- the same shape as `must_change_password` above it. Deliberately a flag rather
+-- than a name or a domain list in code: the account whose address is changing is
+-- a fact about that account, and the next person's address will change too.
+ALTER TABLE `users` ADD `two_factor_enabled` integer DEFAULT false NOT NULL;
+--> statement-breakpoint
+ALTER TABLE `users` ADD `must_update_email` integer DEFAULT false NOT NULL;

@@ -19,7 +19,7 @@ import { requireAuth } from '../auth/middleware.js';
 import { DEMO_USERNAME } from '../demo/identity.js';
 import { destroyEmployeeSessionsForUser } from '../employee/sessions.js';
 import { forgetAllDevices as forgetEmployeeDevices } from '../employee/trustedDevices.js';
-import { isPrivateUserAllowed } from '../auth/privateAccess.js';
+import { isPrivateUserAllowed, wouldRemainAdmitted } from '../auth/privateAccess.js';
 import { getTeamName } from '../teams/service.js';
 import { featuresForUser } from '../features/service.js';
 import { assertDisplayNameFree } from '../admin/service.js';
@@ -127,6 +127,9 @@ const profileSchema = z
     // Off the public study leaderboards. Set from My Terminal ▸ Preferences.
     hideFromLeaderboards: z.boolean().optional(),
     email: z.string().trim().email().max(255).optional(),
+    // The emailed sign-in code, this account's own choice. Off by default — see
+    // the login handler for why it is not a deployment-wide setting.
+    twoFactorEnabled: z.boolean().optional(),
     // A client-resized profile picture as a data URL (~128px JPEG/PNG), or an
     // empty string / null to remove it. Capped to keep the inline blob small.
     avatar: z
@@ -319,7 +322,16 @@ export async function authRoutes(app: FastifyInstance, options: AuthRouteOptions
       user.id,
       signedCookie(request, TERMINAL_DEVICE_COOKIE),
     );
-    if (config.AUTH_REQUIRE_2FA && user.username !== DEMO_USERNAME && !remembered) {
+    // THE CODE IS THIS ACCOUNT'S OWN CHOICE, AND THE DEFAULT IS OFF.
+    // `AUTH_REQUIRE_2FA` remains the deployment-wide availability switch (the
+    // code needs working mail), but it no longer decides WHO is challenged — it
+    // cannot, because the code is emailed to `user.email`. An account whose
+    // mailbox is being closed could not sign in at all while the code was
+    // mandatory: the second factor goes somewhere nobody can read. A sign-in
+    // requirement that depends on a mailbox staying alive is a lockout waiting
+    // for the mailbox to be cancelled.
+    const wantsCode = config.AUTH_REQUIRE_2FA && user.twoFactorEnabled === true;
+    if (wantsCode && user.username !== DEMO_USERNAME && !remembered) {
       const challenge = await beginLoginChallenge(
         user,
         { ip: request.ip, userAgent: request.headers['user-agent'] },
@@ -552,6 +564,8 @@ export async function authRoutes(app: FastifyInstance, options: AuthRouteOptions
       homeScreen?: string | null;
       myTerminalSections?: string | null;
       hideFromLeaderboards?: boolean;
+      twoFactorEnabled?: boolean;
+      mustUpdateEmail?: boolean;
       updatedAt: Date;
     } = {
       updatedAt: new Date(),
@@ -629,7 +643,24 @@ export async function authRoutes(app: FastifyInstance, options: AuthRouteOptions
       if (clash[0]) {
         return reply.code(400).send({ error: 'That email is already in use' });
       }
+      // REFUSED RATHER THAN APPLIED when the new address would drop this account
+      // out of PRIVATE_ACCESS_USER_IDS — the allowlist may name the account by
+      // its email, and the sign-in refusal is generic, so saving it would lock
+      // the account out of a working terminal with nothing anywhere saying why.
+      // See `wouldRemainAdmitted`.
+      if (!wouldRemainAdmitted({ id: me.id, username: me.username, email: me.email }, email)) {
+        return reply.code(400).send({
+          error:
+            'This account is admitted to the terminal by its current email address, so changing it would lock you out. Ask an administrator to admit you by account ID first.',
+        });
+      }
       patch.email = email;
+      // The prompt exists to get a working address on the account; a saved one
+      // is the whole answer, so it stops asking.
+      patch.mustUpdateEmail = false;
+    }
+    if (parsed.data.twoFactorEnabled != null) {
+      patch.twoFactorEnabled = parsed.data.twoFactorEnabled;
     }
 
     await db.update(users).set(patch).where(eq(users.id, me.id));

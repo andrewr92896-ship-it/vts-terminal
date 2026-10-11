@@ -6797,6 +6797,68 @@ hardcoded" below.)
   promotes the hash, consumes the pending row, forces Change Password, and
   revokes older sessions. The one-process IP/mailbox limiter is intentionally
   suitable only while Railway runs one API replica.
+- **THE EMAILED SIGN-IN CODE IS A PER-ACCOUNT OPT-IN, AND OFF IS THE DEFAULT**
+  (`users.two_factor_enabled`, migration `0142`; the switch is on **Settings ▸
+  Sign-in**). `AUTH_REQUIRE_2FA` is still the deployment-wide availability
+  switch — the code needs working mail — but it no longer decides WHO is
+  challenged.
+  - **It cannot, and that is the whole reason this changed.** The code is
+    emailed to `users.email`, so an account whose mailbox is being closed
+    **cannot sign in at all** while the code is mandatory: the second factor
+    goes to an address nobody can read, and the password being correct makes no
+    difference. A sign-in requirement that depends on a mailbox staying alive is
+    a lockout waiting for somebody to cancel the mailbox — which is exactly what
+    prompted it (owner decision, 2026-10, retiring a company address a partner
+    signed in with).
+  - **Nothing already working changed on deploy**: the column defaults to false,
+    which is how every account behaved before it existed, and an account that
+    wants the code turns it on. The panel renders for everybody, including an
+    account with it off, so what the terminal offers is discoverable rather than
+    hidden behind a setting somebody has to know about.
+  - The demo never reaches it (`toPublicUser` masks both flags for the demo, and
+    the login gate excludes the demo username outright).
+- **ASKING AN ACCOUNT FOR A NEW SIGN-IN ADDRESS** (`users.must_update_email`,
+  same migration; `pages/UpdateEmail.tsx`, set from **Admin ▸ Users**). An admin
+  marks the account whose mailbox is being retired and the terminal asks for a
+  new address at its next sign-in.
+  - **A FLAG, NEVER A NAME OR A DOMAIN IN CODE.** Which address is being retired
+    is a fact about one account, and the next person's address will change too —
+    the same rule the Founder trade workflow follows with `eligibleFounders()`.
+  - **IT IS LAST IN `App.tsx`'s GATE CHAIN AND IT IS SKIPPABLE.** The two gates
+    above it (a forced password change, the legal acceptance) are mandatory, and
+    a dismissible card must not sit in front of a legal gate. Skippable because
+    the accounts that meet this screen are the ones whose mailbox is already
+    closing: a hard block is the lockout the whole change exists to avoid, and
+    "Not now" has to lead somewhere. The dismissal is page-load state with
+    nothing stored, so the prompt returns at the next sign-in — the flag is
+    server state and only saving an address clears it.
+  - **The address is typed TWICE because nothing verifies it.** There is no
+    confirmation email in this flow, so a typo would silently point password
+    recovery at an address nobody holds. Typing it twice is proportionate rather
+    than a verification round trip: with the password known and the code off, the
+    cost of a typo is a recovery that would not arrive, which the account can
+    sign in and correct.
+- **AN EMAIL CHANGE THAT WOULD DROP THE ACCOUNT OUT OF THE ALLOWLIST IS REFUSED**
+  (`wouldRemainAdmitted` in `auth/privateAccess.ts`, applied in the profile
+  route). A `PRIVATE_ACCESS_USER_IDS` entry may be an account ID, a username
+  **or an email** — so changing the address can silently remove the account from
+  the admitted set, and the sign-in refusal is deliberately generic. The person
+  who just changed their own address would be locked out of a working terminal
+  with the right password and nothing on either end saying why: the exact
+  invisible lockout the three-form allowlist was built to prevent, arriving by
+  the one route it did not cover. **A refusal with a reason is recoverable in a
+  minute; a lockout is an evening.** The remedy the message names is to be
+  admitted by account ID first.
+- **`npm run db:check-signin-email`** walks all of it against a scratch
+  database, with an allowlist naming one account by its **email** and another by
+  its **username** — both legal forms, and only one survives the account moving
+  its address. That is why it is its own check rather than more assertions in
+  `db:check-two-factor`: the allowlist is read once per process, so the two
+  configurations cannot be exercised in one. It writes, so like
+  `db:check-sharing` it refuses any database that already holds a user. In
+  `verify:db`, so CI runs it. The opt-in half lives in `db:check-two-factor`,
+  whose seeded account now has to ask for the code — `AUTH_REQUIRE_2FA` alone no
+  longer challenges anybody.
 - Session cookie **`vts_session`**: random token, stored server-side in
   `sessions` (SHA-256 of the token; raw token only in the cookie), Fastify-signed
   with `SESSION_SECRET`, `httpOnly`, `sameSite: 'lax'`, `secure` per
@@ -6974,6 +7036,10 @@ defaults; the app runs locally with almost nothing set.
   (**required in production**, ≥16 chars; dev falls back to an insecure default),
   `SESSION_TTL_DAYS` (14), `COOKIE_SECURE` (`true` only over HTTPS),
   `PRIVATE_MAINTENANCE` (unset; `true` closes the private portal — see below),
+  `AUTH_REQUIRE_2FA` (`false`) — the deployment-wide AVAILABILITY switch for the
+  emailed sign-in code, not who gets one: whether a given account is challenged
+  is that account's own opt-in and defaults to off (see Auth & security
+  specifics). `AUTH_2FA_CODE_TTL_MINUTES` (10), `AUTH_2FA_REMEMBER_DAYS` (30),
   `CREDENTIALS_KEY` (broker-credential encryption — **required in production**,
   32+ bytes of generated randomness in base64 or hex, and **must differ from
   `SESSION_SECRET`**; the API refuses to boot otherwise. Generate with
