@@ -437,6 +437,8 @@ export function AdminUsers({ theme }: { theme: Theme }) {
                   <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 7 }}>
                     {!u.active && <Badge color="#ef5468">Inactive</Badge>}
                     {u.mustChangePassword && <Badge color="#e0a23a">Must set password</Badge>}
+                    {u.mustUpdateEmail && <Badge color="#e0a23a">Must set email</Badge>}
+                    {u.twoFactorEnabled && <Badge color="#5AC8FA">Two-step on</Badge>}
                   </div>
                 </div>
 
@@ -450,6 +452,17 @@ export function AdminUsers({ theme }: { theme: Theme }) {
                     style={ghostBtn}
                   >
                     Reset password
+                  </button>
+
+                  {/* Ask this account for a new sign-in address at its next
+                      sign-in. For a mailbox that is being retired — the account
+                      can skip the prompt, and saving an address clears it. */}
+                  <button
+                    onClick={() => patch(u.id, { mustUpdateEmail: !u.mustUpdateEmail })}
+                    disabled={busyId === u.id}
+                    style={ghostBtn}
+                  >
+                    {u.mustUpdateEmail ? 'Cancel email prompt' : 'Ask for new email'}
                   </button>
 
                   {!isSelf && confirmDeleteId !== u.id && (

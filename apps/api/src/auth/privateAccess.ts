@@ -51,3 +51,21 @@ export function isPrivateUserAllowed(user: AdmissibleUser): boolean {
 export function privateAdmissionConfigured(): boolean {
   return entries.size > 0;
 }
+
+// WOULD THIS ACCOUNT STILL BE ADMITTED UNDER A DIFFERENT SIGN-IN ADDRESS?
+//
+// An allowlist entry may be the account's EMAIL (see above), so changing that
+// address can silently remove the account from the admitted set. The sign-in
+// refusal is deliberately generic — "Invalid email or password" — so the person
+// who just changed their own address would be locked out of a working terminal
+// with nothing on either end saying why, and the password they typed was right.
+// That is precisely the invisible lockout the three-form allowlist exists to
+// prevent, arriving by the one route it did not cover.
+//
+// So the email change is checked BEFORE it is written, and refused rather than
+// applied. A refusal with a reason is recoverable in a minute; a lockout is an
+// evening.
+export function wouldRemainAdmitted(user: AdmissibleUser, nextEmail: string): boolean {
+  if (!privateAdmissionConfigured()) return true;
+  return isPrivateUserAllowed({ ...user, email: nextEmail });
+}

@@ -381,6 +381,8 @@ export const api = {
     // the server stores an empty diff as null too, so there is one "default".
     myTerminalSections?: { add: string[]; hide: string[] } | null;
     hideFromLeaderboards?: boolean;
+    // The emailed sign-in code, this account's own choice.
+    twoFactorEnabled?: boolean;
   }): Promise<{ user: User }> {
     return request('/api/auth/profile', {
       method: 'PATCH',
@@ -499,6 +501,9 @@ export const api = {
       viewBrokerage?: boolean;
       teamId?: string | null;
       password?: string;
+      // Ask this account for a new sign-in address at its next sign-in, for a
+      // mailbox that is being retired. Cleared when they save one.
+      mustUpdateEmail?: boolean;
     },
   ): Promise<{ user: AdminUser }> {
     return request(`/api/admin/users/${id}`, {

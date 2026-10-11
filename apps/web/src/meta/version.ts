@@ -11,9 +11,19 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 8.01';
+export const APP_VERSION = 'Beta V 8.02';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 8.02',
+    date: '2026-10-11',
+    notes: [
+      'Two-step sign-in is now yours to switch on, and it starts off. Settings \u25B8 Sign-in has it. With it on, signing in on a device you have not used before asks for a six-digit code emailed to you.',
+      'It had to stop being all-or-nothing: the code goes to the email address on your account, so anyone whose mailbox is closing could not have signed in at all.',
+      'An account whose email address is being retired is asked for a new one when it next signs in. The prompt can be put off and comes back next time; saving an address stops it. Administrators set this per person from Admin \u25B8 Users.',
+      'Changing your email is refused, with the reason, if the new address would stop the terminal letting you in \u2014 rather than going through and locking you out with a password that is still correct.',
+    ],
+  },
   {
     version: 'Beta V 8.01',
     date: '2026-09-29',

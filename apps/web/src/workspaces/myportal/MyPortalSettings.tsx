@@ -143,6 +143,84 @@ function HomePagePicker({ theme }: { theme: Theme }) {
   );
 }
 
+// The emailed sign-in code, as this account's own choice.
+//
+// IT IS AN OPT-IN AND THE DEFAULT IS OFF, deliberately. The code is sent to the
+// account's own sign-in address, so a mandatory one means an account whose
+// mailbox is closing cannot sign in at all — the second factor goes somewhere
+// nobody can read. Off by default is what keeps that from being a lockout
+// waiting on a cancelled mailbox; somebody who wants the code turns it on.
+//
+// The panel renders for every account, including one with the code off, so what
+// the terminal offers is discoverable rather than hidden behind a setting
+// somebody has to know exists.
+function TwoStepPanel({ theme }: { theme: Theme }) {
+  const { user, updateProfile } = useAuth();
+  const on = user?.twoFactorEnabled === true;
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function toggle() {
+    setBusy(true);
+    setError(null);
+    try {
+      await updateProfile({ twoFactorEnabled: !on });
+    } catch {
+      setError('Could not change that. Try again.');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <section style={panel(theme)}>
+      <div style={panelLabel}>{'Sign-in'}</div>
+      <button
+        onClick={toggle}
+        disabled={busy}
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 12,
+          width: '100%',
+          textAlign: 'left',
+          background: 'rgba(0,0,0,.18)',
+          border: `1px solid ${theme.navBorder}`,
+          borderRadius: 8,
+          padding: '12px 14px',
+          cursor: busy ? 'default' : 'pointer',
+          color: C.text,
+          opacity: busy ? 0.6 : 1,
+        }}
+      >
+        <span
+          style={{
+            width: 10,
+            height: 10,
+            borderRadius: '50%',
+            background: on ? C.green : C.faint,
+            flex: 'none',
+          }}
+        />
+        <span style={{ fontSize: 13.5, fontWeight: 600 }}>
+          {on ? 'Two-step sign-in on' : 'Two-step sign-in off'}
+        </span>
+        <span style={{ marginLeft: 'auto', fontSize: 11.5, color: C.faint }}>
+          {on ? 'code required' : 'password only'}
+        </span>
+      </button>
+      <p style={{ margin: '10px 0 0', fontSize: 11.5, color: C.faint, lineHeight: 1.5 }}>
+        {on
+          ? 'Signing in on a device you have not used before asks for a six-digit code emailed to you. Make sure the address on your account is one you can read.'
+          : 'When on, signing in on a device you have not used before asks for a six-digit code emailed to you.'}
+      </p>
+      {error && (
+        <p style={{ margin: '8px 0 0', fontSize: 11.5, color: C.red }}>{error}</p>
+      )}
+    </section>
+  );
+}
+
 function brokerDotColor(status: BrokerStatus['status']): string {
   switch (status) {
     case 'live':
@@ -285,6 +363,9 @@ export function MyPortalSettings({ theme }: { theme: Theme }) {
             {"When on, names and dollar amounts are masked across the terminal — useful when sharing your screen. Nothing is changed, only what's shown."}
           </p>
         </section>
+
+        {/* Two-step sign-in */}
+        <TwoStepPanel theme={theme} />
 
         {/* Home page */}
         <section style={panel(theme)}>
