@@ -11,9 +11,16 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 8.02';
+export const APP_VERSION = 'Beta V 8.03';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 8.03',
+    date: '2026-11-03',
+    notes: [
+      'Nothing in the terminal itself changed in this release. It corrects internal engineering documentation that described parts of the sign-in and account-access setup inaccurately, and drops two stray build files and one unused script from the repository.',
+    ],
+  },
   {
     version: 'Beta V 8.02',
     date: '2026-10-11',

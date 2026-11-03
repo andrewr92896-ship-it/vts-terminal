@@ -38,6 +38,53 @@ It also carries an explicit instruction about how to FINISH: when every item is
 done, say so in capitals and stop, and ask the owner to type an acknowledgement
 rather than letting them press continue past it.
 
+## THIS REPOSITORY MUST STAY PRIVATE, AND DELETING FILES WILL NOT CHANGE THAT
+
+Audited 2026-11 against the full history. **No credential has ever been
+committed** — every blob on every branch was scanned for key material (provider
+keys, private-key blocks, JWTs, database URLs carrying passwords, broker-token
+shapes) and the only hits were localhost test DSNs and `sk-test` placeholders.
+No `.env`, no database file, no broker screenshot, no production account ID.
+That half of the hygiene is genuinely clean, and `.gitignore` is what keeps it
+that way.
+
+**What makes the repository unpublishable is not the current tree.** It is the
+history, the 243 branches, and above all the **489 pull requests**.
+
+- **GitHub serves every pull request as `refs/pull/<n>/head`, permanently.** A
+  force-push to `main` does not touch those refs, and there is no way to delete
+  them: only deleting the repository removes a PR. **Verified**, rather than
+  assumed — `refs/pull/249/head` still hands over the old `legal/content.ts`
+  carrying the owner's personal email, long after that file left `main`.
+- So **"delete the files and flip it public" does not work, and neither does a
+  history rewrite.** Both leave every pull request serving the original commits,
+  and the PR pages render those diffs in the browser with no fetching required.
+- Flipping it public would also expose all 243 branches — the Kia dealership
+  work, the partner trade diagnostics, the Railway handoff branches — plus every
+  PR description and review comment.
+
+**What would actually be published**, in order of what it would cost: the ten
+founder-only `risk` notes in `auth/reviewMarks.ts` (whose own header explains
+they are hidden precisely because publishing them "writes a record pointing at
+itself"), including the one recording that Terms and Privacy describe broker
+credentials as read-only and that this is false; `docs/legal/`'s adversarial
+review, which identifies specific false statements in the **live** Privacy
+Policy and Terms, dated and attributed; the Railway service, environment and
+volume names together with the private portal's hostname; and the owner's
+personal email address.
+
+**The agreed route is a SEPARATE public repository** built from a filtered copy
+— all of the above removed from **every** commit, with the commit history, dates
+and authorship preserved so it still evidences the work. Nothing about this
+repository changes, `main` is never force-pushed, and the private material
+stays where it is needed. If the public mirror is ever refreshed, it is rebuilt
+from a fresh filtered clone; it is never a remote of this repo.
+
+**One thing no redaction fixes: publishing source reveals which protections are
+ABSENT**, whatever the documentation says. The missing CSRF token under *Auth &
+security specifics* is the live example — the reason to add one is that it should
+exist, not that leaving it undocumented hides it.
+
 ## Before you touch anything: confirm this is the live checkout
 
 The terminal is worked on from **more than one machine**, and the single most
@@ -6864,12 +6911,33 @@ hardcoded" below.)
   with `SESSION_SECRET`, `httpOnly`, `sameSite: 'lax'`, `secure` per
   `COOKIE_SECURE`, TTL `SESSION_TTL_DAYS` (default 14). Admin password reset /
   deactivate revokes all of a user's sessions.
-- **No** login rate-limit, account lockout, or CSRF token — password recovery's
-  isolated anti-flood limiter is the exception. CSRF posture rests on
-  `sameSite: 'lax'` + signed httpOnly cookie. AI usage cap and the broker poll
-  throttle are the only rate limits. (The **Employee Portal** has all of these —
-  lockout, CSRF token, idle timeout, emailed-code 2FA — on its own separate session; see its
-  section above. None of it applies to the main terminal's `vts_session`.)
+- **The main terminal HAS a login lockout, and has since the emailed-code work.
+  It does NOT have a CSRF token.** This bullet claimed neither existed and was
+  read that way for months — the stale half of it is why it is now written out
+  in detail rather than as a list of absences.
+  - **`checkTerminalAuthLock` / `recordTerminalAuthFailure`
+    (`auth/twoFactorRateLimit.ts`) is the lockout.** Five failures inside fifteen
+    minutes locks that subject for fifteen minutes, answered **429 with
+    `Retry-After`**. It is counted **per account AND per source address**, so
+    neither a single account nor a single origin can be ground down, and it is
+    stored in `terminal_auth_limits` rather than in memory — a restart must not
+    hand out a fresh budget. The keys are **HMAC'd under `SESSION_SECRET`**, so a
+    database copy carries no usernames and no addresses.
+  - **Nothing on the sign-in path clears that counter until a code actually
+    succeeds.** A correct password is a request an attacker holding the password
+    can make at will, so clearing on password success would let them loop
+    "log in, guess, log in again" forever without reaching a rung.
+  - **Emailed-code sends are capped too** — per account and per address, with a
+    resend cooldown — because the mail flood and the guess-forever attack both
+    work by asking for a fresh session each round.
+  - **CSRF posture is still `sameSite: 'lax'` + a signed httpOnly cookie, with no
+    token.** That genuinely blocks a cross-site form POST, and it is the one
+    remaining gap of the three this bullet used to claim. **Do not describe the
+    main terminal as having no rate limiting.**
+  - AI usage cap and the broker poll throttle are the other rate limits. (The
+    **Employee Portal** additionally has a CSRF token, an idle timeout and a
+    progressive lockout ladder on its own separate session; see its section
+    above. None of that applies to `vts_session`.)
 - **Broker credentials at rest (`security/secretbox.ts`, `security/credentialsKey.ts`).**
   AES-256-GCM, envelope **`v2:<keyId>:<iv>:<tag>:<ct>`**, key derived by
   **HKDF-SHA256** from `CREDENTIALS_KEY`. Five things carry the design, and each
