@@ -10,9 +10,17 @@ The portal is an invite-only system for named accounts. Knowing its URL is never
 4. Add the stable ID to `PRIVATE_ACCESS_USER_IDS` in the private Railway service only.
 5. Redeploy/restart the private service and verify access.
 6. Require a password change and terms acceptance using the existing account flags.
-7. Require MFA before production launch. The current custom main-terminal auth does not implement MFA, so this remains a blocker.
+7. Decide whether this account needs the emailed sign-in code. A second factor exists
+   (a code emailed to the account's own address) but is a **per-account opt-in that
+   defaults to off**, set from Settings > Sign-in. `AUTH_REQUIRE_2FA` only governs
+   whether the deployment offers it at all. TOTP and passkeys are still not supported.
 
-The allowlist is ID-based, not email-domain-based. Production refuses to boot with an empty allowlist.
+An allowlist entry may be a stable account ID, a username **or an email address**. Prefer
+the account ID: a username or email can be changed later, and an entry that stops matching
+silently stops admitting that account, behind the same generic sign-in refusal a wrong
+password gets. The self-service email change refuses outright when it would strip the
+caller out of the allowlist, rather than locking them out invisibly. It is never
+email-DOMAIN-based. Production refuses to boot with an empty allowlist.
 
 ## Authentication and authorization
 
@@ -40,11 +48,23 @@ To disable one person, remove only that ID and restart. To disable all external 
 
 Private login failures caused by invalid credentials or admission denial return the same response. Security logging should use stable user IDs and action names, not passwords, tokens, cookie values, broker credentials or full connection strings. Existing administrator actions should remain in the Administrator Log.
 
-A dedicated structured authentication audit stream, brute-force rate limiting and alerting remain to be implemented.
+Brute-force rate limiting IS implemented: five failed sign-in attempts inside fifteen
+minutes locks that subject for fifteen minutes, counted per account **and** per source
+address, stored in `terminal_auth_limits` so a restart does not hand out a fresh budget,
+with the keys HMAC'd so a database copy carries no usernames or addresses. Emailed-code
+sends are capped per account and per address as well. A dedicated structured
+authentication audit stream and alerting remain to be implemented.
 
 ## MFA and recovery
 
-The current custom private authentication stack does not support TOTP, passkeys or recovery codes. Before production cutover, implement MFA or move private authentication to a separately scoped provider client that requires MFA. Recovery must verify identity through an owner-controlled process and revoke existing sessions.
+The second factor is an emailed code, opt-in per account and off by default; TOTP,
+passkeys and printed recovery codes are not supported. Before production cutover, decide
+whether the code should be mandatory for every account -- note that making it mandatory
+makes sign-in depend on a mailbox staying reachable, which is why it is an opt-in today.
+
+Recovery is implemented: a time-limited temporary credential is emailed, and using it
+forces a password change and revokes older sessions. It does not yet verify identity
+through an owner-controlled process beyond control of the mailbox.
 
 ## Crawlers are not a security boundary
 
